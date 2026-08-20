@@ -1,0 +1,198 @@
+.preview {
+  background: #fff;
+  width: min(100%, 210mm);
+  max-width: 210mm;
+  margin: 18px auto 0;
+  padding: 14mm 13mm;
+  border: 1px solid #c7d4cf;
+  box-shadow: 0 14px 35px rgba(20, 70, 53, .08);
+  color: #111;
+  overflow: visible;
+  page-break-after: always;
+  break-after: page;
+}
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 28mm;
+  gap: 12px;
+  align-items: start;
+  border-bottom: 2px solid #222;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+.top small { display: block; text-transform: uppercase; letter-spacing: .04em; color: #333; }
+.top h2, .top h3 { margin: 4px 0; overflow-wrap: anywhere; }
+.photo { border: 2px solid #222; height: 24mm; display: grid; place-items: center; font-size: 10px; text-align: center; }
+.title { text-align: center; text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 12px; font-size: 18px; line-height: 1.18; }
+.identity { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
+.box { border: 1px solid #444; padding: 6px; min-height: 26px; overflow-wrap: anywhere; }
+.caption { font-weight: 800; font-size: 11px; text-transform: uppercase; background: #eee; text-align: center; padding: 5px; border: 1px solid #444; }
+.table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; margin: 0 0 8px; }
+.table th, .table td { border: 1px solid #333; padding: 4px; vertical-align: middle; overflow-wrap: anywhere; word-break: normal; }
+.table th { background: #eee; text-align: center; }
+.center { text-align: center; }
+.right { text-align: right; }
+.sectionTitle { background: #ddd; text-align: center; font-weight: 900; text-transform: uppercase; }
+.primaryArea { background: #f2f6f4; }
+.mastery { display: grid; grid-template-columns: minmax(0, 1fr) 65mm; gap: 8px; align-items: start; }
+.legend { border: 1px solid #444; font-size: 11px; }
+.legend div { display: grid; grid-template-columns: 24px minmax(0, 1fr); border-bottom: 1px solid #444; }
+.legend div:last-child { border-bottom: 0; }
+.legend b { border-right: 1px solid #444; text-align: center; padding: 4px; }
+.legend span { padding: 4px; overflow-wrap: anywhere; }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #333; margin-top: 8px; }
+.summary div { padding: 7px; border-right: 1px solid #333; overflow-wrap: anywhere; }
+.summary div:last-child { border-right: 0; }
+.summary span { display: block; font-size: 10px; }
+.summary b { font-size: 15px; }
+.appreciation { border: 1px solid #333; margin-top: 12px; min-height: 50px; padding: 9px; font-family: cursive; font-size: 16px; color: #284d92; overflow-wrap: anywhere; }
+.signatures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 24px; text-align: center; }
+.signatures div { border-top: 1px solid #333; padding-top: 6px; min-height: 38px; }
+.histogram { height: 92px; border: 1px solid #333; display: flex; align-items: end; gap: 14px; padding: 8px 14px; margin-top: 8px; }
+.bar { width: 24px; background: #9aa5b1; display: block; }
+.conduct { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.muted { color: #555; font-size: 10px; overflow-wrap: anywhere; }
+.studentForm { font-size: 11px; }
+.dotted { border-bottom: 1px dotted #555; min-height: 18px; overflow-wrap: anywhere; }
+.checkLine { display: flex; gap: 12px; flex-wrap: wrap; }
+.check::before { content: "☐ "; font-weight: 900; }
+.selected::before { content: "☑ "; font-weight: 900; }
+.printAction { display: flex; justify-content: flex-end; margin-top: 18px; }
+.preview, .preview * { box-sizing: border-box; }
+.preview table, .preview tr, .preview td, .preview th { page-break-inside: avoid; break-inside: avoid; }
+.reportDocument { page: report-card; }
+
+@page report-card { size: A4 portrait; margin: 15mm; }
+
+@media screen and (max-width: 760px) {
+  .preview { width: 100%; max-width: 100%; padding: 16px; overflow: auto; }
+  .top { grid-template-columns: 1fr; }
+  .identity, .summary, .conduct { grid-template-columns: 1fr; }
+  .mastery { grid-template-columns: 1fr; }
+  .table { min-width: 760px; }
+  .signatures { grid-template-columns: 1fr; }
+  .photo { width: 100px; }
+}
+
+@page { size: A4 portrait; margin: 8mm; }
+@media print {
+  .preview {
+    box-shadow: none;
+    border: 0;
+    margin: 0;
+    width: 194mm;
+    max-width: 194mm;
+    padding: 0;
+    page-break-after: always;
+    break-after: page;
+  }
+  .printAction { display: none !important; }
+  .table { font-size: 9.5px; min-width: 0 !important; }
+  .table th, .table td { padding: 3px; }
+  .title { font-size: 16px; margin: 6px 0 9px; }
+  .top { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 24mm; gap: 8px; }
+  .photo { height: 20mm; }
+  .identity { gap: 5px; margin: 7px 0; }
+  .box { padding: 4px; min-height: 22px; }
+  .caption { padding: 4px; }
+  .appreciation { min-height: 42px; font-size: 14px; }
+  .signatures { margin-top: 18px; }
+  .mastery { grid-template-columns: minmax(0, 1fr) 58mm; }
+  .legend { font-size: 9px; }
+  .studentForm { font-size: 10px; }
+  .preview.reportDocument {
+    display: grid !important;
+    grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
+    gap: 2.2mm;
+    width: 100% !important;
+    max-width: none !important;
+    height: 266.5mm;
+    padding: 4.5mm !important;
+    overflow: hidden !important;
+    border: .35mm solid #789589 !important;
+    font-family: Arial, sans-serif;
+    font-size: 8pt;
+    line-height: 1.15;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+  .preview.reportDocument .top { margin: 0; padding-bottom: 2mm; }
+  .preview.reportDocument .top h3 { font-size: 11pt; }
+  .preview.reportDocument .top small,
+  .preview.reportDocument .top p { font-size: 6.8pt; }
+  .preview.reportDocument .photo { height: 18mm; font-size: 7pt; }
+  .preview.reportDocument .title { margin: 0; }
+  .preview.reportDocument .identity { margin: 0; }
+  .preview.reportDocument .box { min-height: 0; padding: 1mm; font-size: 7.3pt; }
+  .preview.reportDocument .mastery { align-self: start; }
+  .preview.reportDocument .table { margin: 0; font-size: 6.6pt; line-height: 1.08; }
+  .preview.reportDocument .table th,
+  .preview.reportDocument .table td { padding: .55mm .7mm; }
+  .preview.reportDocument .table tr { height: var(--bulletin-row-height, 5mm); }
+  .preview.reportDocument .secondaryTable { font-size: 6.7pt; }
+  .preview.reportDocument .secondaryTable th:nth-child(1) { width: 14%; }
+  .preview.reportDocument .secondaryTable th:nth-child(2) { width: 5%; }
+  .preview.reportDocument .secondaryTable th:nth-child(3) { width: 6%; }
+  .preview.reportDocument .secondaryTable th:nth-child(4),
+  .preview.reportDocument .secondaryTable th:nth-child(5) { width: 8%; }
+  .preview.reportDocument .secondaryTable th:nth-child(6),
+  .preview.reportDocument .secondaryTable th:nth-child(7) { width: 5%; }
+  .preview.reportDocument .secondaryTable th:nth-child(8) { width: 6%; }
+  .preview.reportDocument .secondaryTable th:nth-child(9) { width: 27%; }
+  .preview.reportDocument .secondaryTable th:nth-child(10) { width: 16%; }
+  .preview.reportDocument .summary { margin: 0; }
+  .preview.reportDocument .summary div { padding: 1.5mm; }
+  .preview.reportDocument .summary b { font-size: 10pt; }
+  .preview.reportDocument .appreciation { margin: 0; min-height: 14mm; padding: 2mm; font-size: 10pt; }
+  .preview.reportDocument .signatures { margin-top: 3mm; align-self: end; }
+  .preview.reportDocument .signatures div { min-height: 14mm; }
+}
+
+
+
+
+/* v0.11.13 — correctif doux des bulletins : garder le modèle écran à l'impression */
+@media print {
+  .preview {
+    box-shadow: none !important;
+    border: 0 !important;
+    margin: 0 auto !important;
+    width: 194mm !important;
+    max-width: 194mm !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  .identity {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .summary {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .signatures {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+  }
+
+  .printOnlyHide,
+  .preview > .muted {
+    display: none !important;
+  }
+
+  .printAction,
+  .document-action-bar {
+    display: none !important;
+  }
+}

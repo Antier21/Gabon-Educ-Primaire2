@@ -1,0 +1,31 @@
+# Gabon Éduc+ — édition autonome
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_PUBLIC_APP_ENV = "production"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# La racine du sous-domaine ouvre directement le portail de cette édition.
+[[redirects]]
+  from = "/"
+  to = "/gabon-educ"
+  status = 302
+  force = true

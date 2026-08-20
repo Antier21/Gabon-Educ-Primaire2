@@ -1,0 +1,31 @@
+name: Qualité Gabon Éduc+
+
+on:
+  push:
+    branches: [main, "agent/**", "codex/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Installer les dépendances
+        run: npm ci --no-audit --no-fund
+      - name: Exécuter les tests
+        run: npm test
+      - name: Vérifier le code
+        run: npm run lint
+      - name: Vérifier les types
+        run: npm run typecheck
+      - name: Compiler l'application
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1

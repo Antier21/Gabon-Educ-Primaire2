@@ -1,0 +1,22 @@
+GABON ÉDUC+ PRIMAIRE — v0.12.0-primary.11
+
+Pour voir l'application sur un ordinateur équipé de Node.js :
+
+1. Ouvrir un terminal dans ce dossier.
+2. Exécuter : npm install
+3. Exécuter : npm run dev
+4. Ouvrir : http://localhost:3000
+
+Pour le mode cloud, appliquer les migrations Supabase 001 à 059 dans l'ordre.
+Si la migration 058_preschool_levels.sql est déjà installée, appliquer uniquement
+059_preschool_grading_persistence.sql pour enregistrer les domaines, observations
+et niveaux de maîtrise de la maternelle.
+
+Aucun compte Supabase n'est nécessaire pour tester : le mode démonstration est automatique.
+
+Pages disponibles :
+- /gabon-educ
+- /gabon-educ/inscription
+- /gabon-educ/connexion
+- /gabon-educ/tableau-de-bord
+- /gabon-educ/synchronisation

@@ -1,0 +1,6 @@
+import { readFileSync } from "node:fs";
+import { describe,expect,it } from "vitest";
+
+describe("migrations Supabase v0.8.0",()=>{const files=Array.from({length:11},(_,index)=>String(index+12).padStart(3,"0"));
+ it("fournit la séquence 012 à 022",()=>{for(const number of files){const path=`supabase/migrations/${number}_${({"012":"establishment_core","013":"school_users_and_roles","014":"academic_structure","015":"student_records","016":"guardians","017":"subject_assignments","018":"timetables","019":"attendance","020":"announcements","021":"documents","022":"report_card_workflow"} as Record<string,string>)[number]}.sql`;expect(()=>readFileSync(path,"utf8")).not.toThrow();}});
+ it("active la RLS sans politique privée ouverte à tous",()=>{for(const number of files){const directory=readFileSync(`supabase/migrations/${number}_${({"012":"establishment_core","013":"school_users_and_roles","014":"academic_structure","015":"student_records","016":"guardians","017":"subject_assignments","018":"timetables","019":"attendance","020":"announcements","021":"documents","022":"report_card_workflow"} as Record<string,string>)[number]}.sql`,"utf8").toLowerCase();expect(directory).not.toMatch(/using\s*\(\s*true\s*\)/);expect(directory).toContain("school_id");}});});
