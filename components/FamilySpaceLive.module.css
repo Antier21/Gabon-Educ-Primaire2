@@ -1,0 +1,70 @@
+.wrapper{display:grid;gap:18px}
+.state{padding:28px;text-align:center;color:#4b5c56}
+.stateError{display:flex;align-items:center;justify-content:center;gap:10px;padding:22px;border-radius:14px;background:#fdf6e8;border:1px solid #efd9ae;color:#7a5510;font-size:14px;line-height:1.55;text-align:left}
+.stateError svg{width:20px;flex:0 0 auto}
+
+.childBar{display:flex;flex-wrap:wrap;gap:10px}
+.childChip,.childActive{display:grid;gap:2px;text-align:left;padding:11px 16px;border-radius:14px;cursor:pointer;font:inherit;background:#fff}
+.childChip{border:1px solid #d8e3de}
+.childActive{border:2px solid #08734f;background:#f1faf6}
+.childChip b,.childActive b{font-size:14px}
+.childChip small,.childActive small{font-size:12px;color:#65766f}
+
+.childHeader{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:#fff;border:1px solid #dce7e2;border-radius:18px;padding:20px}
+.childHeader small{letter-spacing:.06em;font-size:11px;font-weight:700;color:#08734f;text-transform:uppercase}
+.childHeader h2{margin:4px 0 2px;font-size:22px}
+.childHeader p{margin:0;color:#65766f;font-size:14px}
+.counters{margin-left:auto;display:flex;flex-wrap:wrap;gap:10px}
+.counters span{background:#f4f8f6;border-radius:999px;padding:7px 14px;font-size:13px;color:#3d4d47}
+.counters b{color:#08734f}
+
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tab,.tabActive{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;font:inherit;font-size:14px;cursor:pointer}
+.tab{border:1px solid #d8e3de;background:#fff;color:#3d4d47}
+.tab:hover{border-color:#08734f;color:#08734f}
+.tabActive{border:1px solid #08734f;background:#08734f;color:#fff;font-weight:600}
+.tab svg,.tabActive svg{width:17px}
+
+.panel{background:#fff;border:1px solid #dce7e2;border-radius:18px;padding:20px;display:grid;gap:16px}
+.empty{margin:0;color:#65766f;font-size:14px;line-height:1.6}
+
+.report{border:1px solid #e6edea;border-radius:14px;padding:16px}
+.report header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.report header b{font-size:16px;display:block}
+.report header small{color:#65766f;font-size:12px}
+.average{margin-left:auto;background:#eef7f3;color:#0b5138;font-weight:700;font-size:18px;border-radius:12px;padding:8px 14px}
+.report table{width:100%;border-collapse:collapse;font-size:14px}
+.report th{text-align:left;padding:8px 10px;border-bottom:1px solid #dce7e2;color:#677870;font-size:12px;font-weight:700}
+.report td{padding:9px 10px;border-bottom:1px solid #f2f6f4}
+.comment{margin:12px 0 0;padding:12px;background:#f7fbf9;border-radius:10px;font-size:14px;line-height:1.6;color:#3d4d47}
+
+.attendanceList{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.justified,.unjustified{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;border:1px solid #e6edea}
+.justified{background:#f4faf7;border-color:#cfe7db}
+.unjustified{background:#fdf4f4;border-color:#f0d5d5}
+.justified>div,.unjustified>div{display:grid;gap:2px}
+.attendanceList b{font-size:14px}
+.attendanceList small{color:#65766f;font-size:12px}
+.attendanceList em{color:#4b5c56;font-size:12px;font-style:normal}
+.justified>span,.unjustified>span{margin-left:auto;font-size:12px;font-weight:600;color:#3d4d47}
+
+.day{border-top:1px solid #eef2f0;padding-top:12px}
+.day:first-child{border-top:0;padding-top:0}
+.day h3{margin:0 0 8px;font-size:15px;color:#08734f}
+.day ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.day li{display:flex;align-items:center;gap:12px;padding:9px 12px;background:#f7fbf9;border-radius:10px;font-size:14px}
+.hour{font-variant-numeric:tabular-nums;color:#65766f;font-size:13px;min-width:104px}
+.day small{margin-left:auto;color:#65766f;font-size:12px}
+
+.message{border:1px solid #e6edea;border-radius:14px;padding:16px}
+.message header{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+.message header b{font-size:15px}
+.message header small{margin-left:auto;color:#65766f;font-size:12px}
+.message p{margin:0 0 6px;line-height:1.6;font-size:14px;white-space:pre-wrap}
+.message>small{color:#65766f;font-size:12px}
+
+@media(max-width:700px){
+  .counters{margin-left:0;width:100%}
+  .day li{flex-wrap:wrap}
+  .hour{min-width:0}
+}

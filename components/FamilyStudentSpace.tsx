@@ -4,7 +4,7 @@ import Image from "next/image";
 import { PRODUCT } from "@/lib/product-edition";
 import { Bell, BookOpen, CalendarDays, FileText, GraduationCap, MessageCircle, UserRoundCheck } from "lucide-react";
 import { SimpleSpaceNav, type SimpleSpace } from "@/components/SpaceNavigation";
-import { PlatformManager } from "@/components/platform/PlatformManager";
+import { FamilySpaceLive } from "@/components/FamilySpaceLive";
 
 export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "parent" | "student"> }) {
   const isParent = space === "parent";
@@ -27,7 +27,7 @@ export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "par
           <article><MessageCircle /><b>Communication</b><span>Échanges avec l’établissement</span></article>
         </div>
       </section>
-      <div className="family-space-data"><PlatformManager module={space === "parent" ? "parent" : "student"} embedded /></div>
+      <div className="family-space-data"><FamilySpaceLive space={space} /></div>
     </main>
   );
 }

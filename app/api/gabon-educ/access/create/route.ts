@@ -14,6 +14,10 @@ type CreateAccessPayload = {
   classId?: string;
   identifier?: string;
   password?: string;
+  /** Fiche de responsable à rattacher au compte créé (rôle parent). */
+  guardianId?: string;
+  /** Dossier d'élève à rattacher au compte créé (rôle élève). */
+  studentId?: string;
 };
 
 function clean(value: unknown) {
@@ -52,6 +56,8 @@ export async function POST(request: Request) {
     const identifier = normalizeAccessIdentifier(clean(raw.identifier));
     const password = clean(raw.password);
     const classId = clean(raw.classId);
+    const guardianId = clean(raw.guardianId);
+    const studentId = clean(raw.studentId);
 
     if (!schoolId || !firstName || !lastName || !identifier || password.length < 8) {
       return NextResponse.json(
@@ -181,6 +187,35 @@ export async function POST(request: Request) {
       );
     if (credentialError) throw credentialError;
 
+    // Rattachement du compte à la personne qu'il représente.
+    //
+    // Sans ce lien, un parent peut se connecter mais l'application ignore de
+    // quels enfants il est responsable : son espace reste vide, et les
+    // politiques RLS ne reconnaissent rien. C'est ici, au moment où le
+    // secrétariat a la personne devant lui, que le rattachement est le plus
+    // fiable.
+    let linkWarning = "";
+    if (role === "parent" && guardianId) {
+      const { error: guardianLinkError } = await admin
+        .from("guardians")
+        .update({ profile_id: authUserId, updated_at: new Date().toISOString() })
+        .eq("id", guardianId)
+        .eq("school_id", schoolId);
+      if (guardianLinkError) linkWarning = errorMessage(guardianLinkError);
+    } else if (role === "student" && studentId) {
+      const { error: studentLinkError } = await admin
+        .from("student_records")
+        .update({ profile_id: authUserId, updated_at: new Date().toISOString() })
+        .eq("id", studentId)
+        .eq("school_id", schoolId);
+      if (studentLinkError) linkWarning = errorMessage(studentLinkError);
+    } else if (role === "parent" || role === "student") {
+      linkWarning =
+        role === "parent"
+          ? "Compte créé, mais aucune fiche de responsable ne lui est rattachée : son espace restera vide tant que le lien ne sera pas fait."
+          : "Compte créé, mais aucun dossier d'élève ne lui est rattaché : son espace restera vide tant que le lien ne sera pas fait.";
+    }
+
     return NextResponse.json({
       id: authUserId,
       identifier,
@@ -188,6 +223,7 @@ export async function POST(request: Request) {
       displayName,
       role,
       schoolId,
+      ...(linkWarning ? { linkWarning } : {}),
     });
   } catch (error) {
     const message = errorMessage(error);
