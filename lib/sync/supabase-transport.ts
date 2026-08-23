@@ -252,7 +252,17 @@ async function executeTableMutation(
     .upsert(mutation.row, { onConflict: mutation.key })
     .select()
     .single();
-  if (error) throw new Error(subscriptionFriendlyMessage(error));
+  if (error) {
+    // Journalise la table et les colonnes réellement transmises : sans cela,
+    // un message comme « invalid input syntax for type uuid » ne dit pas quelle
+    // colonne pose problème, et le diagnostic devient impossible.
+    console.error(
+      `[Gabon Éduc+] Écriture refusée sur ${mutation.table} :`,
+      error,
+      mutation.row,
+    );
+    throw new Error(subscriptionFriendlyMessage(error));
+  }
   return data as Record<string, unknown>;
 }
 
