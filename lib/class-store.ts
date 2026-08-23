@@ -40,6 +40,8 @@ export type ClassRecord = {
   students: ClassStudent[];
   updatedAt: string;
   syncState?: SyncState;
+  /** Raison exacte d'un échec de synchronisation, à afficher à l'utilisateur. */
+  syncError?: string;
 };
 export type ClassList = {
   items: ClassRecord[];
@@ -269,8 +271,12 @@ export async function saveClassRecord(
     ]);
     if (queued) updateOperationStatus(queued.id, "synced");
     return synced;
-  } catch {
-    return record;
+  } catch (error) {
+    // Une écriture Supabase refusée ne doit jamais passer inaperçue : la classe
+    // resterait indéfiniment locale sans que personne ne sache pourquoi.
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error("Échec d'enregistrement de la classe dans Supabase :", reason);
+    return { ...record, syncError: reason };
   }
 }
 

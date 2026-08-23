@@ -74,18 +74,20 @@ async function resolveGradeLevel(
     if (!level) throw new Error("Niveau de classe absent de la file locale.");
     const schoolId = String(mutation.row.school_id || "");
     if (!schoolId) throw new Error("Établissement absent lors de la résolution du niveau.");
+    // grade_levels est une table de référence GLOBALE : elle ne possède pas de
+    // colonne school_id. Filtrer dessus provoquait une erreur PostgREST
+    // (« column grade_levels.school_id does not exist ») qui faisait échouer
+    // silencieusement toute création de classe.
     let result = await client
       .from("grade_levels")
       .select("id")
-      .eq("school_id", schoolId)
       .eq("code", level)
       .maybeSingle();
     if (!result.data)
       result = await client
         .from("grade_levels")
         .select("id")
-        .eq("school_id", schoolId)
-        .eq("name", level)
+        .ilike("name", level)
         .maybeSingle();
     if (result.error || !result.data?.id)
       throw new Error(`Niveau Supabase introuvable : ${level}.`);

@@ -89,7 +89,11 @@ export function ClassesManagerLocal() {
         // la classe affichée ; la prochaine actualisation pourra réessayer.
         setStatusText(record.syncState === "synced" ? "Classe enregistrée dans Supabase" : "Synchronisation différée");
       }
-      setNotice({ kind:"success", text: record.syncState === "pending" ? "Classe enregistrée localement ; synchronisation différée." : "Classe enregistrée." });
+      setNotice(
+        record.syncError
+          ? { kind: "error", text: `Classe non enregistrée dans Supabase : ${record.syncError} Elle n’existe que sur cet appareil.` }
+          : { kind: "success", text: record.syncState === "pending" ? "Classe enregistrée localement ; synchronisation différée." : "Classe enregistrée." },
+      );
     } catch (error) { setNotice({kind:"error",text:error instanceof Error?error.message:"Enregistrement impossible."}); } finally { setSaving(false); }
   }
 
