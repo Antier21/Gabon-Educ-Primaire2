@@ -7,6 +7,7 @@ import { Brand } from "@/components/Brand";
 import { createClient } from "@/lib/supabase/client";
 import { listClasses } from "@/lib/class-store";
 import { loadPlatformWorkspace, savePlatformWorkspace } from "@/lib/platform/store";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
 import type { ClassRecord } from "@/lib/class-store";
 import type { PlatformWorkspace, SchoolSubject, TeachingAssignment, TimetableSlot } from "@/lib/platform/types";
 import type { SyncOperationMetadata } from "@/lib/sync/types";
@@ -56,6 +57,16 @@ export function TeacherAssignedClasses() {
     const platformResult = await loadPlatformWorkspace();
     setWorkspace(platformResult.workspace);
     const school = platformResult.workspace.school;
+    // Sans établissement résolu, la page resterait vide sans la moindre
+    // explication. On remonte alors la raison exacte du refus.
+    if (!school?.id) {
+      try {
+        await resolveActiveSchoolContext();
+        setMessage(platformResult.message || "Établissement introuvable pour ce compte.");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Établissement introuvable pour ce compte.");
+      }
+    }
     const classResult = school?.id && school.schoolType
       ? await listClasses({ schoolId: school.id, schoolType: school.schoolType })
       : { items: [] as ClassRecord[] };
