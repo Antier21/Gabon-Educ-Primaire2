@@ -13,7 +13,8 @@ import {
   enqueueBusinessOperation,
   hashSyncValue,
 } from "@/lib/sync/business-operation";
-import { markModuleOperationsSynced } from "@/lib/sync/sync-manager";
+import { markModuleOperationsSynced, processQueue } from "@/lib/sync/sync-manager";
+import { createSupabaseSyncTransport } from "@/lib/sync/supabase-transport";
 import type { SyncOperationMetadata } from "@/lib/sync/types";
 import type { PlatformWorkspace } from "./types";
 import { readClasses } from "@/lib/class-store";
@@ -335,22 +336,22 @@ export async function loadPlatformWorkspace(): Promise<{
         )
       : { data: [], error: null };
     if (studentResult.error) throw studentResult.error;
-    // Type minimal commun aux deux appels RPC et au repli local : la suite du
-    // traitement n'utilise que ces deux champs.
+    // Annuaire des utilisateurs. Les deux RPC sont réservées à l'administration :
+    // un enseignant reçoit légitimement une erreur 400. Ce n'est pas un incident,
+    // on garde simplement l'annuaire déjà connu localement.
     type UsersOutcome = { data: unknown[] | null; error: unknown };
-    let usersResult: UsersOutcome | null = schoolId
-      ? await withTimeout(
-          createClient().rpc("list_school_access_users", { p_school_id: schoolId }),
-        ).catch(() => null)
-      : null;
-    if (!usersResult || usersResult.error) {
-      usersResult = schoolId
-        ? await withTimeout(
-            createClient().rpc("list_school_teachers", { p_school_id: schoolId }),
-          )
-        : { data: [], error: null };
+    let usersResult: UsersOutcome = { data: null, error: null };
+    if (schoolId) {
+      usersResult = await withTimeout(
+        createClient().rpc("list_school_access_users", { p_school_id: schoolId }),
+      ).catch(() => ({ data: null, error: null }));
+      if (!usersResult.data || usersResult.error) {
+        usersResult = await withTimeout(
+          createClient().rpc("list_school_teachers", { p_school_id: schoolId }),
+        ).catch(() => ({ data: null, error: null }));
+      }
     }
-    if (usersResult.error) throw usersResult.error;
+    const directoryUnavailable = Boolean(usersResult.error) || !usersResult.data;
     const acceptedTeachers = ((usersResult.data || []) as Array<Record<string, unknown>>).map(
       (row) => ({
         id: String(row.id),
@@ -404,16 +405,61 @@ export async function loadPlatformWorkspace(): Promise<{
       updatedAt: String(row.updated_at || ""),
     })).filter((item) => item.id);
 
+    // Affectations pédagogiques distantes. Cette lecture est un complément :
+    // si elle échoue ou ne renvoie rien, on conserve strictement les affectations
+    // déjà connues localement, sans jamais les effacer.
+    const assignmentsResult = schoolId
+      ? await withTimeout(
+          createClient()
+            .from("school_teaching_assignments")
+            .select("id,school_id,academic_year_id,class_group_id,school_subject_id,teacher_id,starts_on,ends_on,is_temporary,is_head_teacher,is_active,created_at,updated_at")
+            .eq("school_id", schoolId),
+        ).catch(() => ({ data: null, error: null }))
+      : { data: null, error: null };
+    if (assignmentsResult.error)
+      console.warn("Affectations pédagogiques indisponibles :", assignmentsResult.error);
+
+    const remoteAssignments = ((assignmentsResult.data || []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      schoolId: String(row.school_id || ""),
+      academicYearId: String(row.academic_year_id || ""),
+      classId: String(row.class_group_id || ""),
+      subjectId: String(row.school_subject_id || ""),
+      teacherId: String(row.teacher_id || ""),
+      startsOn: String(row.starts_on || ""),
+      endsOn: String(row.ends_on || ""),
+      temporary: Boolean(row.is_temporary),
+      headTeacher: Boolean(row.is_head_teacher),
+      active: Boolean(row.is_active),
+      createdAt: String(row.created_at || ""),
+      updatedAt: String(row.updated_at || ""),
+    }));
+
+    // Fusion par identifiant : la version distante fait autorité quand elle existe,
+    // mais une affectation connue seulement en local n'est jamais perdue.
+    const mergedAssignments = Array.from(
+      new Map(
+        [...resolvedBase.assignments, ...remoteAssignments].map((item) => [item.id, item]),
+      ).values(),
+    );
+
     const mergedAcceptedUsers = Array.from(
       new Map([...staffTeachers, ...acceptedTeachers].map((item) => [item.id, item])).values(),
     );
     const pendingInvitations = resolvedBase.users.filter(
       (item) => item.invitationStatus !== "accepted",
     );
+    // Annuaire inaccessible (cas normal pour un enseignant) : on ne remplace pas
+    // la liste locale par une liste vide.
+    const nextUsers =
+      directoryUnavailable && !mergedAcceptedUsers.length
+        ? resolvedBase.users
+        : [...mergedAcceptedUsers, ...pendingInvitations];
     const remote = mergeStudentsFromClasses({
       ...resolvedBase,
       students: mapRemoteStudents((studentResult.data || []) as Array<Record<string, unknown>>),
-      users: [...mergedAcceptedUsers, ...pendingInvitations],
+      users: nextUsers,
+      assignments: mergedAssignments,
     });
     writeWorkspace(remote);
     return {
@@ -562,10 +608,27 @@ export async function savePlatformWorkspace(
     );
     if (error) throw error;
     markModuleOperationsSynced("settings");
+
+    // Les opérations métier (affectations, matières, emplois du temps) étaient
+    // seulement mises en file : rien ne la vidait en dehors d'un écran de
+    // préproduction. Une affectation d'enseignant n'atteignait donc jamais la
+    // table school_teaching_assignments, et l'espace enseignant restait vide.
+    const entityIds = new Set(operations.map((item) => item.entityId));
+    const queue = await processQueue(createSupabaseSyncTransport());
+    const failed = queue.filter(
+      (item) => entityIds.has(item.entityId) && ["error", "conflict"].includes(item.status),
+    );
+    if (failed.length)
+      return {
+        workspace,
+        mode: "cloud" as const,
+        message: `Enregistrement incomplet : ${failed[0].lastError || "synchronisation refusée par Supabase."}`,
+        blocked: false,
+      };
     return {
       workspace,
       mode: "cloud" as const,
-      message: "Modification enregistrée · synchronisation métier en attente",
+      message: "Modification enregistrée et synchronisée",
       blocked: false,
     };
   } catch (error) {
