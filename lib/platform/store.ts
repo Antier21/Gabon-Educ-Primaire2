@@ -297,17 +297,15 @@ export async function loadPlatformWorkspace(): Promise<{
         .maybeSingle(),
     );
     if (error) throw error;
-    if (!data) {
-      const activeSchool = (await resolveActiveSchoolContext()).school;
-      const workspace = activeSchool ? { ...local, school: activeSchool } : local;
-      if (activeSchool) writeWorkspace(workspace);
-      return {
-        workspace,
-        mode: "cloud",
-        message: activeSchool ? "Établissement cloud sélectionné" : "Sélectionnez un établissement dans Service abonnements",
-      };
-    }
-    const base = normalize(data.payload as Partial<PlatformWorkspace>);
+    // Un compte qui ouvre l'application sur un appareil neuf ne possède aucune
+    // ligne platform_workspaces : c'est le cas normal d'un enseignant à sa
+    // première connexion. Interrompre le chargement ici le privait de ses
+    // élèves et de ses affectations, donc de toutes ses classes. On poursuit
+    // désormais avec un espace de travail vide, que les lectures distantes
+    // ci-dessous viennent remplir.
+    const base = normalize(
+      data ? (data.payload as Partial<PlatformWorkspace>) : { ...local, school: null },
+    );
     const activeSchool = (await resolveActiveSchoolContext()).school;
     const storedSchoolId = readLocal<string>(STORAGE_KEYS.activeSchool, "");
     const localSelectedSchool = local.school?.id === storedSchoolId ? local.school : null;
