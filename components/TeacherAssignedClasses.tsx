@@ -126,34 +126,29 @@ export function TeacherAssignedClasses() {
           <Link href={`/gabon-educ/preparer-un-cours?classId=${selectedClassId}`}><BookOpenCheck/><span><b>Planifier un cours</b><small>Préparer une fiche pour {selectedClass?.name}</small></span></Link>
           <Link href={`/gabon-educ/evaluations?new=1&classId=${selectedClassId}`}><ClipboardPenLine/><span><b>Planifier une évaluation</b><small>Créer un sujet pour {selectedClass?.name}</small></span></Link>
         </nav>
-        <section className={styles.scheduleCard}><div className={styles.scheduleHead}><div><h2><CalendarDays/> Emploi du temps éditable</h2><p>{selectedClass?.name} — cliquez sur une case pour programmer votre matière.</p></div><label>Classe<select value={selectedClassId} onChange={(e)=>setSelectedClassId(e.target.value)}>{classes.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>
-          <div className="platform-timetable-board"><div className="platform-timetable-head"><b/>{DAYS.map((d)=><b key={d}>{d}</b>)}</div>{ROWS.map(([label,start,end])=><div className="platform-timetable-row" key={start}><small>{label}</small>{DAYS.map((d,i)=>{const slot=slotAt(i+1,start);return <button type="button" className={slot?"platform-timetable-cell has-course":"platform-timetable-cell"} onClick={()=>openCell(i+1,start,end,slot)} key={`${d}-${start}`}>{slot?<><strong>{subjectName(slot.subjectId)}</strong><span>{selectedClass?.name}</span><em>{slot.room||""}</em></>:<span className="empty-cell-label">+</span>}</button>})}</div>)}</div>
-        </section>
-        <section className={styles.studentsList}>
-          <h2><Users/> Liste des élèves de {selectedClass?.name}</h2>
-          {selectedClass && selectedClass.students.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Nom</th>
-                  <th>Prénom</th>
-                  <th>Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedClass.students.map((student) => (
-                  <tr key={student.id}>
-                    <td>{student.lastName}</td>
-                    <td>{student.firstName}</td>
-                    <td>{student.email}</td>
-                  </tr>
+        <div className={styles.classWorkspace}>
+          <section className={styles.studentsList}>
+            <h2><Users/> Élèves de {selectedClass?.name}<span className={styles.count}>{selectedClass?.students.length || 0}</span></h2>
+            {selectedClass && selectedClass.students.length > 0 ? (
+              <ol>
+                {selectedClass.students.map((student, index) => (
+                  <li key={student.id} className={styles.studentRow}>
+                    <span>{index + 1}.</span>
+                    <div>
+                      <b>{student.lastName} {student.firstName}</b>
+                      {student.email && <small>{student.email}</small>}
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className={styles.emptyStudents}>Aucun élève affecté à cette classe.</div>
-          )}
-        </section>
+              </ol>
+            ) : (
+              <div className={styles.emptyStudents}>Aucun élève affecté à cette classe.</div>
+            )}
+          </section>
+          <section className={styles.scheduleCard}><div className={styles.scheduleHead}><div><h2><CalendarDays/> Emploi du temps éditable</h2><p>{selectedClass?.name} — cliquez sur une case pour programmer votre matière.</p></div><label>Classe<select value={selectedClassId} onChange={(e)=>setSelectedClassId(e.target.value)}>{classes.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>
+            <div className={styles.timetableScroll}><div className="platform-timetable-board"><div className="platform-timetable-head"><b/>{DAYS.map((d)=><b key={d}>{d}</b>)}</div>{ROWS.map(([label,start,end])=><div className="platform-timetable-row" key={start}><small>{label}</small>{DAYS.map((d,i)=>{const slot=slotAt(i+1,start);return <button type="button" className={slot?"platform-timetable-cell has-course":"platform-timetable-cell"} onClick={()=>openCell(i+1,start,end,slot)} key={`${d}-${start}`}>{slot?<><strong>{subjectName(slot.subjectId)}</strong><span>{selectedClass?.name}</span><em>{slot.room||""}</em></>:<span className="empty-cell-label">+</span>}</button>})}</div>)}</div></div>
+          </section>
+        </div>
       </>}
     </section>
     {editing && <div className={styles.backdrop}><form className={styles.modal} onSubmit={saveCell}><header><div><h2>{editing.slot?"Modifier la programmation":"Programmer ce créneau"}</h2><p>{DAYS[editing.weekday-1]} · {editing.start} – {editing.end} · {selectedClass?.name}</p></div><button type="button" onClick={()=>setEditing(null)}><X/></button></header><label>Matière<select value={subjectId} onChange={(e)=>setSubjectId(e.target.value)} required><option value="">Choisir</option>{subjects.map((s)=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label><label>Salle <span>(facultatif)</span><input value={room} onChange={(e)=>setRoom(e.target.value)}/></label><footer>{editing.slot&&<button type="button" className={styles.delete} onClick={()=>void deleteCell()}>Supprimer</button>}<button type="button" className={styles.light} onClick={()=>setEditing(null)}>Annuler</button><button className={styles.save}>Enregistrer</button></footer></form></div>}

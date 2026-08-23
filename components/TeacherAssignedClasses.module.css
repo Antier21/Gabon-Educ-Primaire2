@@ -2,3 +2,19 @@
 .teacherActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 18px}.teacherActions a{display:flex;align-items:center;gap:12px;padding:15px;border:1px solid #cfe2da;border-radius:14px;background:#fff;color:#10231d;text-decoration:none}.teacherActions a:hover{border-color:#08734f;background:#f1faf6}.teacherActions svg{width:22px;color:#08734f;flex:0 0 auto}.teacherActions span{display:grid;gap:3px}.teacherActions small{color:#677870}
 .studentsList{background:#fff;border:1px solid #dce7e2;border-radius:18px;padding:20px;margin:18px 0}.studentsList h2{display:flex;gap:9px;align-items:center;margin:0 0 16px;font-size:20px}.studentsList table{width:100%;border-collapse:collapse}.studentsList th{text-align:left;padding:12px;border-bottom:1px solid #dce7e2;font-weight:700;color:#677870;font-size:14px}.studentsList td{padding:12px;border-bottom:1px solid #f0f4f2;color:#10231d}.studentsList tr:hover{background:#f5f8f7}.emptyStudents{padding:20px;text-align:center;color:#677870}
 @media(max-width:800px){.teacherActions{grid-template-columns:1fr}}
+
+/* Espace de travail de la classe : liste nominative à gauche, emploi du temps à droite. */
+.classWorkspace{display:grid;grid-template-columns:minmax(250px,310px) minmax(0,1fr);gap:18px;align-items:start;margin:18px 0}
+.classWorkspace>.studentsList{margin:0;position:sticky;top:18px;max-height:calc(100vh - 40px);overflow:auto}
+.classWorkspace>.scheduleCard{margin:0;min-width:0}
+.studentsList h2 .count{margin-left:auto;font-size:13px;font-weight:600;color:#08734f;background:#eef7f3;border-radius:999px;padding:3px 10px}
+.studentRow{display:flex;gap:10px;align-items:baseline;padding:10px 4px;border-bottom:1px solid #f0f4f2}
+.studentRow:last-child{border-bottom:0}
+.studentRow>span{color:#8b9a94;font-size:12px;min-width:22px;font-variant-numeric:tabular-nums}
+.studentRow b{display:block;font-size:14px;color:#10231d;font-weight:600}
+.studentRow small{display:block;color:#677870;font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+.timetableScroll{overflow-x:auto}
+@media(max-width:1080px){
+  .classWorkspace{grid-template-columns:1fr}
+  .classWorkspace>.studentsList{position:static;max-height:none}
+}
