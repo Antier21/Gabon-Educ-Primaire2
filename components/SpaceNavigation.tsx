@@ -22,7 +22,13 @@ const adminGroups: AdminGroup[] = [
       { label: "Scolarité", href: "/gabon-educ/eleves" },
       { label: "Gestion des classes", href: "/gabon-educ/classes" },
       { label: "Inscriptions", href: "/gabon-educ/inscriptions" },
-      { label: "Communication", href: "/gabon-educ/annonces" },
+      // Deux entrées distinctes : les annonces s'affichent dans l'application,
+      // les messages partent sur le téléphone des parents. Les confondre sous
+      // un même intitulé « Communication » rendait le second introuvable.
+      { label: "Messages aux parents (WhatsApp)", href: "/gabon-educ/communication" },
+      { label: "Annonces", href: "/gabon-educ/annonces" },
+      { label: "Parents et responsables", href: "/gabon-educ/parents" },
+      { label: "Comptes et identifiants", href: "/gabon-educ/utilisateurs" },
       { label: "Abonnement et licence", href: "/gabon-educ/abonnement" },
     ],
   },
@@ -34,6 +40,7 @@ const adminGroups: AdminGroup[] = [
       { label: "Créer un enseignant", href: "/gabon-educ/creer-enseignant" },
       { label: "Évaluations", href: "/gabon-educ/evaluations" },
       { label: "Bulletins", href: "/gabon-educ/notes-bulletins?tab=reports" },
+      { label: "Messages aux parents (WhatsApp)", href: "/gabon-educ/communication" },
       { label: "Concours", href: "/gabon-educ/modules/concours" },
       { label: "Surveillance — activité", href: "/gabon-educ/assiduite" },
       { label: "Vie scolaire", href: "/gabon-educ/assiduite" },
