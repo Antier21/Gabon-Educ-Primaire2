@@ -30,6 +30,17 @@ const requiredSchool = (actor: SyncActor, module: string) => {
   return actor.schoolId;
 };
 const nullable = (value: unknown) => (value === "" ? null : (value ?? null));
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Colonnes uuid : les identifiants de repli locaux (« local », « local-user »,
+ * « pending-user »…) ne sont pas des uuid. Les transmettre tels quels provoquait
+ * « invalid input syntax for type uuid » et bloquait toute la synchronisation.
+ * Une référence locale non résolue devient null plutôt qu'une valeur invalide.
+ */
+const uuidOrNull = (value: unknown) => {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return UUID_PATTERN.test(raw) ? raw : null;
+};
 
 /** Transforme un payload métier en colonnes strictement prévues par les migrations 001–030. */
 export function buildSupabaseMutation(
@@ -95,7 +106,7 @@ export function buildSupabaseMutation(
         id: operation.entityId,
         school_id: requiredSchool(actor, operation.module),
         owner_teacher_id: actor.userId,
-        grade_level_id: nullable(item.gradeLevelId),
+        grade_level_id: uuidOrNull(item.gradeLevelId),
         name: item.name,
         room: nullable(item.room),
         academic_year_label: item.academicYear,
@@ -106,7 +117,7 @@ export function buildSupabaseMutation(
   if (operation.module === "students") {
     const item = record(operation.payload, "student");
     if ("academicYearId" in item || "schoolId" in item) {
-      const classId = nullable(item.classId);
+      const classId = uuidOrNull(item.classId);
       return {
         kind: "table",
         table: "student_records",
@@ -115,7 +126,7 @@ export function buildSupabaseMutation(
         row: {
           id: operation.entityId,
           school_id: requiredSchool(actor, operation.module),
-          academic_year_id: nullable(item.academicYearId),
+          academic_year_id: uuidOrNull(item.academicYearId),
           class_group_id: classId,
           registration_number: nullable(item.registrationNumber),
           first_name: item.firstName,
@@ -272,7 +283,7 @@ export function buildSupabaseMutation(
       row: {
         id: operation.entityId,
         teacher_id: actor.userId,
-        class_group_id: nullable(item.classId),
+        class_group_id: uuidOrNull(item.classId),
         title: item.title,
         subject: item.subject,
         grade: item.grade,
@@ -292,9 +303,9 @@ export function buildSupabaseMutation(
       row: {
         id: operation.entityId,
         school_id: requiredSchool(actor, operation.module),
-        academic_year_id: nullable(item.academicYearId),
-        school_period_id: nullable(item.periodId),
-        class_group_id: nullable(item.classId),
+        academic_year_id: uuidOrNull(item.academicYearId),
+        school_period_id: uuidOrNull(item.periodId),
+        class_group_id: uuidOrNull(item.classId),
         student_id: item.studentId,
         timetable_slot_id: nullable(item.timetableSlotId),
         attendance_kind: item.kind,
@@ -320,7 +331,7 @@ export function buildSupabaseMutation(
         academic_year_id: item.academicYearId,
         class_group_id: item.classId,
         school_subject_id: item.subjectId,
-        teacher_id: nullable(item.teacherId),
+        teacher_id: uuidOrNull(item.teacherId),
         room: nullable(item.room),
         weekday: item.weekday,
         starts_at: item.startsAt,
@@ -342,8 +353,8 @@ export function buildSupabaseMutation(
         school_id: requiredSchool(actor, operation.module),
         document_kind: item.kind,
         title: item.title,
-        student_id: nullable(item.studentId),
-        class_group_id: nullable(item.classId),
+        student_id: uuidOrNull(item.studentId),
+        class_group_id: uuidOrNull(item.classId),
         payload: item.payload || {},
         document_status: item.status || "generated",
         created_by: actor.userId,
@@ -421,7 +432,7 @@ export function buildSupabaseMutation(
       row: {
         id: operation.entityId,
         school_id: requiredSchool(actor, operation.module),
-        school_level_id: nullable(item.levelId),
+        school_level_id: uuidOrNull(item.levelId),
         code: item.code,
         label: item.label,
         color: nullable(item.color),
