@@ -8,6 +8,13 @@ export type TableMutation = {
   entityId: string;
   row: Record<string, unknown>;
   related?: TableMutation[];
+  /**
+   * Colonnes servant à détecter un conflit lors de l'écriture, quand la clé
+   * naturelle diffère de la clé primaire. Sans cela, une entité recréée
+   * localement avec un nouvel identifiant heurte la contrainte d'unicité
+   * métier au lieu de mettre à jour la ligne existante.
+   */
+  conflictTarget?: string;
 };
 export type RpcMutation = {
   kind: "rpc";
@@ -428,6 +435,10 @@ export function buildSupabaseMutation(
       kind: "table",
       table: "school_subjects",
       key: "id",
+      // Une matière est identifiée métier par (établissement, code) : c'est la
+      // contrainte school_subjects_school_id_code_key. Résoudre le conflit sur
+      // ce couple met à jour la matière existante au lieu de la dupliquer.
+      conflictTarget: "school_id,code",
       entityId: operation.entityId,
       row: {
         id: operation.entityId,

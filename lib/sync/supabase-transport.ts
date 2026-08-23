@@ -249,7 +249,7 @@ async function executeTableMutation(
   }
   const { data, error } = await client
     .from(mutation.table)
-    .upsert(mutation.row, { onConflict: mutation.key })
+    .upsert(mutation.row, { onConflict: mutation.conflictTarget || mutation.key })
     .select()
     .single();
   if (error) {
