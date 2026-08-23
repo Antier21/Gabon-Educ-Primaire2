@@ -112,6 +112,30 @@ async function resolveGradeLevel(
   mutation.row.academic_year_id = year.data.id;
 }
 
+/**
+ * Les niveaux d'établissement ne sont pas encore synchronisés : ils n'existent
+ * que dans l'espace de travail local. Une matière référençant un niveau absent
+ * de school_levels était rejetée par la clé étrangère, ce qui bloquait ensuite
+ * les affectations. La colonne étant facultative, on préfère écrire la matière
+ * sans son niveau plutôt que de la perdre.
+ */
+async function resolveSubjectLevel(
+  client: SupabaseClient,
+  mutation: TableMutation,
+) {
+  if (mutation.table !== "school_subjects") return;
+  const levelId = String(mutation.row.school_level_id || "");
+  if (!levelId) return;
+  const schoolId = String(mutation.row.school_id || "");
+  const existing = await client
+    .from("school_levels")
+    .select("id")
+    .eq("id", levelId)
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (existing.error || !existing.data?.id) mutation.row.school_level_id = null;
+}
+
 async function resolveAssignmentReferences(
   client: SupabaseClient,
   mutation: TableMutation,
@@ -290,6 +314,7 @@ export function createSupabaseSyncTransport(
 
       await resolveGradeLevel(client, operation, mutation);
       await resolveLessonReferences(client, operation, mutation);
+      await resolveSubjectLevel(client, mutation);
       await resolveAssignmentReferences(client, mutation);
       const saved = await executeTableMutation(
         client,
