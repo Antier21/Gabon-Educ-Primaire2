@@ -1,0 +1,94 @@
+.page{min-height:100vh;background:#f5f8f7;color:#10231d}
+.topbar{height:64px;background:#fff;border-bottom:1px solid #dce7e2;display:flex;align-items:center;padding:0 28px}
+.brand{display:flex;align-items:center;gap:14px}
+.brand>div:last-child{display:grid}
+.brand small{color:#65766f}
+.back{display:grid;place-items:center;color:inherit}
+.back svg{width:20px}
+.shell{max-width:1180px;margin:auto;padding:32px 28px 64px}
+.heading small{letter-spacing:.08em;font-size:12px;font-weight:700;color:#08734f}
+.heading h1{margin:6px 0 8px;font-size:30px}
+.heading p{margin:0 0 22px;color:#4b5c56;max-width:70ch;line-height:1.55}
+
+.notice,.noticeError{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;margin-bottom:18px;font-size:14px}
+.notice{background:#eef7f3;border:1px solid #bfe3d2;color:#0b5138}
+.noticeError{background:#fdeeee;border:1px solid #f2c4c4;color:#8c2020}
+.notice button,.noticeError button{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;display:grid;place-items:center}
+.notice svg,.noticeError svg{width:16px}
+
+.card{background:#fff;border:1px solid #dce7e2;border-radius:18px;padding:22px;margin:0 0 20px}
+.card h2{display:flex;align-items:center;gap:10px;margin:0 0 18px;font-size:19px}
+.card h2 svg{width:20px;color:#08734f}
+.card label{display:grid;gap:6px;font-size:13px;font-weight:600;color:#3d4d47;margin-bottom:14px}
+.card input[type=text],.card input:not([type]),.card select,.card textarea{padding:10px 12px;border:1px solid #cfe2da;border-radius:10px;font:inherit;color:#10231d;background:#fff;width:100%}
+.card textarea{resize:vertical;line-height:1.55}
+
+.audienceGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+.audienceCard,.audienceActive{display:grid;gap:4px;text-align:left;padding:14px;border-radius:14px;background:#fff;cursor:pointer;font:inherit}
+.audienceCard{border:1px solid #cfe2da}
+.audienceActive{border:2px solid #08734f;background:#f1faf6}
+.audienceCard b,.audienceActive b{font-size:15px}
+.audienceCard small,.audienceActive small{color:#65766f;font-size:12px}
+
+.targetRow{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.targetRow label{flex:1 1 240px;margin-bottom:0}
+
+.primary{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:0;border-radius:10px;background:#08734f;color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.primary:disabled{background:#a8c4b8;cursor:not-allowed}
+.primary svg{width:17px}
+.ghost{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid #cfe2da;border-radius:9px;background:#fff;color:#3d4d47;font:inherit;font-size:13px;cursor:pointer}
+.ghost:hover{border-color:#08734f;color:#08734f}
+.ghost svg{width:15px}
+
+.studentPicker{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid #eef2f0}
+.studentChip,.studentChecked{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;margin:0}
+.studentChip{border:1px solid #cfe2da;background:#fff;color:#3d4d47}
+.studentChecked{border:1px solid #08734f;background:#eef7f3;color:#0b5138}
+
+.recipientSummary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid #eef2f0}
+.badgeOk{padding:5px 12px;border-radius:999px;background:#eef7f3;color:#0b5138;font-size:13px;font-weight:600}
+.badgeWarn{padding:5px 12px;border-radius:999px;background:#fdf3e3;color:#8a5a12;font-size:13px;font-weight:600}
+.excludedList{flex:1 1 100%;margin:6px 0 0;padding-left:18px;color:#65766f;font-size:12px;line-height:1.7}
+
+.templateRow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.templateChip{padding:7px 13px;border:1px solid #cfe2da;border-radius:999px;background:#fff;color:#3d4d47;font:inherit;font-size:13px;cursor:pointer}
+.templateChip:hover{border-color:#08734f;background:#f1faf6;color:#0b5138}
+
+.variables{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px}
+.variables button{padding:5px 10px;border:1px dashed #b6d4c6;border-radius:8px;background:#f7fbf9;color:#0b5138;font:inherit;font-size:12px;cursor:pointer}
+.checkboxRow{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:#3d4d47}
+.checkboxRow input{width:auto}
+
+.preview{background:#f7fbf9;border:1px solid #dce7e2;border-radius:12px;padding:14px;margin-bottom:16px}
+.preview small{display:block;color:#65766f;font-size:12px;margin-bottom:6px}
+.preview p{margin:0;line-height:1.6;white-space:pre-wrap}
+
+.progress{margin-left:auto;font-size:14px;font-weight:600;color:#08734f;background:#eef7f3;border-radius:999px;padding:4px 12px}
+.recipientList{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.row_pending,.row_sent,.row_failed,.row_skipped{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;border:1px solid #e6edea;background:#fff}
+.row_sent{background:#f4faf7;border-color:#cfe7db}
+.row_failed{background:#fdf1f1;border-color:#f0cfcf}
+.row_skipped{background:#fafafa;border-color:#e8e8e8;opacity:.75}
+.row_pending>div:first-child,.row_sent>div:first-child,.row_failed>div:first-child,.row_skipped>div:first-child{display:grid;gap:2px;min-width:0}
+.recipientList b{font-size:14px}
+.recipientList small{color:#65766f;font-size:12px;overflow-wrap:anywhere}
+.recipientList em{color:#8c2020;font-size:12px;font-style:normal}
+.rowActions{margin-left:auto;display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.sendButton{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;background:#25d366;color:#04331c;font-weight:600;font-size:13px;text-decoration:none}
+.sendButton:hover{background:#1eb856}
+.sendButton svg{width:15px}
+.sentTag{display:inline-flex;align-items:center;gap:6px;color:#0b5138;font-size:13px;font-weight:600}
+.sentTag svg{width:16px}
+.done{margin:14px 0 0;color:#0b5138;font-size:14px;font-weight:600}
+
+.journal{width:100%;border-collapse:collapse;font-size:14px}
+.journal th{text-align:left;padding:10px 12px;border-bottom:1px solid #dce7e2;color:#677870;font-weight:700;font-size:13px}
+.journal td{padding:11px 12px;border-bottom:1px solid #f0f4f2}
+.journal tr:hover td{background:#f7fbf9}
+.muted{color:#65766f;font-size:13px;line-height:1.6}
+
+@media(max-width:760px){
+  .shell{padding:22px 16px 48px}
+  .row_pending,.row_sent,.row_failed,.row_skipped{flex-wrap:wrap}
+  .rowActions{margin-left:0;width:100%}
+}
