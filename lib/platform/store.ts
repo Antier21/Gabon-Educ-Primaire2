@@ -641,7 +641,11 @@ export async function savePlatformWorkspace(
     // sans relancer une file entière qui saturerait le navigateur et ferait
     // échouer l'action de l'utilisateur. Le Centre de synchronisation reste là
     // pour vider un arriéré important.
-    const queue = await processQueue(createSupabaseSyncTransport(), operations.length + 10);
+    const queue = await processQueue(
+      createSupabaseSyncTransport(),
+      operations.length + 10,
+      entityIds,
+    );
     const failed = queue.filter(
       (item) => entityIds.has(item.entityId) && ["error", "conflict"].includes(item.status),
     );

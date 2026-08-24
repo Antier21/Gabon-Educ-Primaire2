@@ -223,6 +223,7 @@ export function resolveConflict(
 export async function processQueue(
   transport: SyncTransport,
   limit = Number.POSITIVE_INFINITY,
+  priorityEntityIds?: ReadonlySet<string>,
 ) {
   const state = getConnectionState();
   const started = currentTime();
@@ -236,10 +237,24 @@ export async function processQueue(
     return readSyncQueue();
   }
   let queue = readSyncQueue();
+  // « syncing » est inclus volontairement : une passe interrompue — onglet
+  // fermé, page rechargée — laisse des opérations figées dans cet état, que
+  // plus rien ne reprenait ensuite. Le traitement étant séquentiel, une telle
+  // ligne ne peut être qu'un reliquat.
   const waiting = queue.filter(
-    (item) => ["pending", "error"].includes(item.status) && item.retryCount < 5,
+    (item) => ["pending", "error", "syncing"].includes(item.status) && item.retryCount < 5,
   );
-  for (const original of Number.isFinite(limit) ? waiting.slice(0, limit) : waiting) {
+  // Les nouvelles opérations sont ajoutées en fin de file. Sans ce classement,
+  // une limite basse ne traitait que les plus anciennes : l'action que
+  // l'utilisateur vient de demander attendait derrière tout l'arriéré et ne
+  // partait jamais, alors qu'une relance manuelle de sa ligne fonctionnait.
+  const ordered = priorityEntityIds?.size
+    ? [
+        ...waiting.filter((item) => priorityEntityIds.has(item.entityId)),
+        ...waiting.filter((item) => !priorityEntityIds.has(item.entityId)),
+      ]
+    : waiting;
+  for (const original of Number.isFinite(limit) ? ordered.slice(0, limit) : ordered) {
     const syncing = {
       ...original,
       status: "syncing" as const,
