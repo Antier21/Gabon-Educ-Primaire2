@@ -7,9 +7,24 @@ import {
   HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
   School, ShieldCheck, UserRound, Users, WalletCards, X
 } from "lucide-react";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
+import type { SchoolRole } from "@/lib/platform/types";
 
-type NavItem = { label: string; href: string; external?: boolean };
-type AdminGroup = { label: string; icon: React.ComponentType<{ className?: string }>; items: NavItem[] };
+/**
+ * `hiddenFor` retire une entrée à certains rôles.
+ *
+ * Le choix est de masquer plutôt que de griser : une porte visible qu'on
+ * ouvre pour se voir refuser l'entrée est plus décourageante qu'une porte
+ * absente, et elle donne au passage une fausse idée de l'organigramme.
+ */
+type NavItem = { label: string; href: string; external?: boolean; hiddenFor?: SchoolRole[] };
+type AdminGroup = {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: NavItem[];
+  hiddenFor?: SchoolRole[];
+};
 
 const adminGroups: AdminGroup[] = [
   {
@@ -28,8 +43,12 @@ const adminGroups: AdminGroup[] = [
       { label: "Messages aux parents (WhatsApp)", href: "/gabon-educ/communication" },
       { label: "Annonces", href: "/gabon-educ/annonces" },
       { label: "Parents et responsables", href: "/gabon-educ/parents" },
-      { label: "Comptes et identifiants", href: "/gabon-educ/utilisateurs" },
-      { label: "Abonnement et licence", href: "/gabon-educ/abonnement" },
+      // Le secrétariat inscrit, met à jour et communique, mais ne distribue pas
+      // les accès et ne touche pas au contrat : ouvrir un compte, c'est décider
+      // qui voit quoi dans l'établissement, et cela reste une décision de
+      // direction.
+      { label: "Comptes et identifiants", href: "/gabon-educ/utilisateurs", hiddenFor: ["secretary"] },
+      { label: "Abonnement et licence", href: "/gabon-educ/abonnement", hiddenFor: ["secretary"] },
     ],
   },
   {
@@ -87,10 +106,47 @@ const adminGroups: AdminGroup[] = [
   },
 ];
 
-export function AdminMegaNav({ onLogout }: { onLogout: () => void }) {
+export function AdminMegaNav({ onLogout, role }: { onLogout: () => void; role?: SchoolRole }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [resolvedRole, setResolvedRole] = useState<SchoolRole | null>(role || null);
   const navRef = useRef<HTMLElement>(null);
+
+  // Le rôle est résolu ici lorsque l'appelant ne le fournit pas, pour que
+  // chaque page qui affiche ce menu n'ait pas à s'en charger. Tant qu'il est
+  // inconnu, aucune entrée n'est masquée : mieux vaut montrer brièvement une
+  // rubrique de trop que faire clignoter le menu à chaque ouverture de page.
+  useEffect(() => {
+    if (role) {
+      setResolvedRole(role);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const context = await resolveActiveSchoolContext();
+        const roles = await resolveMyRoles(context.school.id);
+        if (!cancelled && roles) setResolvedRole(roles.primary);
+      } catch {
+        // Sans rôle identifié, le menu reste complet : c'est l'état d'avant.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
+
+  const visibleGroups = adminGroups
+    .filter((group) => !(resolvedRole && group.hiddenFor?.includes(resolvedRole)))
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !(resolvedRole && item.hiddenFor?.includes(resolvedRole)),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const homeHref = resolvedRole ? homeForRole(resolvedRole) : "/gabon-educ/administration";
 
   useEffect(() => {
     function onOutside(event: MouseEvent | TouchEvent) {
@@ -118,8 +174,8 @@ export function AdminMegaNav({ onLogout }: { onLogout: () => void }) {
         {mobileOpen ? <X /> : <Menu />} Menu de l’administration
       </button>
       <div className="admin-meganav-inner">
-        <Link className="admin-meganav-home" href="/gabon-educ/administration"><Home />Accueil</Link>
-        {adminGroups.map(group => {
+        <Link className="admin-meganav-home" href={homeHref}><Home />Accueil</Link>
+        {visibleGroups.map(group => {
           const Icon = group.icon;
           const isOpen = openGroup === group.label;
           return (
