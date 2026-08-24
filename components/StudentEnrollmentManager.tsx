@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardList, Edit3, FileText, LoaderCircle, Save, UserRoundCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, Edit3, FileText, LoaderCircle, Save, Trash2, UserRoundCheck } from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { SubscriptionReadOnlyPanel } from "@/components/SubscriptionReadOnlyPanel";
 import { cacheStudentInClass, listClasses, type ClassRecord } from "@/lib/class-store";
@@ -116,6 +116,37 @@ export function StudentEnrollmentManager() {
   const [message, setMessage] = useState("Chargement…");
   const [saving, setSaving] = useState(false);
   const [printData, setPrintData] = useState<Record<string, string> | null>(null);
+
+  /**
+   * Suppression d'une fiche d'inscription.
+   *
+   * La fiche est un document de saisie : la supprimer n'efface pas le dossier
+   * de l'élève, qui appartient à l'établissement dès la validation. La
+   * confirmation le dit explicitement, pour éviter qu'un secrétariat croie
+   * avoir désinscrit un élève alors qu'il n'a retiré qu'un formulaire.
+   */
+  function removeEnrollment(record: EnrollmentRecord) {
+    const name = `${record.data.lastName} ${record.data.firstName}`.trim();
+    const validated = record.status === "validated";
+    if (
+      !confirm(
+        validated
+          ? `Supprimer la fiche d’inscription de ${name} ?\n\nLe dossier élève déjà créé est conservé : pour le retirer également, passez par Scolarité.`
+          : `Supprimer définitivement la fiche d’inscription de ${name} ?`,
+      )
+    )
+      return;
+    // Les fiches vivent dans le stockage local : on réécrit la liste complète
+    // en conservant celles des autres établissements.
+    writeEnrollments(readEnrollments().filter((item) => item.id !== record.id));
+    setEnrollments(enrollments.filter((item) => item.id !== record.id));
+    if (editing?.id === record.id) setEditing(null);
+    setMessage(
+      validated
+        ? "Fiche supprimée. Le dossier élève reste enregistré dans Scolarité."
+        : "Fiche d’inscription supprimée.",
+    );
+  }
 
   const reload = useCallback(async () => {
     const [workspaceResult, classResult] = await Promise.all([loadPlatformWorkspace(), listClasses()]);
@@ -432,7 +463,17 @@ export function StudentEnrollmentManager() {
                     <td>{genderLabel(record.data.gender)}</td>
                     <td>{record.status === "validated" ? "Dossier élève créé" : "Brouillon"}</td>
                     <td>{new Date(record.updatedAt).toLocaleDateString("fr-FR")}</td>
-                    <td><button className="btn btn-light" onClick={() => setEditing(record)}><Edit3 /> Modifier</button></td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <button className="btn btn-light" onClick={() => setEditing(record)}><Edit3 /> Modifier</button>
+                      <button
+                        className="btn btn-light"
+                        style={{ marginLeft: 6, color: "#9b3f3f" }}
+                        onClick={() => removeEnrollment(record)}
+                        title="Supprimer cette fiche d’inscription"
+                      >
+                        <Trash2 /> Supprimer
+                      </button>
+                    </td>
                   </tr>)}
                 </tbody>
               </table>
