@@ -1340,6 +1340,48 @@ function StudentsView({ workspace, classes, persist }: ViewProps) {
       },
     );
   }
+  /**
+   * Suppression définitive d'un dossier d'élève.
+   *
+   * L'archivage convient à un départ en cours d'année ; il ne règle pas la
+   * saisie erronée ou le doublon, qui doivent disparaître. On refuse toutefois
+   * de détruire un dossier porteur d'informations : responsables rattachés ou
+   * compte de connexion. L'utilisateur retire d'abord ces éléments.
+   */
+  async function removeStudent(student: StudentRecord) {
+    const links = workspace.guardianLinks.filter((item) => item.studentId === student.id);
+    if (links.length) {
+      const names = links
+        .map((link) => workspace.guardians.find((item) => item.id === link.guardianId))
+        .filter(Boolean)
+        .map((guardian) => `${guardian?.firstName} ${guardian?.lastName}`);
+      alert(
+        `Suppression impossible : ${links.length} responsable(s) sont rattachés à cet élève${names.length ? ` (${names.join(", ")})` : ""}. Retirez ces liens dans Parents et responsables, puis recommencez.`,
+      );
+      return;
+    }
+    if (
+      !confirm(
+        `Supprimer définitivement le dossier de ${student.firstName} ${student.lastName} ?\n\nCette action est irréversible. Pour un élève qui quitte l’établissement, préférez « Archiver », qui conserve son historique.`,
+      )
+    )
+      return;
+    await persist(
+      {
+        ...workspace,
+        students: workspace.students.filter((item) => item.id !== student.id),
+      },
+      {
+        module: "students",
+        operation: "delete",
+        entityId: student.id,
+        payload: {},
+        baseUpdatedAt: student.updatedAt,
+      },
+      "Dossier supprimé.",
+    );
+  }
+
   return (
     <>
       <form className={`${styles.card} ${styles.form}`} onSubmit={add}>
@@ -1460,8 +1502,16 @@ function StudentsView({ workspace, classes, persist }: ViewProps) {
             <button
               className={`${styles.button} ${styles.buttonDanger}`}
               onClick={() => void archive(student)}
+              title="Conserve le dossier et son historique, mais le retire des listes actives"
             >
               Archiver
+            </button>
+            <button
+              className={`${styles.button} ${styles.buttonDanger}`}
+              onClick={() => void removeStudent(student)}
+              title="Efface définitivement le dossier — réservé aux erreurs de saisie et aux doublons"
+            >
+              Supprimer
             </button>
           </div>,
         ])}
@@ -1471,6 +1521,95 @@ function StudentsView({ workspace, classes, persist }: ViewProps) {
 }
 
 function GuardiansView({ workspace, persist }: ViewProps) {
+  const [editing, setEditing] = useState<Guardian | null>(null);
+  const [notice, setNotice] = useState("");
+
+  /**
+   * Correction d'une fiche existante. Les liens avec les élèves ne sont pas
+   * touchés : on ne corrige ici que l'identité et les coordonnées du
+   * responsable.
+   */
+  async function saveEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+    const data = new FormData(event.currentTarget);
+    const guardian: Guardian = {
+      ...editing,
+      firstName: field(data, "firstName"),
+      lastName: field(data, "lastName"),
+      phone: field(data, "phone"),
+      email: field(data, "email"),
+      address: field(data, "address"),
+      contactAllowed: data.get("contactAllowed") === "on",
+      updatedAt: now(),
+    };
+    const done = await persist(
+      {
+        ...workspace,
+        guardians: workspace.guardians.map((item) => (item.id === guardian.id ? guardian : item)),
+      },
+      {
+        module: "guardians",
+        operation: "update",
+        entityId: guardian.id,
+        payload: { guardian },
+        baseUpdatedAt: editing.updatedAt,
+      },
+      "Responsable mis à jour.",
+    );
+    if (done) setEditing(null);
+  }
+
+  /**
+   * Suppression d'un responsable. Conformément au principe retenu, on refuse
+   * et on explique plutôt que de détruire en chaîne : un responsable qui
+   * dispose d'un compte de connexion doit d'abord voir cet accès supprimé,
+   * sans quoi le compte resterait rattaché à une fiche disparue.
+   */
+  async function removeGuardian(guardian: Guardian) {
+    setNotice("");
+    const account = workspace.users.find(
+      (user) =>
+        user.role === "guardian" &&
+        `${user.firstName} ${user.lastName}`.trim().toLocaleLowerCase("fr") ===
+          `${guardian.firstName} ${guardian.lastName}`.trim().toLocaleLowerCase("fr"),
+    );
+    if (account) {
+      setNotice(
+        `Suppression impossible : un compte de connexion (${account.accessIdentifier || account.email}) correspond à ce responsable. Supprimez d’abord cet accès dans Comptes et identifiants.`,
+      );
+      return;
+    }
+    const links = workspace.guardianLinks.filter((item) => item.guardianId === guardian.id);
+    const children = links
+      .map((link) => workspace.students.find((item) => item.id === link.studentId))
+      .filter(Boolean)
+      .map((child) => `${child?.firstName} ${child?.lastName}`);
+    if (
+      !confirm(
+        children.length
+          ? `Supprimer ${guardian.firstName} ${guardian.lastName} ?\n\nSon lien avec ${children.join(", ")} sera également retiré. L’élève, lui, est conservé.`
+          : `Supprimer ${guardian.firstName} ${guardian.lastName} ?`,
+      )
+    )
+      return;
+    await persist(
+      {
+        ...workspace,
+        guardians: workspace.guardians.filter((item) => item.id !== guardian.id),
+        guardianLinks: workspace.guardianLinks.filter((item) => item.guardianId !== guardian.id),
+      },
+      {
+        module: "guardians",
+        operation: "delete",
+        entityId: guardian.id,
+        payload: {},
+        baseUpdatedAt: guardian.updatedAt,
+      },
+      "Responsable supprimé.",
+    );
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1579,8 +1718,50 @@ function GuardiansView({ workspace, persist }: ViewProps) {
           <button className={styles.button}>Enregistrer</button>
         </div>
       </form>
+      {editing && (
+        <form className={`${styles.card} ${styles.form}`} onSubmit={saveEdit}>
+          <h2>
+            Corriger la fiche de {editing.firstName} {editing.lastName}
+          </h2>
+          <div className={styles.three}>
+            <label>
+              Prénom
+              <input name="firstName" defaultValue={editing.firstName} required />
+            </label>
+            <label>
+              Nom
+              <input name="lastName" defaultValue={editing.lastName} required />
+            </label>
+            <label>
+              Téléphone
+              <input name="phone" defaultValue={editing.phone} required />
+            </label>
+          </div>
+          <div className={styles.two}>
+            <label>
+              E-mail
+              <input name="email" defaultValue={editing.email} />
+            </label>
+            <label>
+              Adresse
+              <input name="address" defaultValue={editing.address} />
+            </label>
+          </div>
+          <label>
+            <input type="checkbox" name="contactAllowed" defaultChecked={editing.contactAllowed} />{" "}
+            Communications autorisées
+          </label>
+          <div className={styles.actions}>
+            <button type="button" className={`${styles.button} ${styles.buttonSecondary}`} onClick={() => setEditing(null)}>
+              Annuler
+            </button>
+            <button className={styles.button}>Enregistrer les corrections</button>
+          </div>
+        </form>
+      )}
+      {notice && <p className={`${styles.notice} ${styles.dangerNotice}`}>{notice}</p>}
       <DataTable
-        headers={["Responsable", "Contact", "Élève(s)", "Lien", "Autorisé"]}
+        headers={["Responsable", "Contact", "Élève(s)", "Lien", "Autorisé", "Action"]}
         rows={workspace.guardians.map((guardian) => {
           const links = workspace.guardianLinks.filter(
             (item) => item.guardianId === guardian.id,
@@ -1600,6 +1781,23 @@ function GuardiansView({ workspace, persist }: ViewProps) {
               .join(", "),
             links.map((item) => item.relationship).join(", "),
             guardian.contactAllowed ? "Oui" : "Non",
+            <span key={guardian.id} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button
+                className={`${styles.button} ${styles.buttonSecondary}`}
+                onClick={() => {
+                  setNotice("");
+                  setEditing(guardian);
+                }}
+              >
+                Modifier
+              </button>
+              <button
+                className={`${styles.button} ${styles.buttonDanger}`}
+                onClick={() => void removeGuardian(guardian)}
+              >
+                Supprimer
+              </button>
+            </span>,
           ];
         })}
       />

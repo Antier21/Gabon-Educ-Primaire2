@@ -41,6 +41,54 @@ export function PersonnelManager(){
       setSaving(false);
     }
   }
+  /**
+   * Suppression d'un dossier de personnel.
+   *
+   * Refuser et expliquer : un membre du personnel dont le compte pédagogique
+   * a été créé ne peut pas disparaître sans que cet accès soit d'abord retiré,
+   * sinon un identifiant subsisterait sans dossier RH correspondant.
+   */
+  async function removeStaff(row:StaffRow){
+    setMessage("");
+    if(row.pedagogical_user_id){
+      setMessage("Suppression impossible : un compte pédagogique est rattaché à ce dossier. Supprimez d’abord son accès dans Comptes et identifiants.");
+      return;
+    }
+    if(!confirm(`Supprimer définitivement le dossier de ${row.first_name} ${row.last_name} ?`))return;
+    setSaving(true);
+    try{
+      const {error}=await client.from("school_staff").delete().eq("id",row.id).eq("school_id",schoolId);
+      if(error)throw error;
+      await reload(schoolId);
+      setMessage("Dossier supprimé.");
+    }catch(error){
+      setMessage(`Erreur : ${personnelErrorMessage(error)}`);
+    }finally{
+      setSaving(false);
+    }
+  }
+
+  /** Correction rapide des champs les plus souvent saisis de travers. */
+  async function editStaff(row:StaffRow){
+    const firstName=prompt("Prénom",row.first_name); if(firstName===null)return;
+    const lastName=prompt("Nom",row.last_name); if(lastName===null)return;
+    const jobTitle=prompt("Fonction",row.job_title||""); if(jobTitle===null)return;
+    const phone=prompt("Téléphone",row.phone||""); if(phone===null)return;
+    setMessage(""); setSaving(true);
+    try{
+      const {error}=await client.from("school_staff")
+        .update({first_name:firstName.trim(),last_name:lastName.trim(),job_title:jobTitle.trim()||"Personnel",phone:phone.trim(),updated_at:new Date().toISOString()})
+        .eq("id",row.id).eq("school_id",schoolId);
+      if(error)throw error;
+      await reload(schoolId);
+      setMessage("Dossier corrigé.");
+    }catch(error){
+      setMessage(`Erreur : ${personnelErrorMessage(error)}`);
+    }finally{
+      setSaving(false);
+    }
+  }
+
   async function logout(){await client.auth.signOut(); router.push("/gabon-educ");}
   return <>
     <AdminMegaNav onLogout={()=>void logout()}/>
@@ -62,7 +110,7 @@ export function PersonnelManager(){
         <label>Notes administratives<textarea name="administrative_notes" rows={3}/></label>
         {message&&<p role="status" aria-live="polite" style={{fontWeight:700}}>{message}</p>}<button type="submit" disabled={saving}>{saving?"Enregistrement…":"Enregistrer le personnel"}</button>
       </form>
-      <section style={{marginTop:24,background:"rgba(255,255,255,.08)",padding:20,borderRadius:16,border:"1px solid rgba(255,255,255,.22)"}}><h2>Personnel enregistré ({rows.length})</h2><div style={{overflowX:"auto"}}><table><thead><tr><th>Matricule</th><th>Nom</th><th>Catégorie</th><th>Fonction</th><th>Service</th><th>Contrat</th><th>Profil pédagogique</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.employee_number}</td><td>{r.first_name} {r.last_name}</td><td>{r.staff_category}</td><td>{r.job_title}</td><td>{r.department}</td><td>{r.contract_type}</td><td>{r.pedagogical_user_id?"Créé":"Non créé"}</td></tr>)}</tbody></table></div></section>
+      <section style={{marginTop:24,background:"rgba(255,255,255,.08)",padding:20,borderRadius:16,border:"1px solid rgba(255,255,255,.22)"}}><h2>Personnel enregistré ({rows.length})</h2><div style={{overflowX:"auto"}}><table><thead><tr><th>Matricule</th><th>Nom</th><th>Catégorie</th><th>Fonction</th><th>Service</th><th>Contrat</th><th>Profil pédagogique</th><th>Action</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.employee_number}</td><td>{r.first_name} {r.last_name}</td><td>{r.staff_category}</td><td>{r.job_title}</td><td>{r.department}</td><td>{r.contract_type}</td><td>{r.pedagogical_user_id?"Créé":"Non créé"}</td><td style={{whiteSpace:"nowrap"}}><button type="button" onClick={()=>void editStaff(r)} disabled={saving} style={{background:"#0f5f8a",marginRight:6}}>Modifier</button><button type="button" onClick={()=>void removeStaff(r)} disabled={saving} style={{background:"#8a2f2f"}}>Supprimer</button></td></tr>)}</tbody></table></div></section>
     </main>
     <style jsx global>{`.form-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.form-grid-3 label,label{display:grid;gap:5px;color:#fff;font-weight:700}input,select,textarea{padding:10px;border:1px solid #ccd5d1;border-radius:8px;background:#fff!important;color:#111!important}button{padding:11px 16px;border:0;border-radius:9px;background:#08734f;color:#fff;font-weight:700}table{width:100%;border-collapse:collapse;color:#fff}th,td{padding:9px;border-bottom:1px solid rgba(255,255,255,.18);text-align:left}th{background:rgba(0,0,0,.25)}@media(max-width:800px){.form-grid-3{grid-template-columns:1fr}}`}</style>
   </>;
