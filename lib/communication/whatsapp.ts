@@ -62,10 +62,27 @@ export function mergeMessage(template: string, variables: MessageVariables): str
   });
 }
 
-/** Lien d'ouverture de WhatsApp avec le message pré-rempli. */
+/**
+ * Lien d'ouverture de WhatsApp avec le message pré-rempli.
+ *
+ * On vise api.whatsapp.com plutôt que wa.me : ce dernier n'est qu'un
+ * raccourcisseur qui redirige vers cette adresse, et il est parfois lent ou
+ * filtré par certains fournisseurs d'accès. Une redirection de moins, un
+ * domaine de moins à joindre.
+ */
 export function buildWhatsAppLink(phone: string, message: string): string {
   const normalized = normalizePhone(phone);
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+  return `https://api.whatsapp.com/send?phone=${normalized}&text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Ouverture directe dans l'application WhatsApp installée, sans passer par le
+ * web. Utile quand la connexion est mauvaise ou le domaine inaccessible ; sans
+ * effet si l'application n'est pas installée.
+ */
+export function buildWhatsAppAppLink(phone: string, message: string): string {
+  const normalized = normalizePhone(phone);
+  return `whatsapp://send?phone=${normalized}&text=${encodeURIComponent(message)}`;
 }
 
 /** Lien SMS, replié pour les parents sans WhatsApp. */

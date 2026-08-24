@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardList,
+  Copy,
   Filter,
   MessageSquare,
   Send,
@@ -32,7 +33,11 @@ import {
   type MessageTemplate,
   type RecipientDraft,
 } from "@/lib/communication/store";
-import { MESSAGE_VARIABLES, buildWhatsAppLink, waMeTransport } from "@/lib/communication/whatsapp";
+import {
+  MESSAGE_VARIABLES,
+  buildWhatsAppAppLink,
+  buildWhatsAppLink,
+} from "@/lib/communication/whatsapp";
 import styles from "./CommunicationManager.module.css";
 
 const AUDIENCES: Array<{ kind: AudienceKind; label: string; hint: string }> = [
@@ -161,13 +166,10 @@ export function CommunicationManager() {
   }
 
   async function sendOne(recipient: CampaignRecipient) {
-    const outcome = await waMeTransport.send(recipient.phone, recipient.resolvedBody);
-    if (outcome.status === "failed") {
-      await markRecipient(recipient.id, "failed", outcome.reason || "Envoi impossible.");
-    } else {
-      // wa.me ne confirme rien : l'ouverture de WhatsApp vaut envoi déclaré.
-      await markRecipient(recipient.id, "sent");
-    }
+    // Le lien ouvre déjà WhatsApp : appeler le transporteur ici ouvrait un
+    // second onglet pour le même message. On se contente donc d'enregistrer
+    // l'envoi, que WhatsApp ne peut de toute façon pas nous confirmer.
+    await markRecipient(recipient.id, "sent");
     await refreshCampaignProgress(campaignId);
     setRecipients(await listCampaignRecipients(campaignId));
     setCampaigns(await listCampaigns(schoolId));
@@ -457,6 +459,31 @@ export function CommunicationManager() {
                         >
                           <Send /> WhatsApp
                         </a>
+                        {/*
+                          Replis quand le web WhatsApp est lent ou inaccessible :
+                          ouverture directe de l'application installée, ou copie
+                          du message pour un envoi à la main.
+                        */}
+                        <a
+                          className={styles.ghost}
+                          href={buildWhatsAppAppLink(recipient.phone, recipient.resolvedBody)}
+                          title="Ouvrir l’application WhatsApp installée sur cet ordinateur"
+                        >
+                          Application
+                        </a>
+                        <button
+                          type="button"
+                          className={styles.ghost}
+                          title="Copier le message pour l’envoyer à la main"
+                          onClick={() => {
+                            void navigator.clipboard
+                              ?.writeText(recipient.resolvedBody)
+                              .then(() => setNotice({ kind: "info", text: `Message pour ${recipient.guardianName} copié.` }))
+                              .catch(() => setNotice({ kind: "error", text: "Copie impossible sur ce navigateur." }));
+                          }}
+                        >
+                          <Copy /> Copier
+                        </button>
                         <button type="button" className={styles.ghost} onClick={() => void changeStatus(recipient, "skipped")}>
                           <SkipForward /> Ignorer
                         </button>
