@@ -312,10 +312,18 @@ export function createSupabaseSyncTransport(
         };
       }
 
-      await resolveGradeLevel(client, operation, mutation);
-      await resolveLessonReferences(client, operation, mutation);
-      await resolveSubjectLevel(client, mutation);
-      await resolveAssignmentReferences(client, mutation);
+      // Les résolveurs complètent les références d'une ligne à écrire : niveau,
+      // année scolaire, matière, enseignant. Une suppression n'a besoin que de
+      // l'identifiant, et sa charge utile est vide — les faire tourner ici
+      // revenait à exiger des champs absents, puis à lever « La classe
+      // sélectionnée ne possède pas d'identifiant cloud valide ». Aucune
+      // suppression d'affectation ou de classe ne pouvait donc aboutir.
+      if (operation.type !== "delete") {
+        await resolveGradeLevel(client, operation, mutation);
+        await resolveLessonReferences(client, operation, mutation);
+        await resolveSubjectLevel(client, mutation);
+        await resolveAssignmentReferences(client, mutation);
+      }
       const saved = await executeTableMutation(
         client,
         operation,

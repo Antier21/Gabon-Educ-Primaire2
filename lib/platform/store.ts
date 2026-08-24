@@ -646,11 +646,15 @@ export async function savePlatformWorkspace(
       (item) => entityIds.has(item.entityId) && ["error", "conflict"].includes(item.status),
     );
     if (failed.length)
+      // blocked marque ici « l'opération n'a pas abouti côté serveur ». Sans
+      // cela, l'appelant affichait son message de succès prédéfini et l'échec
+      // passait inaperçu : l'utilisateur lisait « Affectation retirée » tout en
+      // voyant l'affectation rester à l'écran.
       return {
         workspace,
         mode: "cloud" as const,
         message: `Enregistrement incomplet : ${failed[0].lastError || "synchronisation refusée par Supabase."}`,
-        blocked: false,
+        blocked: true,
       };
     return {
       workspace,
