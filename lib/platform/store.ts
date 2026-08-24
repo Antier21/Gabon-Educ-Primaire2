@@ -506,11 +506,21 @@ export async function savePlatformWorkspace(
   // la dernière licence validée et mise en cache est appliquée.
   if (status.mode === "cloud" && status.user && schoolId && schoolId !== "local") {
     try {
-      const { data, error } = await withTimeout(
+      // Une seule tentative sur un réseau lent suffisait à faire basculer
+      // l'écran en lecture seule. On laisse davantage de temps, et on réessaie
+      // une fois avant de conclure quoi que ce soit.
+      let result = await withTimeout(
         createClient().rpc("school_can_write", { target_school: schoolId }),
-      );
-      if (error) throw error;
-      if (data !== true) {
+        15000,
+      ).catch(() => null);
+      if (!result || result.error) {
+        result = await withTimeout(
+          createClient().rpc("school_can_write", { target_school: schoolId }),
+          15000,
+        ).catch(() => null);
+      }
+      if (!result || result.error) throw result?.error || new Error("timeout");
+      if (result.data !== true) {
         return {
           workspace: current,
           mode: "cloud" as const,
@@ -524,13 +534,28 @@ export async function savePlatformWorkspace(
         checkedAt: new Date().toISOString(),
       });
     } catch {
-      return {
-        workspace: current,
-        mode: "cloud" as const,
-        message:
-          "Vérification de l’abonnement impossible. Par sécurité, aucune modification n’a été enregistrée.",
-        blocked: true,
-      };
+      // Un réseau lent n'est pas une suspension d'abonnement. Tant que la
+      // dernière licence validée reste valable, l'établissement continue de
+      // travailler ; le message le dit clairement au lieu d'annoncer à tort
+      // une suspension.
+      const cached = readLocal<{ schoolId: string; canWrite: boolean; checkedAt: string } | null>(
+        "gabon-educ:subscription-write-cache",
+        null,
+      );
+      const cacheAge = cached?.checkedAt
+        ? Date.now() - new Date(cached.checkedAt).getTime()
+        : Number.POSITIVE_INFINITY;
+      const licenceStillValid =
+        cached?.schoolId === schoolId && cached.canWrite && cacheAge <= 30 * 24 * 60 * 60 * 1000;
+      if (!licenceStillValid) {
+        return {
+          workspace: current,
+          mode: "cloud" as const,
+          message:
+            "Connexion trop lente pour vérifier l’abonnement, et aucune licence récente n’est enregistrée sur cet appareil. Reconnectez-vous à Internet avant de saisir des données.",
+          blocked: true,
+        };
+      }
     }
   } else if (schoolId && schoolId !== "local") {
     const cached = readLocal<{

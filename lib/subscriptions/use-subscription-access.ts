@@ -23,8 +23,12 @@ export function useSubscriptionAccess(): SubscriptionAccessState {
   const [message, setMessage] = useState("");
 
   const refresh = useCallback(async () => {
+    // Ne jamais verrouiller par anticipation. Cette fonction est rappelée à
+    // chaque reprise de focus de la fenêtre : bloquer avant d'avoir vérifié
+    // faisait clignoter l'écran entre lecture seule et écriture, au point de
+    // rendre toute saisie impossible. L'état connu est conservé pendant la
+    // vérification.
     setLoading(true);
-    setBlocked(true);
     if (!hasSupabaseEnvironment()) {
       setSchoolId("");
       setBlocked(false);
@@ -42,13 +46,12 @@ export function useSubscriptionAccess(): SubscriptionAccessState {
       const denied = data !== true;
       setBlocked(denied);
       setMessage(denied ? BLOCKED_MESSAGE : "");
-    } catch (error) {
-      setBlocked(true);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Vérification de l’abonnement impossible. Par sécurité, les modifications sont temporairement désactivées.",
-      );
+    } catch {
+      // Un incident technique — réseau lent, session en cours de reprise —
+      // n'est pas un refus d'abonnement et ne doit pas passer l'écran en
+      // lecture seule. L'écriture reste de toute façon contrôlée au moment de
+      // l'enregistrement, où la licence est revérifiée.
+      setMessage("");
     }
     setLoading(false);
   }, []);

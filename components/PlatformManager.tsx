@@ -381,7 +381,16 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
               <div className={styles.subscriptionBlockedIcon} aria-hidden="true">
                 <ShieldAlert />
               </div>
-              <h2>Votre établissement est suspendu.</h2>
+              {/*
+                Le titre doit correspondre à la cause réelle. Annoncer une
+                suspension d'abonnement pour un incident réseau inquiète
+                inutilement l'établissement et masque le vrai problème.
+              */}
+              <h2>
+                {subscriptionMessage.startsWith("Votre établissement est suspendu.")
+                  ? "Votre établissement est suspendu."
+                  : "Modifications temporairement indisponibles."}
+              </h2>
               <p>
                 {subscriptionMessage || "Les données restent consultables, mais les créations, modifications et suppressions sont désactivées jusqu’à la régularisation de l’abonnement."}
               </p>
