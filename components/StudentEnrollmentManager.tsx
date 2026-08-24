@@ -9,24 +9,15 @@ import { cacheStudentInClass, listClasses, type ClassRecord } from "@/lib/class-
 import { loadPlatformWorkspace, savePlatformWorkspace } from "@/lib/platform/store";
 import type { PlatformWorkspace, StudentRecord } from "@/lib/platform/types";
 import { filterLevelsForSchoolType, formatSchoolProfile, getDefaultLevelsForSchoolType } from "@/lib/school-profiles";
-import { LEGACY_KEYS, readLocal, STORAGE_KEYS, writeLocal } from "@/lib/storage-mode";
+import { LEGACY_KEYS, STORAGE_KEYS } from "@/lib/storage-mode";
 import { useSubscriptionAccess } from "@/lib/subscriptions/use-subscription-access";
 import { resolveEnrollmentSubmitIntent } from "@/lib/enrollment/submit-intent";
-
-type EnrollmentStatus = "draft" | "validated";
-
-type EnrollmentRecord = {
-  id: string;
-  schoolId: string;
-  academicYearId: string;
-  status: EnrollmentStatus;
-  linkedStudentId: string;
-  createdAt: string;
-  updatedAt: string;
-  data: Record<string, string>;
-};
-
-const ENROLLMENTS_KEY = "gabon-educ-plus:v1:student-enrollments";
+import {
+  deleteEnrollmentForm,
+  loadEnrollmentForms,
+  saveEnrollmentForm,
+  type EnrollmentRecord,
+} from "@/lib/enrollment/store";
 
 function now() {
   return new Date().toISOString();
@@ -38,14 +29,6 @@ function id() {
 
 function field(data: FormData, name: string) {
   return String(data.get(name) || "").trim();
-}
-
-function readEnrollments() {
-  return readLocal<EnrollmentRecord[]>(ENROLLMENTS_KEY, []);
-}
-
-function writeEnrollments(items: EnrollmentRecord[]) {
-  writeLocal(ENROLLMENTS_KEY, items);
 }
 
 function genderLabel(value: string) {
@@ -125,7 +108,7 @@ export function StudentEnrollmentManager() {
    * confirmation le dit explicitement, pour éviter qu'un secrétariat croie
    * avoir désinscrit un élève alors qu'il n'a retiré qu'un formulaire.
    */
-  function removeEnrollment(record: EnrollmentRecord) {
+  async function removeEnrollment(record: EnrollmentRecord) {
     const name = `${record.data.lastName} ${record.data.firstName}`.trim();
     const validated = record.status === "validated";
     if (
@@ -136,15 +119,14 @@ export function StudentEnrollmentManager() {
       )
     )
       return;
-    // Les fiches vivent dans le stockage local : on réécrit la liste complète
-    // en conservant celles des autres établissements.
-    writeEnrollments(readEnrollments().filter((item) => item.id !== record.id));
+    const result = await deleteEnrollmentForm(record);
     setEnrollments(enrollments.filter((item) => item.id !== record.id));
     if (editing?.id === record.id) setEditing(null);
     setMessage(
-      validated
-        ? "Fiche supprimée. Le dossier élève reste enregistré dans Scolarité."
-        : "Fiche d’inscription supprimée.",
+      result.syncError ||
+        (validated
+          ? "Fiche supprimée. Le dossier élève reste enregistré dans Scolarité."
+          : "Fiche d’inscription supprimée."),
     );
   }
 
@@ -153,23 +135,41 @@ export function StudentEnrollmentManager() {
     const activeSchoolId = workspaceResult.workspace.school?.id || "";
     setWorkspace(workspaceResult.workspace);
     setClasses(classResult.items.filter((item) => !activeSchoolId || item.schoolId === activeSchoolId));
-    setEnrollments(readEnrollments().filter((item) => !activeSchoolId || item.schoolId === activeSchoolId));
+    const forms = await loadEnrollmentForms(activeSchoolId);
+    setEnrollments(forms.items);
+    return forms;
   }, []);
 
   useEffect(() => {
-    void reload();
-    setMessage("Formulaire d’inscription prêt.");
+    void (async () => {
+      const forms = await reload();
+      // Le message de démarrage rend compte de ce qui s'est réellement passé :
+      // une fiche restée sur un ancien poste vient peut-être d'être remontée
+      // en base, et le secrétariat doit le savoir.
+      setMessage(
+        forms.syncError ||
+          (forms.migrated
+            ? `${forms.migrated} fiche(s) de ce poste transférée(s) en ligne. Formulaire prêt.`
+            : "Formulaire d’inscription prêt."),
+      );
+    })();
+    // ENROLLMENTS_KEY est volontairement absent de cette liste : le
+    // rechargement écrit lui-même le cache des fiches, et se réabonner à sa
+    // propre écriture ferait boucler la page indéfiniment.
     const onStorage = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
-      if (!detail?.key || [STORAGE_KEYS.classes, LEGACY_KEYS.classes, STORAGE_KEYS.students, ENROLLMENTS_KEY].includes(detail.key)) {
+      if (detail?.key && [STORAGE_KEYS.classes, LEGACY_KEYS.classes, STORAGE_KEYS.students].includes(detail.key)) {
         void reload();
       }
     };
+    const onExternalStorage = () => {
+      void reload();
+    };
     window.addEventListener("gabon-educ:storage", onStorage);
-    window.addEventListener("storage", reload);
+    window.addEventListener("storage", onExternalStorage);
     return () => {
       window.removeEventListener("gabon-educ:storage", onStorage);
-      window.removeEventListener("storage", reload);
+      window.removeEventListener("storage", onExternalStorage);
     };
   }, [reload]);
 
@@ -315,20 +315,28 @@ export function StudentEnrollmentManager() {
           dateOfBirth: student.dateOfBirth,
         });
       }
-      writeEnrollments([record, ...enrollments.filter((item) => item.id !== record.id)]);
+      const written = await saveEnrollmentForm(record);
       setWorkspace(result.workspace);
-      setEnrollments(readEnrollments());
+      setEnrollments([record, ...enrollments.filter((item) => item.id !== record.id)]);
       setEditing(null);
       form.reset();
-      setMessage(student.classId ? "Inscription validée : l’élève figure maintenant dans sa classe." : "Inscription validée et dossier élève créé.");
+      setMessage(
+        written.syncError ||
+          (student.classId
+            ? "Inscription validée : l’élève figure maintenant dans sa classe."
+            : "Inscription validée et dossier élève créé."),
+      );
       setSaving(false);
       return;
     }
 
-    writeEnrollments(nextEnrollments);
+    const written = await saveEnrollmentForm(record);
     setEnrollments(nextEnrollments);
     setEditing(record);
-    setMessage("Fiche d’inscription enregistrée en brouillon éditable.");
+    setMessage(
+      written.syncError ||
+        "Fiche d’inscription enregistrée. Elle est consultable depuis n’importe quel poste de l’établissement.",
+    );
     setSaving(false);
   }
 
