@@ -2393,6 +2393,66 @@ function TimetableView({ workspace, classes, persist }: ViewProps) {
 
 function AttendanceView({ workspace, classes, persist }: ViewProps) {
   const summary = calculateAttendance(workspace.attendance);
+
+  /**
+   * Requalifier une absence. C'est le geste quotidien du secrétariat : le
+   * justificatif arrive le lendemain, et il n'existait aucun moyen d'en tenir
+   * compte — l'absence restait « non justifiée » à vie.
+   */
+  async function toggleJustified(entry: PlatformWorkspace["attendance"][number]) {
+    const reason = entry.justified
+      ? entry.reason
+      : prompt("Motif du justificatif (facultatif)", entry.reason) ?? entry.reason;
+    const updated = {
+      ...entry,
+      justified: !entry.justified,
+      reason,
+      updatedAt: now(),
+    };
+    await persist(
+      {
+        ...workspace,
+        attendance: workspace.attendance.map((item) => (item.id === entry.id ? updated : item)),
+      },
+      {
+        module: "attendance",
+        operation: "update",
+        entityId: entry.id,
+        payload: { attendance: updated },
+        baseUpdatedAt: entry.updatedAt,
+      },
+      updated.justified ? "Absence justifiée." : "Justificatif retiré.",
+    );
+  }
+
+  /**
+   * Suppression d'un enregistrement. Une absence attribuée au mauvais élève
+   * fausse durablement les statistiques ; elle doit pouvoir disparaître.
+   */
+  async function removeAttendance(entry: PlatformWorkspace["attendance"][number]) {
+    const student = workspace.students.find((item) => item.id === entry.studentId);
+    if (
+      !confirm(
+        `Supprimer cet enregistrement du ${entry.date}${student ? ` pour ${student.lastName} ${student.firstName}` : ""} ?\n\nÀ n’utiliser que pour une saisie erronée : les statistiques d’assiduité seront recalculées.`,
+      )
+    )
+      return;
+    await persist(
+      {
+        ...workspace,
+        attendance: workspace.attendance.filter((item) => item.id !== entry.id),
+      },
+      {
+        module: "attendance",
+        operation: "delete",
+        entityId: entry.id,
+        payload: {},
+        baseUpdatedAt: entry.updatedAt,
+      },
+      "Enregistrement supprimé.",
+    );
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -2531,7 +2591,7 @@ function AttendanceView({ workspace, classes, persist }: ViewProps) {
         </div>
       </form>
       <DataTable
-        headers={["Date", "Élève", "Classe", "Type", "Durée", "Justification"]}
+        headers={["Date", "Élève", "Classe", "Type", "Durée", "Justification", "Action"]}
         rows={workspace.attendance.map((entry) => {
           const student = workspace.students.find(
             (item) => item.id === entry.studentId,
@@ -2543,6 +2603,22 @@ function AttendanceView({ workspace, classes, persist }: ViewProps) {
             entry.kind,
             `${entry.durationMinutes} min`,
             entry.justified ? "Justifiée" : "Non justifiée",
+            <div key={entry.id} className={styles.actions}>
+              <button
+                className={`${styles.button} ${styles.buttonSecondary}`}
+                onClick={() => void toggleJustified(entry)}
+                title="Basculer entre justifiée et non justifiée"
+              >
+                {entry.justified ? "Retirer le justificatif" : "Justifier"}
+              </button>
+              <button
+                className={`${styles.button} ${styles.buttonDanger}`}
+                onClick={() => void removeAttendance(entry)}
+                title="Supprimer — pour une absence saisie sur le mauvais élève"
+              >
+                Supprimer
+              </button>
+            </div>,
           ];
         })}
       />
@@ -2610,6 +2686,78 @@ function AnnouncementsView({ workspace, persist }: ViewProps) {
       "Annonce publiée localement.",
     );
   }
+
+  /** Retirer une annonce publiée par erreur, sans la détruire. */
+  async function unpublish(item: PlatformWorkspace["announcements"][number]) {
+    const updated = { ...item, status: "draft" as const, updatedAt: now() };
+    await persist(
+      {
+        ...workspace,
+        announcements: workspace.announcements.map((entry) =>
+          entry.id === item.id ? updated : entry,
+        ),
+      },
+      {
+        module: "announcements",
+        operation: "update",
+        entityId: item.id,
+        payload: { announcement: updated },
+        baseUpdatedAt: item.updatedAt,
+      },
+      "Annonce retirée. Elle redevient un brouillon.",
+    );
+  }
+
+  /** Corriger le titre et le contenu d'une annonce, publiée ou non. */
+  async function editAnnouncement(item: PlatformWorkspace["announcements"][number]) {
+    const title = prompt("Titre de l’annonce", item.title);
+    if (title === null) return;
+    const content = prompt("Message", item.content);
+    if (content === null) return;
+    const updated = { ...item, title: title.trim(), content, updatedAt: now() };
+    await persist(
+      {
+        ...workspace,
+        announcements: workspace.announcements.map((entry) =>
+          entry.id === item.id ? updated : entry,
+        ),
+      },
+      {
+        module: "announcements",
+        operation: "update",
+        entityId: item.id,
+        payload: { announcement: updated },
+        baseUpdatedAt: item.updatedAt,
+      },
+      "Annonce corrigée.",
+    );
+  }
+
+  async function removeAnnouncement(item: PlatformWorkspace["announcements"][number]) {
+    if (
+      !confirm(
+        item.status === "published"
+          ? `Supprimer définitivement l’annonce « ${item.title} » ?\n\nElle est actuellement publiée. Pour la retirer temporairement, préférez « Dépublier ».`
+          : `Supprimer définitivement l’annonce « ${item.title} » ?`,
+      )
+    )
+      return;
+    await persist(
+      {
+        ...workspace,
+        announcements: workspace.announcements.filter((entry) => entry.id !== item.id),
+      },
+      {
+        module: "announcements",
+        operation: "delete",
+        entityId: item.id,
+        payload: {},
+        baseUpdatedAt: item.updatedAt,
+      },
+      "Annonce supprimée.",
+    );
+  }
+
   return (
     <>
       <form className={`${styles.card} ${styles.form}`} onSubmit={submit}>
@@ -2664,17 +2812,33 @@ function AnnouncementsView({ workspace, persist }: ViewProps) {
           item.audience,
           new Date(item.publishesAt).toLocaleString("fr-FR"),
           item.status,
-          item.status !== "published" ? (
+          <div key={item.id} className={styles.actions}>
+            {item.status !== "published" ? (
+              <button className={styles.button} onClick={() => void publish(item)}>
+                Publier
+              </button>
+            ) : (
+              <button
+                className={`${styles.button} ${styles.buttonSecondary}`}
+                onClick={() => void unpublish(item)}
+                title="Retirer l’annonce sans la supprimer"
+              >
+                Dépublier
+              </button>
+            )}
             <button
-              key={item.id}
-              className={styles.button}
-              onClick={() => void publish(item)}
+              className={`${styles.button} ${styles.buttonSecondary}`}
+              onClick={() => void editAnnouncement(item)}
             >
-              Publier
+              Modifier
             </button>
-          ) : (
-            "Publiée"
-          ),
+            <button
+              className={`${styles.button} ${styles.buttonDanger}`}
+              onClick={() => void removeAnnouncement(item)}
+            >
+              Supprimer
+            </button>
+          </div>,
         ])}
       />
     </>
@@ -2684,6 +2848,31 @@ function AnnouncementsView({ workspace, persist }: ViewProps) {
 function DocumentsView({ workspace, classes, persist }: ViewProps) {
   const [selected, setSelected] = useState<SchoolDocument | null>(null);
   const templates = getTemplatesForSchoolType(workspace.school?.schoolType);
+
+  /**
+   * Suppression d'un document généré. Chaque essai d'attestation ou de
+   * bulletin s'accumulait définitivement dans le registre, sans moyen de faire
+   * le ménage.
+   */
+  async function removeDocument(doc: SchoolDocument) {
+    if (!confirm(`Supprimer le document « ${doc.title} » du registre ?`)) return;
+    if (selected?.id === doc.id) setSelected(null);
+    await persist(
+      {
+        ...workspace,
+        documents: workspace.documents.filter((item) => item.id !== doc.id),
+      },
+      {
+        module: "documents",
+        operation: "delete",
+        entityId: doc.id,
+        payload: {},
+        baseUpdatedAt: doc.updatedAt,
+      },
+      "Document supprimé du registre.",
+    );
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget),
@@ -2825,13 +3014,20 @@ function DocumentsView({ workspace, classes, persist }: ViewProps) {
               ?.lastName || "—",
             doc.status,
             new Date(doc.createdAt).toLocaleDateString("fr-FR"),
-            <button
-              key={doc.id}
-              className={`${styles.button} ${styles.buttonSecondary}`}
-              onClick={() => setSelected(doc)}
-            >
-              Prévisualiser
-            </button>,
+            <div key={doc.id} className={styles.actions}>
+              <button
+                className={`${styles.button} ${styles.buttonSecondary}`}
+                onClick={() => setSelected(doc)}
+              >
+                Prévisualiser
+              </button>
+              <button
+                className={`${styles.button} ${styles.buttonDanger}`}
+                onClick={() => void removeDocument(doc)}
+              >
+                Supprimer
+              </button>
+            </div>,
           ])}
         />
       </div>
