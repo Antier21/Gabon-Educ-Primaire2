@@ -381,7 +381,16 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
               <div className={styles.subscriptionBlockedIcon} aria-hidden="true">
                 <ShieldAlert />
               </div>
-              <h2>Votre établissement est suspendu.</h2>
+              {/*
+                Le titre doit correspondre à la cause réelle. Annoncer une
+                suspension d'abonnement pour un incident réseau inquiète
+                inutilement l'établissement et masque le vrai problème.
+              */}
+              <h2>
+                {subscriptionMessage.startsWith("Votre établissement est suspendu.")
+                  ? "Votre établissement est suspendu."
+                  : "Modifications temporairement indisponibles."}
+              </h2>
               <p>
                 {subscriptionMessage || "Les données restent consultables, mais les créations, modifications et suppressions sont désactivées jusqu’à la régularisation de l’abonnement."}
               </p>
@@ -880,6 +889,8 @@ function UsersView({ workspace, persist }: ViewProps) {
             phone: field(data, "phone"),
             role,
             classId,
+            guardianId: field(data, "guardianId"),
+            studentId: field(data, "studentId"),
             identifier: accessIdentifier,
             password: temporaryPassword,
           }),
@@ -903,6 +914,8 @@ function UsersView({ workspace, persist }: ViewProps) {
             body: JSON.stringify({
               schoolId, firstName, lastName,
               phone: field(data, "phone"), role, classId,
+              guardianId: field(data, "guardianId"),
+              studentId: field(data, "studentId"),
               identifier: accessIdentifier, password: temporaryPassword,
             }),
           });
@@ -912,6 +925,9 @@ function UsersView({ workspace, persist }: ViewProps) {
           throw new Error(payload.error || "Création de l’accès impossible.");
         }
         remoteUserId = String(payload.id || remoteUserId);
+        // Le compte existe, mais sans rattachement son espace restera vide :
+        // mieux vaut le dire tout de suite que de laisser la famille le découvrir.
+        if (payload.linkWarning) setFeedback(String(payload.linkWarning));
       }
 
       const user: SchoolUser = {
@@ -949,23 +965,84 @@ function UsersView({ workspace, persist }: ViewProps) {
       setFeedback(error instanceof Error ? error.message : "Création de l’accès impossible.");
     }
   }
+  /**
+   * Gestion d'un compte existant.
+   *
+   * L'ancienne version écrivait dans school_invitations, table étrangère à la
+   * connexion : le compte « suspendu » restait utilisable. Tout passe désormais
+   * par une route serveur qui agit sur access_credentials, la table réellement
+   * lue à l'ouverture de session.
+   */
+  async function manageAccount(
+    user: SchoolUser,
+    body: Record<string, unknown>,
+  ): Promise<boolean> {
+    const schoolId = workspace.school?.id || "";
+    if (!schoolId) {
+      setFeedback("Établissement actif non résolu.");
+      return false;
+    }
+    setFeedback("");
+    try {
+      const response = await fetch("/api/gabon-educ/access/manage", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ schoolId, userId: user.id, ...body }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeedback(payload.error || "Opération impossible.");
+        return false;
+      }
+      setFeedback(payload.message || "Opération effectuée.");
+      // La liste des comptes vient du serveur : on la relit plutôt que de
+      // deviner localement le nouvel état.
+      window.dispatchEvent(new Event("gabon-educ:subscription-changed"));
+      window.location.reload();
+      return true;
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Opération impossible.");
+      return false;
+    }
+  }
+
   async function toggle(user: SchoolUser) {
     const status = user.status === "suspended" ? "active" : "suspended";
-    await persist(
-      {
-        ...workspace,
-        users: workspace.users.map((item) =>
-          item.id === user.id ? { ...item, status, updatedAt: now() } : item,
-        ),
-      },
-      {
-        module: "users",
-        operation: "update",
-        entityId: user.id,
-        payload: { user: { ...user, status } },
-        baseUpdatedAt: user.updatedAt,
-      },
+    if (
+      status === "suspended" &&
+      !confirm(`Suspendre ${user.firstName} ${user.lastName} ? Son identifiant ne permettra plus de se connecter.`)
+    )
+      return;
+    await manageAccount(user, { action: "status", status });
+  }
+
+  async function renameAccount(user: SchoolUser) {
+    const firstName = prompt("Prénom", user.firstName);
+    if (firstName === null) return;
+    const lastName = prompt("Nom", user.lastName);
+    if (lastName === null) return;
+    const identifier = prompt(
+      "Identifiant de connexion (laisser tel quel pour ne pas le changer)",
+      user.accessIdentifier,
     );
+    if (identifier === null) return;
+    await manageAccount(user, {
+      action: "update",
+      firstName,
+      lastName,
+      phone: user.phone,
+      ...(identifier && identifier !== user.accessIdentifier ? { identifier } : {}),
+    });
+  }
+
+  async function removeAccount(user: SchoolUser) {
+    if (
+      !confirm(
+        `Supprimer définitivement l’accès de ${user.firstName} ${user.lastName} ?\n\nLa fiche de la personne (élève, parent, personnel) est conservée : seul l’identifiant de connexion est supprimé.`,
+      )
+    )
+      return;
+    await manageAccount(user, { action: "delete" });
   }
   return (
     <>
@@ -1020,6 +1097,35 @@ function UsersView({ workspace, persist }: ViewProps) {
               ))}
             </select>
           </label>
+          {/*
+            Rattachement du compte à la personne qu'il représente. Sans lui, un
+            parent se connecte mais son espace reste vide : l'application ignore
+            de quels enfants il répond. C'est ici que le lien doit se faire,
+            pendant que le secrétariat a la personne devant lui.
+          */}
+          <label>
+            Fiche du responsable <span>(comptes parents)</span>
+            <select name="guardianId">
+              <option value="">Aucune — l’espace parent restera vide</option>
+              {workspace.guardians.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.lastName} {item.firstName}
+                  {item.phone ? ` · ${item.phone}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dossier de l’élève <span>(comptes élèves)</span>
+            <select name="studentId">
+              <option value="">Aucun — l’espace élève restera vide</option>
+              {workspace.students.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.lastName} {item.firstName}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         {feedback && <p className={styles.notice}>{feedback}</p>}
         <div className={styles.actions}>
@@ -1041,13 +1147,28 @@ function UsersView({ workspace, persist }: ViewProps) {
           roleLabels[user.role],
           user.status,
           user.scopeClassIds.join(", ") || "Selon affectations",
-          <button
-            key={user.id}
-            className={`${styles.button} ${user.status === "suspended" ? styles.buttonSecondary : styles.buttonDanger}`}
-            onClick={() => void toggle(user)}
-          >
-            {user.status === "suspended" ? "Réactiver" : "Suspendre"}
-          </button>,
+          <span key={user.id} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              className={`${styles.button} ${styles.buttonSecondary}`}
+              onClick={() => void renameAccount(user)}
+              title="Corriger le nom ou l’identifiant"
+            >
+              Modifier
+            </button>
+            <button
+              className={`${styles.button} ${user.status === "suspended" ? styles.buttonSecondary : styles.buttonDanger}`}
+              onClick={() => void toggle(user)}
+            >
+              {user.status === "suspended" ? "Réactiver" : "Suspendre"}
+            </button>
+            <button
+              className={`${styles.button} ${styles.buttonDanger}`}
+              onClick={() => void removeAccount(user)}
+              title="Supprimer définitivement cet identifiant de connexion"
+            >
+              Supprimer
+            </button>
+          </span>,
         ])}
       />
     </>
