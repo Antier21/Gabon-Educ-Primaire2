@@ -18,11 +18,17 @@ import {
 import styles from "./FamilySpaceLive.module.css";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+/**
+ * Chaque onglet porte une ancre. C'est elle qui permet au menu et aux
+ * vignettes d'accueil d'ouvrir directement le bon onglet : sans elle, tous
+ * les liens de l'espace famille ramenaient au même écran, et il fallait
+ * ensuite retrouver l'onglet à la main.
+ */
 const TABS = [
-  { key: "results", label: "Résultats", icon: GraduationCap },
-  { key: "attendance", label: "Vie scolaire", icon: UserRoundCheck },
-  { key: "timetable", label: "Emploi du temps", icon: CalendarDays },
-  { key: "messages", label: "Messages", icon: MessageCircle },
+  { key: "results", hash: "resultats", label: "Résultats et bulletins", icon: GraduationCap },
+  { key: "attendance", hash: "vie-scolaire", label: "Vie scolaire", icon: UserRoundCheck },
+  { key: "timetable", hash: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
+  { key: "messages", hash: "messages", label: "Messages", icon: MessageCircle },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -64,6 +70,29 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
       }
     })();
   }, [space]);
+
+  // L'onglet suit l'ancre de l'adresse. Le menu et les vignettes d'accueil
+  // pointent vers « …/espace-parent#vie-scolaire » : la page est déjà ouverte,
+  // seul l'onglet change, sans rechargement ni perte des données chargées.
+  useEffect(() => {
+    const applyHash = () => {
+      const wanted = window.location.hash.replace(/^#/, "");
+      const found = TABS.find((item) => item.hash === wanted);
+      if (found) setTab(found.key);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  function selectTab(next: TabKey) {
+    setTab(next);
+    const found = TABS.find((item) => item.key === next);
+    // replaceState plutôt que push : parcourir les onglets ne doit pas
+    // remplir l'historique au point que le bouton « retour » du téléphone
+    // devienne inutilisable.
+    if (found) window.history.replaceState(null, "", `#${found.hash}`);
+  }
 
   const child: FamilyChild | undefined = identity?.children.find((item) => item.id === childId);
 
@@ -149,7 +178,8 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
             key={key}
             type="button"
             className={tab === key ? styles.tabActive : styles.tab}
-            onClick={() => setTab(key)}
+            aria-current={tab === key ? "page" : undefined}
+            onClick={() => selectTab(key)}
           >
             <Icon /> {label}
           </button>

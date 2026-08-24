@@ -210,7 +210,7 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
   const { data, error } = await client
     .from("report_cards")
     .select(
-      "id,report_status,general_average,general_rank,class_average,grading_period_id,report_card_subjects(subject_name,average_value,coefficient,appreciation),report_card_comments(general_comment)",
+      "id,report_status,general_average,general_rank,class_average,grading_period_id,grading_periods(label,period_kind),report_card_subjects(subject_name,average_value,coefficient,appreciation),report_card_comments(general_comment)",
     )
     .eq("class_student_id", studentId)
     .order("created_at", { ascending: false });
@@ -222,6 +222,7 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
     general_average?: number | null;
     general_rank?: number | null;
     grading_period_id?: string;
+    grading_periods?: { label?: string; period_kind?: string } | Array<{ label?: string; period_kind?: string }> | null;
     report_card_subjects?: Array<{
       subject_name?: string;
       average_value?: number | null;
@@ -235,9 +236,18 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
     const comments = Array.isArray(row.report_card_comments)
       ? row.report_card_comments[0]
       : row.report_card_comments;
+    const period = Array.isArray(row.grading_periods)
+      ? row.grading_periods[0]
+      : row.grading_periods;
     return {
       id: String(row.id),
-      periodLabel: String(row.grading_period_id || "").slice(0, 8),
+      // Le libellé saisi par l'établissement — « 1er trimestre », « 2e
+      // semestre ». Le repli mentionne la nature de la période plutôt que son
+      // identifiant : un parent ne doit jamais lire de suite hexadécimale sur
+      // le bulletin de son enfant.
+      periodLabel:
+        String(period?.label || "").trim() ||
+        (period?.period_kind === "semester" ? "Semestre" : "Période non nommée"),
       average: row.general_average ?? null,
       rank: row.general_rank === null || row.general_rank === undefined ? "" : String(row.general_rank),
       status: String(row.report_status || ""),

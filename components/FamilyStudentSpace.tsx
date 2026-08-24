@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import { PRODUCT } from "@/lib/product-edition";
-import { Bell, BookOpen, CalendarDays, FileText, GraduationCap, MessageCircle, UserRoundCheck } from "lucide-react";
+import { Bell, CalendarDays, GraduationCap, MessageCircle, UserRoundCheck } from "lucide-react";
 import { SimpleSpaceNav, type SimpleSpace } from "@/components/SpaceNavigation";
 import { FamilySpaceLive } from "@/components/FamilySpaceLive";
 
 export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "parent" | "student"> }) {
   const isParent = space === "parent";
+  const base = isParent ? "/gabon-educ/espace-parent" : "/gabon-educ/espace-eleve";
   return (
     <main className={`family-space family-space-${space}`}>
       <header className="family-space-brandbar">
@@ -18,13 +19,17 @@ export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "par
       <SimpleSpaceNav space={space} />
       <section className="family-space-welcome">
         <div><small>{isParent ? "Suivi familial" : "Suivi personnel"}</small><h1>{isParent ? "Suivez la scolarité de vos enfants" : "Bienvenue dans votre espace scolaire"}</h1><p>Les informations visibles ici sont limitées au profil connecté.</p></div>
+        {/*
+          Ces vignettes ressemblaient à des boutons sans réagir au clic, et
+          deux d'entre elles annonçaient des contenus inexistants. Elles
+          ouvrent désormais chacune son onglet, et se limitent à ce que
+          l'établissement alimente réellement.
+        */}
         <div className="family-quick-cards">
-          <article><GraduationCap /><b>Résultats</b><span>Consulter les notes et bulletins</span></article>
-          <article><CalendarDays /><b>Emploi du temps</b><span>Voir la semaine scolaire</span></article>
-          <article><BookOpen /><b>Cahiers de texte</b><span>Travail et leçons</span></article>
-          <article><UserRoundCheck /><b>Vie scolaire</b><span>Présences et informations</span></article>
-          <article><FileText /><b>Documents</b><span>Documents autorisés</span></article>
-          <article><MessageCircle /><b>Communication</b><span>Échanges avec l’établissement</span></article>
+          <a href={`${base}#resultats`}><GraduationCap /><b>Résultats et bulletins</b><span>Moyennes, rangs et appréciations</span></a>
+          <a href={`${base}#vie-scolaire`}><UserRoundCheck /><b>Vie scolaire</b><span>Absences, retards et justificatifs</span></a>
+          <a href={`${base}#emploi-du-temps`}><CalendarDays /><b>Emploi du temps</b><span>Voir la semaine scolaire</span></a>
+          <a href={`${base}#messages`}><MessageCircle /><b>Messages</b><span>Informations reçues de l’établissement</span></a>
         </div>
       </section>
       <div className="family-space-data"><FamilySpaceLive space={space} /></div>

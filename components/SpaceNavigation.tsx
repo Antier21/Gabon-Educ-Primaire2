@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
-  BookOpen, BriefcaseBusiness, ChevronDown, ClipboardCheck, ExternalLink, GraduationCap,
-  HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
+  BookOpen, BriefcaseBusiness, CalendarDays, ChevronDown, ClipboardCheck, ExternalLink,
+  GraduationCap, HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
   School, ShieldCheck, UserRound, Users, WalletCards, X
 } from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
@@ -199,43 +199,47 @@ export function AdminMegaNav({ onLogout, role }: { onLogout: () => void; role?: 
 
 export type SimpleSpace = "teacher" | "parent" | "student";
 
-const simpleNav: Record<SimpleSpace, NavItem[]> = {
+type SimpleNavItem = NavItem & { icon: React.ComponentType<{ className?: string }> };
+
+/**
+ * Menus des espaces simples.
+ *
+ * Les espaces parent et élève annonçaient neuf entrées dont huit menaient à
+ * une page « Ce module est prévu… » : le deuxième clic d'une démonstration
+ * tombait dans le vide. Ils n'annoncent plus que ce qui existe, et pointent
+ * vers les onglets réellement alimentés par l'établissement.
+ *
+ * Les entrées retirées — cahiers de texte, évaluations à venir, documents —
+ * reviendront au menu le jour où elles auront un contenu, et pas avant.
+ * Promettre moins et tenir tout inspire davantage confiance que l'inverse.
+ */
+const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
   teacher: [
-    { label: "Accueil", href: "/gabon-educ/tableau-de-bord" },
-    { label: "Voir mes classes", href: "/gabon-educ/mes-classes" },
-    { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches" },
-    { label: "Notes", href: "/gabon-educ/notes" },
-    { label: "Bulletins", href: "/gabon-educ/bulletins" },
-    { label: "Ressources", href: "/gabon-educ/documents" },
-    { label: "Cahiers d’appel", href: "/gabon-educ/assiduite" },
-    { label: "Vie scolaire", href: "/gabon-educ/assiduite" },
-    { label: "Communication", href: "/gabon-educ/notifications" },
+    { label: "Accueil", href: "/gabon-educ/tableau-de-bord", icon: Home },
+    { label: "Voir mes classes", href: "/gabon-educ/mes-classes", icon: Users },
+    { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches", icon: NotebookPen },
+    { label: "Notes", href: "/gabon-educ/notes", icon: ClipboardCheck },
+    { label: "Bulletins", href: "/gabon-educ/bulletins", icon: GraduationCap },
+    { label: "Ressources", href: "/gabon-educ/documents", icon: BookOpen },
+    { label: "Cahiers d’appel", href: "/gabon-educ/assiduite", icon: School },
+    { label: "Vie scolaire", href: "/gabon-educ/assiduite", icon: UserRound },
+    { label: "Communication", href: "/gabon-educ/notifications", icon: MessageCircle },
   ],
   parent: [
-    { label: "Mes données", href: "/gabon-educ/espace-parent" },
-    { label: "Cahiers de texte", href: "/gabon-educ/modules/parent-cahiers-textes" },
-    { label: "Évaluations", href: "/gabon-educ/modules/parent-evaluations" },
-    { label: "Notes", href: "/gabon-educ/modules/parent-notes" },
-    { label: "Résultats", href: "/gabon-educ/modules/parent-resultats" },
-    { label: "Bulletins", href: "/gabon-educ/modules/parent-bulletins" },
-    { label: "Emploi du temps", href: "/gabon-educ/modules/parent-emploi-du-temps" },
-    { label: "Vie scolaire", href: "/gabon-educ/modules/parent-vie-scolaire" },
-    { label: "Communication", href: "/gabon-educ/modules/parent-communication" },
+    { label: "Accueil", href: "/gabon-educ/espace-parent", icon: Home },
+    { label: "Résultats et bulletins", href: "/gabon-educ/espace-parent#resultats", icon: GraduationCap },
+    { label: "Vie scolaire", href: "/gabon-educ/espace-parent#vie-scolaire", icon: UserRound },
+    { label: "Emploi du temps", href: "/gabon-educ/espace-parent#emploi-du-temps", icon: CalendarDays },
+    { label: "Messages", href: "/gabon-educ/espace-parent#messages", icon: MessageCircle },
   ],
   student: [
-    { label: "Mes données", href: "/gabon-educ/espace-eleve" },
-    { label: "Cahiers de texte", href: "/gabon-educ/modules/eleve-cahiers-textes" },
-    { label: "Évaluations", href: "/gabon-educ/modules/eleve-evaluations" },
-    { label: "Notes", href: "/gabon-educ/modules/eleve-notes" },
-    { label: "Résultats", href: "/gabon-educ/modules/eleve-resultats" },
-    { label: "Bulletins", href: "/gabon-educ/modules/eleve-bulletins" },
-    { label: "Emploi du temps", href: "/gabon-educ/modules/eleve-emploi-du-temps" },
-    { label: "Vie scolaire", href: "/gabon-educ/modules/eleve-vie-scolaire" },
-    { label: "Communication", href: "/gabon-educ/modules/eleve-communication" },
+    { label: "Accueil", href: "/gabon-educ/espace-eleve", icon: Home },
+    { label: "Résultats et bulletins", href: "/gabon-educ/espace-eleve#resultats", icon: GraduationCap },
+    { label: "Vie scolaire", href: "/gabon-educ/espace-eleve#vie-scolaire", icon: UserRound },
+    { label: "Emploi du temps", href: "/gabon-educ/espace-eleve#emploi-du-temps", icon: CalendarDays },
+    { label: "Messages", href: "/gabon-educ/espace-eleve#messages", icon: MessageCircle },
   ],
 };
-
-const simpleIcons = [Home, Users, NotebookPen, BookOpen, ClipboardCheck, GraduationCap, BookOpen, School, UserRound, MessageCircle];
 
 export function SimpleSpaceNav({ space, onLogout }: { space: SimpleSpace; onLogout?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -243,13 +247,18 @@ export function SimpleSpaceNav({ space, onLogout }: { space: SimpleSpace; onLogo
     <nav className={`space-topnav space-topnav-${space} ${open ? "open" : ""}`} aria-label={`Navigation espace ${space}`}>
       <button className="space-topnav-toggle" onClick={() => setOpen(value => !value)}>{open ? <X /> : <Menu />} Menu</button>
       <div className="space-topnav-links">
-        {simpleNav[space].map((item, index) => {
-          const Icon = simpleIcons[index] || BookOpen;
-          return item.external ? (
-            <a href={item.href} key={item.label} onClick={() => setOpen(false)} target="_blank" rel="noopener noreferrer" className="apc-nav-link"><Icon />{item.label}<ExternalLink /></a>
-          ) : (
-            <Link href={item.href} key={item.label} onClick={() => setOpen(false)}><Icon />{item.label}</Link>
-          );
+        {simpleNav[space].map(item => {
+          const Icon = item.icon;
+          if (item.external) {
+            return <a href={item.href} key={item.label} onClick={() => setOpen(false)} target="_blank" rel="noopener noreferrer" className="apc-nav-link"><Icon />{item.label}<ExternalLink /></a>;
+          }
+          // Les liens vers une ancre restent des liens ordinaires : le routeur
+          // de Next change l'adresse par l'API d'historique, qui n'émet pas
+          // « hashchange » — l'onglet visé ne s'ouvrirait donc jamais.
+          if (item.href.includes("#")) {
+            return <a href={item.href} key={item.label} onClick={() => setOpen(false)}><Icon />{item.label}</a>;
+          }
+          return <Link href={item.href} key={item.label} onClick={() => setOpen(false)}><Icon />{item.label}</Link>;
         })}
         {onLogout && <button onClick={onLogout}><LogOut />Déconnexion</button>}
       </div>
