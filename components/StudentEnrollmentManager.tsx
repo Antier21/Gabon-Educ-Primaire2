@@ -158,7 +158,11 @@ export function StudentEnrollmentManager() {
     // propre écriture ferait boucler la page indéfiniment.
     const onStorage = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
-      if (detail?.key && [STORAGE_KEYS.classes, LEGACY_KEYS.classes, STORAGE_KEYS.students].includes(detail.key)) {
+      // Le tableau est typé explicitement : composé uniquement de constantes,
+      // TypeScript en déduirait sinon un type littéral fermé, dans lequel
+      // chercher une clé de provenance inconnue devient une erreur.
+      const watched: string[] = [STORAGE_KEYS.classes, LEGACY_KEYS.classes, STORAGE_KEYS.students];
+      if (detail?.key && watched.includes(detail.key)) {
         void reload();
       }
     };
