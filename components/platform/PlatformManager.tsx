@@ -1806,6 +1806,112 @@ function GuardiansView({ workspace, persist }: ViewProps) {
 }
 
 function SubjectsView({ workspace, classes, persist }: ViewProps) {
+  /**
+   * Correction d'une matière. Le libellé apparaît sur les bulletins et le
+   * coefficient pèse dans les moyennes : une faute de frappe ou un coefficient
+   * erroné devait pouvoir se rattraper.
+   */
+  async function editSubject(subject: SchoolSubject) {
+    const label = prompt("Nom de la matière", subject.label);
+    if (label === null) return;
+    const coefficientText = prompt("Coefficient", String(subject.coefficient));
+    if (coefficientText === null) return;
+    const coefficient = Number(coefficientText.replace(",", "."));
+    if (!Number.isFinite(coefficient) || coefficient <= 0) {
+      alert("Le coefficient doit être un nombre strictement positif.");
+      return;
+    }
+    const hoursText = prompt("Volume horaire hebdomadaire", String(subject.weeklyHours || 0));
+    if (hoursText === null) return;
+    const updated: SchoolSubject = {
+      ...subject,
+      label: label.trim() || subject.label,
+      coefficient,
+      weeklyHours: Number(hoursText.replace(",", ".")) || 0,
+      updatedAt: now(),
+    };
+    await persist(
+      {
+        ...workspace,
+        subjects: workspace.subjects.map((item) => (item.id === subject.id ? updated : item)),
+      },
+      {
+        module: "subjects",
+        operation: "update",
+        entityId: subject.id,
+        payload: { subject: updated },
+        baseUpdatedAt: subject.updatedAt,
+      },
+      "Matière corrigée.",
+    );
+  }
+
+  /**
+   * Suppression d'une matière. Refuser et expliquer : une matière encore
+   * affectée à une classe ou placée dans un emploi du temps ne peut pas
+   * disparaître sans laisser des références orphelines.
+   */
+  async function removeSubject(subject: SchoolSubject) {
+    const linkedAssignments = workspace.assignments.filter(
+      (item) => item.active && item.subjectId === subject.id,
+    );
+    const linkedSlots = workspace.timetable.filter((item) => item.subjectId === subject.id);
+    if (linkedAssignments.length || linkedSlots.length) {
+      const parts: string[] = [];
+      if (linkedAssignments.length)
+        parts.push(`${linkedAssignments.length} affectation(s) d’enseignant`);
+      if (linkedSlots.length) parts.push(`${linkedSlots.length} créneau(x) d’emploi du temps`);
+      alert(
+        `Suppression impossible : « ${subject.label} » est encore utilisée par ${parts.join(" et ")}. Retirez-les d’abord, puis recommencez.`,
+      );
+      return;
+    }
+    if (!confirm(`Supprimer définitivement la matière « ${subject.label} » ?`)) return;
+    await persist(
+      {
+        ...workspace,
+        subjects: workspace.subjects.filter((item) => item.id !== subject.id),
+      },
+      {
+        module: "subjects",
+        operation: "delete",
+        entityId: subject.id,
+        payload: {},
+        baseUpdatedAt: subject.updatedAt,
+      },
+      "Matière supprimée.",
+    );
+  }
+
+  /**
+   * Retrait d'une affectation. C'est aussi le préalable à la suppression d'une
+   * matière ou d'un compte enseignant, que l'application refuse tant que des
+   * affectations subsistent.
+   */
+  async function removeAssignment(assignment: TeachingAssignment) {
+    const subject = workspace.subjects.find((item) => item.id === assignment.subjectId);
+    if (
+      !confirm(
+        `Retirer ${userName(workspace.users, assignment.teacherId)} de « ${subject?.label || "cette matière"} » en ${className(classes, assignment.classId)} ?`,
+      )
+    )
+      return;
+    await persist(
+      {
+        ...workspace,
+        assignments: workspace.assignments.filter((item) => item.id !== assignment.id),
+      },
+      {
+        module: "assignments",
+        operation: "delete",
+        entityId: assignment.id,
+        payload: { assignment },
+        baseUpdatedAt: assignment.updatedAt,
+      },
+      "Affectation retirée.",
+    );
+  }
+
   const suggestedSubjects = getDefaultSubjectsForSchoolType(workspace.school?.schoolType || PRODUCT.defaultSchoolType);
   const knownSubjectLabels = new Set(workspace.subjects.map((subject) => subject.label.trim().toLocaleLowerCase("fr")));
   const missingSuggestedSubjects = suggestedSubjects.filter((label) => !knownSubjectLabels.has(label.toLocaleLowerCase("fr")));
@@ -2076,6 +2182,39 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
           </form>
         )}
       </div>
+      <h2 style={{ marginTop: 24 }}>Matières de l’établissement</h2>
+      <DataTable
+        headers={["Matière", "Code", "Coefficient", "Volume", "Affectations", "Action"]}
+        rows={workspace.subjects
+          .filter((subject) => subject.active)
+          .map((subject) => {
+            const used = workspace.assignments.filter(
+              (item) => item.active && item.subjectId === subject.id,
+            ).length;
+            return [
+              subject.label,
+              subject.code,
+              subject.coefficient,
+              `${subject.weeklyHours || 0} h`,
+              used ? `${used} affectation(s)` : "Aucune",
+              <div key={subject.id} className={styles.actions}>
+                <button
+                  className={`${styles.button} ${styles.buttonSecondary}`}
+                  onClick={() => void editSubject(subject)}
+                >
+                  Modifier
+                </button>
+                <button
+                  className={`${styles.button} ${styles.buttonDanger}`}
+                  onClick={() => void removeSubject(subject)}
+                >
+                  Supprimer
+                </button>
+              </div>,
+            ];
+          })}
+      />
+      <h2 style={{ marginTop: 24 }}>Affectations</h2>
       <DataTable
         headers={[
           "Matière",
@@ -2084,6 +2223,7 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
           "Classe",
           "Enseignant",
           "Titulaire / principal",
+          "Action",
         ]}
         rows={workspace.assignments.map((assignment) => {
           const subject = workspace.subjects.find(
@@ -2096,6 +2236,14 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
             className(classes, assignment.classId),
             userName(workspace.users, assignment.teacherId),
             assignment.headTeacher ? "Oui" : "Non",
+            <button
+              key={assignment.id}
+              className={`${styles.button} ${styles.buttonDanger}`}
+              onClick={() => void removeAssignment(assignment)}
+              title="Retirer cette affectation"
+            >
+              Retirer
+            </button>,
           ];
         })}
       />
