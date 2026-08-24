@@ -308,6 +308,10 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
     setWorkspace(result.workspace);
     setMode(result.mode);
     setMessage(result.blocked ? result.message : note || result.message);
+    // Les messages s'affichent en haut de page, alors que les tableaux d'action
+    // se trouvent souvent tout en bas : sans ce défilement, l'utilisateur clique
+    // et ne voit rien se produire, y compris lorsque l'opération est refusée.
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
     return !result.blocked;
   }
   const meta = labels[module];

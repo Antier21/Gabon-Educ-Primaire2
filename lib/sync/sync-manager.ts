@@ -209,7 +209,21 @@ export function resolveConflict(
   saveSyncQueue(queue.map((item) => (item.id === id ? pending : item)));
   return pending;
 }
-export async function processQueue(transport: SyncTransport) {
+/**
+ * Traite la file de synchronisation.
+ *
+ * `limit` borne le nombre d'opérations tentées en une passe. Sans cette borne,
+ * un enregistrement ordinaire relançait la totalité des opérations en attente :
+ * chacune interroge Supabase deux à trois fois pour résoudre ses références, et
+ * le navigateur finissait saturé (« ERR_INSUFFICIENT_RESOURCES »), au point que
+ * l'action demandée par l'utilisateur n'aboutissait plus. Le reste de la file
+ * est traité aux passes suivantes, ou d'un seul coup depuis le Centre de
+ * synchronisation, qui appelle cette fonction sans limite.
+ */
+export async function processQueue(
+  transport: SyncTransport,
+  limit = Number.POSITIVE_INFINITY,
+) {
   const state = getConnectionState();
   const started = currentTime();
   if (state === "offline") {
@@ -222,9 +236,10 @@ export async function processQueue(transport: SyncTransport) {
     return readSyncQueue();
   }
   let queue = readSyncQueue();
-  for (const original of queue.filter(
+  const waiting = queue.filter(
     (item) => ["pending", "error"].includes(item.status) && item.retryCount < 5,
-  )) {
+  );
+  for (const original of Number.isFinite(limit) ? waiting.slice(0, limit) : waiting) {
     const syncing = {
       ...original,
       status: "syncing" as const,

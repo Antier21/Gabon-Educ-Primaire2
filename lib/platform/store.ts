@@ -637,7 +637,11 @@ export async function savePlatformWorkspace(
     // préproduction. Une affectation d'enseignant n'atteignait donc jamais la
     // table school_teaching_assignments, et l'espace enseignant restait vide.
     const entityIds = new Set(operations.map((item) => item.entityId));
-    const queue = await processQueue(createSupabaseSyncTransport());
+    // Borne volontaire : on transmet l'opération demandée et quelques retards,
+    // sans relancer une file entière qui saturerait le navigateur et ferait
+    // échouer l'action de l'utilisateur. Le Centre de synchronisation reste là
+    // pour vider un arriéré important.
+    const queue = await processQueue(createSupabaseSyncTransport(), operations.length + 10);
     const failed = queue.filter(
       (item) => entityIds.has(item.entityId) && ["error", "conflict"].includes(item.status),
     );
