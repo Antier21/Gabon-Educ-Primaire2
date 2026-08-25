@@ -31,7 +31,11 @@ const adminGroups: AdminGroup[] = [
     label: "Direction et secrétariat",
     icon: ShieldCheck,
     items: [
-      { label: "Direction", href: "/gabon-educ/administration" },
+      // Le tableau de pilotage de la direction. Le secrétariat possède son
+      // propre bureau, atteint par « Accueil » : lui proposer en plus l'écran
+      // du chef d'établissement l'envoyait sur des indicateurs qui ne sont pas
+      // les siens.
+      { label: "Direction", href: "/gabon-educ/administration", hiddenFor: ["secretary"] },
       { label: "Personnel", href: "/gabon-educ/personnel" },
       { label: "Emplois du temps — conception", href: "/gabon-educ/emplois-du-temps" },
       { label: "Scolarité", href: "/gabon-educ/eleves" },

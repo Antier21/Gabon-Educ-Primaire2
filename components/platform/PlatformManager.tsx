@@ -12,6 +12,8 @@ import { buildReportCardSnapshot } from "@/lib/grading/calculations";
 import { loadGradingWorkspace } from "@/lib/grading/store";
 import { readClasses, type ClassRecord } from "@/lib/class-store";
 import { loadActiveSchoolClasses } from "@/lib/active-school-classes";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
 import { hasPermission, type PermissionResource } from "@/lib/permissions";
 import {
   calculateAttendance,
@@ -218,6 +220,14 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
   const [message, setMessage] = useState("Chargement local…");
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<SchoolRole>("school_admin");
+  /**
+   * Rôle réel du compte, distinct du « rôle simulé » ci-dessus qui sert aux
+   * essais de permissions. Il ne pilote que la navigation : le lien de retour
+   * ramenait tout le monde au tableau de bord des enseignants, et l'entrée
+   * « Administration » au tableau de pilotage de la direction — deux écrans
+   * qui ne sont pas ceux du secrétariat.
+   */
+  const [spaceRole, setSpaceRole] = useState<SchoolRole | null>(null);
   const subscriptionAccess = useSubscriptionAccess();
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   useEffect(() => {
@@ -247,6 +257,21 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
     return () => {
       window.removeEventListener("gabon-educ:storage", onStorage);
       window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const context = await resolveActiveSchoolContext();
+        const roles = await resolveMyRoles(context.school.id);
+        if (!cancelled && roles) setSpaceRole(roles.primary);
+      } catch {
+        // Rôle indéterminé : la navigation reste celle d'avant.
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
   async function persist(
@@ -317,6 +342,30 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
   const meta = labels[module];
   const subscriptionBlocked = role !== "super_admin" && (subscriptionAccess.blocked || message.startsWith("Votre établissement est suspendu."));
   const subscriptionMessage = subscriptionAccess.message || message;
+
+  // Le lien de retour ramène chacun chez lui. Tant que le rôle n'est pas
+  // connu, on conserve la destination historique plutôt que de faire
+  // clignoter le lien à chaque ouverture de page.
+  const spaceHome = spaceRole ? homeForRole(spaceRole) : "/gabon-educ/tableau-de-bord";
+  const spaceHomeLabel =
+    spaceRole === "secretary"
+      ? "← Bureau du secrétariat"
+      : spaceRole === "super_admin"
+        ? "← Centre de pilotage"
+        : "← Tableau de bord";
+
+  // Le secrétariat ne distribue pas les accès et n'a pas à ouvrir le tableau
+  // de pilotage de la direction : ces deux entrées disparaissent de sa
+  // navigation, comme elles ont déjà disparu du menu principal.
+  const hiddenFromSecretary: PlatformModule[] = ["administration", "users"];
+  const visibleNav: typeof nav = nav
+    .map(([group, items]) => [
+      group,
+      items.filter(
+        ([key]) => !(spaceRole === "secretary" && hiddenFromSecretary.includes(key)),
+      ),
+    ] as (typeof nav)[number])
+    .filter(([group, items]) => items.length > 0 || group === "SCOLARITÉ");
   return (
     <main className={embedded ? `${styles.page} ${styles.embedded}` : styles.page}>
       {!embedded && <header className={styles.topbar}>
@@ -349,8 +398,8 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
       </header>}
       <div className={embedded ? `${styles.layout} ${styles.embeddedLayout}` : styles.layout}>
         {!embedded && <aside className={styles.nav}>
-          <Link href="/gabon-educ/tableau-de-bord">← Tableau de bord</Link>
-          {nav.map(([group, items]) => (
+          <Link href={spaceHome}>{spaceHomeLabel}</Link>
+          {visibleNav.map(([group, items]) => (
             <div key={group}>
               <b>{group}</b>
               {items.map(([key, label]) => (
