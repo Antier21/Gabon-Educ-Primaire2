@@ -1,0 +1,27 @@
+/* Écran de composition du bulletin.
+   Styles propres au module : les classes globales « admin-* » couvrent
+   l'ossature de page (bandeau, barre de contexte) mais pas les tableaux
+   éditables ni les boutons de cet écran. */
+.panel{background:#fff;border:1px solid #e0e5e2;border-radius:13px;box-shadow:0 7px 22px rgba(0,0,0,.05);padding:20px 22px;margin:0 26px 18px}
+.panel h2{margin:0 0 6px;font-size:18px;color:#20302a}
+.panel h2 small{font-weight:600;color:#7c8783;font-size:14px}
+.panel h3{margin:0 0 8px;font-size:14px;color:#08734f;letter-spacing:.02em}
+.panel p{margin:0 0 14px;color:#5d6a65;font-size:14px;line-height:1.55}
+.domainHead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px}
+.skillBlock{margin-bottom:20px}
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.table th{text-align:left;padding:7px 8px;border-bottom:1px solid #e0e5e2;color:#7c8783;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.table td{padding:5px 8px;border-bottom:1px solid #f0f3f2;vertical-align:middle}
+.table input{width:100%;padding:7px 9px;border:1px solid #dde5e2;border-radius:8px;font:inherit;font-size:14px;background:#fbfdfc}
+.table input:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f;background:#fff}
+.inlineForm{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.inlineForm input{padding:8px 10px;border:1px solid #dde5e2;border-radius:8px;font:inherit;font-size:14px;flex:1 1 220px;min-width:0}
+.inlineForm input[type="number"]{flex:0 0 90px}
+.primary{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border:0;border-radius:999px;background:#08734f;color:#fff;font:inherit;font-weight:600;font-size:14px;cursor:pointer}
+.ghost{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid #d8e3de;border-radius:999px;background:#fff;color:#3d4d47;font:inherit;font-size:13px;cursor:pointer}
+.ghost:hover{border-color:#08734f;color:#08734f}
+.primary:disabled,.ghost:disabled{opacity:.55;cursor:progress}
+.primary svg,.ghost svg{width:15px;height:15px}
+.error{margin:0 26px 14px;padding:12px 16px;border-radius:11px;background:#fdecea;color:#96271b;font-size:14px;display:flex;align-items:center;gap:8px}
+.error svg{width:18px;height:18px;flex:0 0 auto}
+.ok{margin:0 26px 14px;padding:12px 16px;border-radius:11px;background:#e7f5ee;color:#08734f;font-size:14px}

@@ -85,6 +85,7 @@ const adminGroups: AdminGroup[] = [
       { label: "Créer un enseignant", href: "/gabon-educ/creer-enseignant" },
       { label: "Évaluations", href: "/gabon-educ/evaluations" },
       { label: "Notes et bulletins", href: "/gabon-educ/notes-bulletins?tab=reports" },
+      { label: "Modèle de bulletin", href: "/gabon-educ/modele-bulletin" },
       { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches" },
     ],
   },
