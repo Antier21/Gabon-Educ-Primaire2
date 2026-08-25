@@ -280,13 +280,23 @@ export function StudentEnrollmentManager() {
       id: editing?.id || id(),
       schoolId: workspace.school?.id || "local",
       academicYearId: workspace.academicYears.find((item) => item.active)?.id || workspace.academicYears[0]?.id || "local",
-      status: intent === "validate" ? "validated" : editing?.status || "draft",
+      // La fiche ne devient « validée » qu'une fois le dossier élève
+      // réellement créé. La marquer d'avance ferait apparaître comme inscrit
+      // un élève que la base a refusé.
+      status: editing?.status || "draft",
       linkedStudentId: editing?.linkedStudentId || "",
       createdAt: editing?.createdAt || timestamp,
       updatedAt: timestamp,
       data: values,
     };
     const nextEnrollments = [record, ...enrollments.filter((item) => item.id !== record.id)];
+
+    // La saisie est mise à l'abri avant toute tentative de validation. Un
+    // refus de droits, une coupure réseau ou une classe mal choisie ne doivent
+    // jamais coûter à une secrétaire la trentaine de champs qu'elle vient de
+    // taper : la fiche reste en brouillon, prête à être reprise.
+    const draftWrite = await saveEnrollmentForm(record);
+    setEnrollments(nextEnrollments);
 
     if (intent === "validate") {
       const student = toStudent(record, workspace);
@@ -305,10 +315,16 @@ export function StudentEnrollmentManager() {
         },
       );
       if (result.blocked) {
-        setMessage(result.message);
+        // La fiche vient d'être enregistrée en brouillon : on le dit, sinon
+        // l'utilisateur croit avoir tout perdu et ressaisit.
+        setEditing(record);
+        setMessage(
+          `${result.message} La fiche est conservée en brouillon : corrigez le droit d’accès, puis relancez « Valider ».`,
+        );
         setSaving(false);
         return;
       }
+      record.status = "validated";
       if (student.classId) {
         cacheStudentInClass(student.classId, {
           id: student.id,
@@ -334,11 +350,9 @@ export function StudentEnrollmentManager() {
       return;
     }
 
-    const written = await saveEnrollmentForm(record);
-    setEnrollments(nextEnrollments);
     setEditing(record);
     setMessage(
-      written.syncError ||
+      draftWrite.syncError ||
         "Fiche d’inscription enregistrée. Elle est consultable depuis n’importe quel poste de l’établissement.",
     );
     setSaving(false);
