@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { SyncConflictError } from "./sync-manager";
 import { subscriptionFriendlyMessage } from "@/lib/subscriptions/errors";
+import { readPlatformWorkspace } from "@/lib/platform/store";
 import {
   buildSupabaseMutation,
   type SyncActor,
@@ -136,8 +137,119 @@ async function resolveSubjectLevel(
   if (existing.error || !existing.data?.id) mutation.row.school_level_id = null;
 }
 
+/**
+ * Rattache l'affectation à une matière qui existe réellement en base.
+ *
+ * L'affectation désigne sa matière par un identifiant local. Trois situations
+ * le rendaient invalide, et toutes trois se soldaient par le même refus —
+ * « violates foreign key constraint … school_subject_id » :
+ *
+ *   — la matière venait d'être créée dans la même fournée, et son écriture
+ *     n'était pas encore passée quand l'affectation partait ;
+ *   — la matière existait dans l'espace de travail local depuis longtemps,
+ *     mais son écriture avait échoué autrefois sans que personne la reprenne ;
+ *   — la matière existait en base sous un autre identifiant : les matières
+ *     sont dédoublonnées sur le couple (établissement, code), si bien qu'une
+ *     matière recréée localement porte un identifiant que la base ignore.
+ *
+ * On résout donc par identifiant, puis par code, puis par libellé, et l'on
+ * crée la matière en dernier recours. L'affectation part ensuite avec
+ * l'identifiant réellement présent en base.
+ */
+async function resolveAssignmentSubject(
+  client: SupabaseClient,
+  operation: SyncOperation,
+  mutation: TableMutation,
+) {
+  const schoolId = String(mutation.row.school_id || "");
+  const subjectId = String(mutation.row.school_subject_id || "");
+  if (!schoolId) return;
+
+  if (uuidPattern.test(subjectId)) {
+    const found = await client
+      .from("school_subjects")
+      .select("id")
+      .eq("id", subjectId)
+      .eq("school_id", schoolId)
+      .maybeSingle();
+    if (found.data?.id) return;
+  }
+
+  const value = operation.payload.subject;
+  let subject =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+
+  // Repli sur l'espace de travail local. Les affectations mises en file avant
+  // que la matière ne voyage avec elles n'en portent pas la description : sans
+  // ce repli, l'arriéré déjà constitué resterait bloqué à jamais et il
+  // faudrait ressaisir chaque affectation à la main.
+  if (!subject && uuidPattern.test(subjectId)) {
+    const local = readPlatformWorkspace().subjects.find((item) => item.id === subjectId);
+    if (local) subject = local as unknown as Record<string, unknown>;
+  }
+
+  const code = String(subject?.code || "").trim();
+  const label = String(subject?.label || "").trim();
+
+  if (code) {
+    const byCode = await client
+      .from("school_subjects")
+      .select("id")
+      .eq("school_id", schoolId)
+      .eq("code", code)
+      .maybeSingle();
+    if (byCode.data?.id) {
+      mutation.row.school_subject_id = byCode.data.id;
+      return;
+    }
+  }
+  if (label) {
+    const byLabel = await client
+      .from("school_subjects")
+      .select("id")
+      .eq("school_id", schoolId)
+      .ilike("label", label)
+      .limit(1)
+      .maybeSingle();
+    if (byLabel.data?.id) {
+      mutation.row.school_subject_id = byLabel.data.id;
+      return;
+    }
+  }
+
+  if (!code || !label)
+    throw new Error(
+      "La matière de cette affectation n’existe pas encore dans l’établissement. Enregistrez-la depuis « Matières », puis relancez l’affectation.",
+    );
+
+  const created = await client
+    .from("school_subjects")
+    .insert({
+      school_id: schoolId,
+      code,
+      label,
+      color: subject?.color || null,
+      icon: subject?.icon || null,
+      coefficient: Number(subject?.coefficient ?? 1) || 1,
+      weekly_hours: Number(subject?.weeklyHours ?? 0) || 0,
+      category: subject?.category || null,
+      bulletin_order: Number(subject?.bulletinOrder ?? 0) || 0,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (created.error || !created.data?.id)
+    throw new Error(
+      `Matière « ${label} » impossible à enregistrer : ${subscriptionFriendlyMessage(created.error)}`,
+    );
+  mutation.row.school_subject_id = created.data.id;
+}
+
 async function resolveAssignmentReferences(
   client: SupabaseClient,
+  operation: SyncOperation,
   mutation: TableMutation,
 ) {
   if (mutation.table !== "school_teaching_assignments") return;
@@ -169,6 +281,8 @@ async function resolveAssignmentReferences(
     .maybeSingle();
   if (membership.error || !membership.data?.user_id)
     throw new Error("Cet enseignant n’a pas encore accepté son invitation.");
+
+  await resolveAssignmentSubject(client, operation, mutation);
 }
 
 async function resolveLessonReferences(
@@ -322,7 +436,7 @@ export function createSupabaseSyncTransport(
         await resolveGradeLevel(client, operation, mutation);
         await resolveLessonReferences(client, operation, mutation);
         await resolveSubjectLevel(client, mutation);
-        await resolveAssignmentReferences(client, mutation);
+        await resolveAssignmentReferences(client, operation, mutation);
       }
       const saved = await executeTableMutation(
         client,
