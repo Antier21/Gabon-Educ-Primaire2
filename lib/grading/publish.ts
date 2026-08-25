@@ -52,9 +52,15 @@ function numberOrNull(value: number | null | undefined) {
 
 /**
  * La période doit exister en base avant le bulletin, qui la référence par une
- * clé étrangère. Or les périodes ne vivaient jusqu'ici que dans l'espace de
- * travail local : la table était vide, et toute écriture de bulletin aurait
- * été rejetée. On la crée à la volée, à l'identique.
+ * clé étrangère. Or les périodes ne vivent que dans l'espace de travail local,
+ * et elles y portent des identifiants lisibles — « period-t1 », « period-t2 »
+ * — et non des UUID. Vouloir réutiliser cet identifiant comme clé primaire
+ * était une erreur : la colonne est de type uuid, et la publication échouait
+ * avant même d'essayer d'écrire. Le relevé de notes, lui, référence sa période
+ * par un texte libre : c'est pourquoi il fonctionnait quand le bulletin non.
+ *
+ * On retrouve donc la période par sa clé métier — enseignant, année, libellé —
+ * et on la crée en laissant la base attribuer son identifiant.
  */
 async function ensurePeriod(
   client: ReturnType<typeof createClient>,
@@ -64,43 +70,47 @@ async function ensurePeriod(
   userId: string,
   schoolId: string | null,
 ) {
-  const periodId = snapshot.periodId;
-  if (!uuidPattern.test(periodId))
-    throw new Error(
-      "La période de ce bulletin ne possède pas d’identifiant valide. Recréez-la depuis les paramètres des notes.",
-    );
+  const label = (period?.label || snapshot.periodLabel || "Période").trim();
+  const yearLabel = (settings.academicYear || snapshot.academicYear || "").trim() || "Année en cours";
 
   const existing = await client
     .from("grading_periods")
     .select("id")
-    .eq("id", periodId)
+    .eq("owner_teacher_id", userId)
+    .eq("academic_year_label", yearLabel)
+    .eq("label", label)
     .maybeSingle();
-  if (existing.data?.id) return periodId;
+  if (existing.data?.id) return String(existing.data.id);
 
-  const label = period?.label || snapshot.periodLabel || "Période";
   const startsOn = period?.startsOn || `${new Date().getFullYear()}-01-01`;
   const endsOn = period?.endsOn || `${new Date().getFullYear()}-12-31`;
-  const { error } = await client.from("grading_periods").insert({
-    id: periodId,
-    owner_teacher_id: userId,
-    school_id: schoolId,
-    academic_year_label: settings.academicYear || snapshot.academicYear || "—",
-    label,
-    period_kind: settings.periodKind === "semester" ? "semester" : "trimester",
-    starts_on: startsOn,
-    ends_on: endsOn,
-    is_active: true,
-  });
-  if (error) throw new Error(`Période non enregistrée : ${describe(error)}`);
-  return periodId;
+  const { data, error } = await client
+    .from("grading_periods")
+    .insert({
+      owner_teacher_id: userId,
+      school_id: schoolId,
+      academic_year_label: yearLabel,
+      label,
+      period_kind: settings.periodKind === "semester" ? "semester" : "trimester",
+      starts_on: startsOn,
+      ends_on: endsOn,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data?.id)
+    throw new Error(`Période « ${label} » non enregistrée : ${describe(error)}`);
+  return String(data.id);
 }
 
 export async function publishReportCard(
   snapshot: ReportSnapshot,
   period: GradingPeriod | undefined,
   settings: SchoolSettings,
+  /** Client de remplacement, utilisé par les tests. */
+  clientOverride?: ReturnType<typeof createClient>,
 ): Promise<PublicationResult> {
-  const client = createClient();
+  const client = clientOverride || createClient();
   const { data: auth } = await client.auth.getUser();
   const userId = auth.user?.id || "";
   if (!userId)
