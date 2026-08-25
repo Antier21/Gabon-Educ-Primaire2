@@ -151,6 +151,11 @@ export type FamilyIdentity = {
   userId: string;
   displayName: string;
   guardianId: string;
+  /**
+   * Coordonnées du responsable, qu'il peut corriger lui-même. Vides pour un
+   * élève : sa fiche appartient à l'établissement.
+   */
+  contact: { phone: string; email: string; address: string };
   children: FamilyChild[];
   /** Explication à afficher quand aucun rattachement n'a été trouvé. */
   reason: string;
@@ -171,6 +176,7 @@ export async function resolveFamilyIdentity(
     userId,
     displayName: "",
     guardianId: "",
+    contact: { phone: "", email: "", address: "" },
     children: [],
     reason: "",
   };
@@ -212,12 +218,20 @@ export async function resolveFamilyIdentity(
       className: String(row.class_groups?.name || ""),
       relationship: "Élève",
     };
-    return { kind: "student", userId, displayName: child.fullName, guardianId: "", children: [child], reason: "" };
+    return {
+      kind: "student",
+      userId,
+      displayName: child.fullName,
+      guardianId: "",
+      contact: { phone: "", email: "", address: "" },
+      children: [child],
+      reason: "",
+    };
   }
 
   const guardian = await client
     .from("guardians")
-    .select("id,first_name,last_name")
+    .select("id,first_name,last_name,phone,email,address")
     .eq("profile_id", userId)
     .maybeSingle();
   if (guardian.error) throw new Error(describe(guardian.error));
@@ -268,6 +282,11 @@ export async function resolveFamilyIdentity(
     userId,
     displayName: `${guardian.data.last_name || ""} ${guardian.data.first_name || ""}`.trim(),
     guardianId: String(guardian.data.id),
+    contact: {
+      phone: String(guardian.data.phone || ""),
+      email: String(guardian.data.email || ""),
+      address: String(guardian.data.address || ""),
+    },
     children,
     reason: children.length
       ? ""
@@ -562,4 +581,32 @@ export async function loadMessages(guardianId: string): Promise<FamilyMessage[]>
       studentName: String(row.student_name || ""),
       receivedAt: String(row.created_at || ""),
     }));
+}
+
+/**
+ * Enregistre les coordonnées du responsable connecté.
+ *
+ * Passe par une fonction SQL plutôt que par une écriture directe : Supabase
+ * accorde les droits colonne par colonne à tous les comptes authentifiés, si
+ * bien qu'ouvrir la mise à jour de la ligne ouvrirait aussi la modification du
+ * nom. La fonction, elle, ne touche que le téléphone, le courriel et
+ * l'adresse — le reste de la fiche appartient à l'établissement.
+ */
+export async function saveMyContact(contact: {
+  phone: string;
+  email: string;
+  address: string;
+}): Promise<{ phone: string; email: string; address: string }> {
+  const { data, error } = await createClient().rpc("update_my_guardian_contact", {
+    new_phone: contact.phone,
+    new_email: contact.email,
+    new_address: contact.address,
+  });
+  if (error) throw new Error(describe(error));
+  const row = (data || {}) as { phone?: string; email?: string; address?: string };
+  return {
+    phone: String(row.phone || ""),
+    email: String(row.email || ""),
+    address: String(row.address || ""),
+  };
 }

@@ -122,3 +122,16 @@
   .evaluationSoon,.evaluationPast{flex-wrap:wrap}
   .evaluationDate{margin-left:0;text-align:left}
 }
+
+/* Formulaire de coordonnées. Champs pleine largeur et hauteur confortable :
+   la plupart des parents remplissent cela au téléphone, au pouce. */
+.contactForm{display:flex;flex-direction:column;gap:14px;max-width:520px}
+.contactIntro{margin:0;color:#3d4d47;font-size:14px;line-height:1.5}
+.contactForm label{display:flex;flex-direction:column;gap:6px}
+.contactForm label span{font-size:13px;font-weight:600;color:#20302a}
+.contactForm input{padding:11px 13px;border:1px solid #d8e3de;border-radius:10px;font:inherit;font-size:15px;color:#20302a;background:#fff}
+.contactForm input:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f}
+.contactError{margin:0;padding:10px 12px;border-radius:10px;background:#fdecea;color:#96271b;font-size:14px}
+.contactOk{margin:0;padding:10px 12px;border-radius:10px;background:#e7f5ee;color:#08734f;font-size:14px}
+.contactSubmit{align-self:flex-start;padding:11px 20px;border:0;border-radius:999px;background:#08734f;color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.contactSubmit:disabled{opacity:.6;cursor:progress}
