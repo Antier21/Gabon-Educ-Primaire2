@@ -63,8 +63,55 @@
 .message p{margin:0 0 6px;line-height:1.6;font-size:14px;white-space:pre-wrap}
 .message>small{color:#65766f;font-size:12px}
 
+/* Relevé de notes */
+.statement{border:1px solid #e6edea;border-radius:14px;padding:16px;display:grid;gap:14px}
+.statement>header{display:flex;align-items:center;gap:12px}
+/* Le titre et le décompte vivent dans un div interne : le sélecteur enfant
+   direct ne les atteignait pas, et « Trimestre 1 » se collait à « 0 note(s) ». */
+.statement>header b{display:block;font-size:16px}
+.statement>header div b{display:block;font-size:16px}
+.statement>header div small{display:block;color:#65766f;font-size:12px}
+.statementSubject{border-top:1px solid #eef2f0;padding-top:12px}
+.statementSubject:first-of-type{border-top:0;padding-top:0}
+.statementSubjectHead{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+.statementSubjectHead b{font-size:15px;color:#08734f}
+.statementSubjectHead span{margin-left:auto;font-size:13px;color:#65766f;font-variant-numeric:tabular-nums}
+.statementSubject ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.statementSubject li{display:flex;align-items:center;gap:12px;padding:9px 12px;background:#f7fbf9;border-radius:10px}
+.statementSubject li b{font-size:14px;font-weight:600}
+.statementSubject li small{color:#65766f;font-size:12px;margin-left:8px}
+.scoreValue{margin-left:auto;font-variant-numeric:tabular-nums;font-size:16px;font-weight:700;color:#17221e;white-space:nowrap}
+.scoreValue small{font-size:12px;font-weight:400;color:#65766f;margin-left:1px}
+.scoreValue em{font-style:normal;font-size:12px;font-weight:600;color:#8a6a10}
+.statementNote{margin:0;font-size:12px;color:#65766f;line-height:1.5;border-top:1px solid #eef2f0;padding-top:10px}
+
+/* Cahiers de texte */
+.lessonList{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.lessonItem{border:1px solid #e6edea;border-radius:14px;padding:14px 16px}
+.lessonHead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.lessonHead b{font-size:15px}
+.lessonHead small{color:#65766f;font-size:12px}
+.lessonSummary{margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap}
+/* Le travail à faire est ce que le parent cherche en premier : il ne doit pas
+   se confondre avec le résumé de la séance. */
+.homework{margin:10px 0 0;padding:10px 12px;background:#fff8e6;border-left:3px solid #d9a521;border-radius:0 8px 8px 0;font-size:14px;line-height:1.55}
+.homework b{color:#8a6a10}
+
+/* Évaluations */
+.evaluationList{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.evaluationSoon,.evaluationPast{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;border:1px solid #e6edea}
+.evaluationSoon{border-color:#08734f;background:#f2fbf7}
+.evaluationPast{background:#f7f9f8;color:#5d6b66}
+.evaluationSoon b,.evaluationPast b{display:block;font-size:15px}
+.evaluationSoon small,.evaluationPast small{color:#65766f;font-size:12px}
+.evaluationDate{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;white-space:nowrap}
+.evaluationDate em{display:block;font-style:normal;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#65766f}
+.evaluationSoon .evaluationDate em{color:#08734f;font-weight:700}
+
 @media(max-width:700px){
   .counters{margin-left:0;width:100%}
   .day li{flex-wrap:wrap}
   .hour{min-width:0}
+  .evaluationSoon,.evaluationPast{flex-wrap:wrap}
+  .evaluationDate{margin-left:0;text-align:left}
 }

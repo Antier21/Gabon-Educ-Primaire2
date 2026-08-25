@@ -87,22 +87,33 @@ export function buildScoreStatement(
   const decimals = workspace.settings.decimals ?? 2;
   const maxScore = workspace.settings.maxScore || 20;
 
-  const subjects = workspace.classSubjects
-    .filter(
-      (item) =>
-        item.classId === classId &&
-        item.active &&
-        (!item.periodId || item.periodId === periodId),
+  // Les matières sont déduites des devoirs eux-mêmes, et non de la liste
+  // déclarée dans les paramètres des notes. Un enseignant peut créer un devoir
+  // sans avoir déclaré la matière au préalable — l'écran le lui permet — et
+  // partir de la déclaration produisait alors un relevé vide alors que des
+  // notes existaient bel et bien.
+  const declared = new Map<string, number>();
+  for (const item of workspace.classSubjects) {
+    if (
+      item.classId === classId &&
+      item.active &&
+      (!item.periodId || item.periodId === periodId)
     )
-    .map((subject) => {
-      const assessments = workspace.assessments
-        .filter(
-          (item) =>
-            item.classId === classId &&
-            item.periodId === periodId &&
-            item.subject === subject.subject &&
-            item.active,
-        )
+      declared.set(item.subject, item.coefficient);
+  }
+
+  const periodAssessments = workspace.assessments.filter(
+    (item) => item.classId === classId && item.periodId === periodId && item.active,
+  );
+  const subjectNames = Array.from(
+    new Set(periodAssessments.map((item) => item.subject).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, "fr"));
+
+  const subjects = subjectNames
+    .map((name) => {
+      const subject = { subject: name, coefficient: declared.get(name) ?? 1 };
+      const assessments = periodAssessments
+        .filter((item) => item.subject === name)
         .sort((a, b) => a.date.localeCompare(b.date));
 
       const rows: StatementAssessment[] = assessments.map((assessment) => {

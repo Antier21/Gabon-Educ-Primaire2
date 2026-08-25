@@ -292,6 +292,20 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
       text: error instanceof Error ? error.message : "Opération impossible.",
     });
   }
+  /**
+   * Rattrapage à l'ouverture d'une classe.
+   *
+   * Sans cela, les notes saisies avant la mise en place du relevé — ou pendant
+   * une coupure réseau — n'atteindraient jamais les familles : rien ne les
+   * repousserait tant que l'enseignant ne modifie pas une note. Il suffit
+   * désormais qu'il ouvre la classe.
+   */
+  useEffect(() => {
+    if (!ready || !classId || !periodId) return;
+    void refreshScoreStatements(workspace);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId, periodId, ready]);
+
   if (!ready)
     return (
       <main className={styles.page}>
