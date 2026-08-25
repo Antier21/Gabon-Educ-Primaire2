@@ -15,6 +15,7 @@ import {
   Plus,
   Printer,
   Save,
+  Send,
   Settings2,
   Trash2,
   Unlock,
@@ -61,6 +62,7 @@ import type {
   ClassSubject,
   GeneralComment,
   GradeAssessment,
+  GradingRole,
   GradingWorkspace,
   Mention,
   MasteryLevel,
@@ -337,6 +339,22 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
     (spaceRole !== null &&
       (["super_admin", "school_admin", "headmaster"] as SchoolRole[]).includes(spaceRole)) ||
     canLockPeriod(workspace.settings.simulatedRole);
+
+  /**
+   * Rôle transmis aux règles de transition.
+   *
+   * Ces règles réservent la validation, le verrouillage et la publication à
+   * l'administration. Elles ne recevaient que le « rôle simulé », réglé sur
+   * « enseignant » par défaut : le chef d'établissement se voyait donc refuser
+   * le passage de « À vérifier » à « Validé » sur ses propres bulletins, avec
+   * un message énigmatique — « transition non autorisée pour l'état ou le rôle
+   * actuel » — qui ne désignait ni le rôle en cause ni où le changer.
+   */
+  const effectiveGradingRole: GradingRole =
+    spaceRole !== null &&
+    (["super_admin", "school_admin", "headmaster"] as SchoolRole[]).includes(spaceRole)
+      ? (spaceRole as GradingRole)
+      : workspace.settings.simulatedRole;
 
   if (!ready)
     return (
@@ -710,30 +728,114 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
         : "Appréciations par matière enregistrées. La synthèse générale reste réservée à l’enseignant principal ou à l’administration.",
     );
   }
+  /**
+   * Avertit sur un bulletin incomplet et renvoie l'accord de l'utilisateur.
+   *
+   * La complétude n'est plus un barrage. Exiger un bulletin parfaitement
+   * rempli rendait toute publication impossible en pratique — une matière sans
+   * devoir, un élève arrivé en cours de trimestre, et la classe entière restait
+   * bloquée. Or celui qui publie en répond devant les familles : il lui revient
+   * de juger. Le logiciel dit ce qui manque, précisément ; il ne décide pas à
+   * sa place.
+   */
+  function acceptsIncompleteReport(status: ReportStatus) {
+    if (!currentClass) return true;
+    const completeness = reportCompleteness(
+      workspace,
+      classId,
+      periodId,
+      currentClass.students.map((item) => item.id),
+    );
+    if (completeness.complete) return true;
+    const manques = [
+      completeness.missingScores ? `${completeness.missingScores} note(s) non saisie(s)` : "",
+      completeness.subjectsWithoutAssessments
+        ? `${completeness.subjectsWithoutAssessments} matière(s) sans aucune évaluation`
+        : "",
+      completeness.invalidCoefficients
+        ? `${completeness.invalidCoefficients} coefficient(s) invalide(s)`
+        : "",
+      completeness.assessmentCount === 0 ? "aucune évaluation dans la période" : "",
+    ].filter(Boolean);
+    const verbe =
+      status === "published" ? "publier" : status === "locked" ? "verrouiller" : "valider";
+    return window.confirm(
+      `Ce bulletin est incomplet :\n\n• ${manques.join("\n• ")}\n\n` +
+        (status === "published"
+          ? "Une fois publié, il sera visible par la famille en l’état.\n\n"
+          : "") +
+        `Voulez-vous le ${verbe} quand même ?`,
+    );
+  }
+
+  /**
+   * Publication en un geste.
+   *
+   * Le circuit compte six états, et le menu déroulant n'autorisait qu'un pas à
+   * la fois : pour remettre un bulletin aux familles, il fallait le faire
+   * passer de « Calculé » à « À vérifier », puis « Validé », puis
+   * « Verrouillé », puis « Publié » — cinq manœuvres, sans que rien n'indique
+   * laquelle menait à la famille. Ce bouton parcourt le chemin d'un coup, en
+   * respectant chaque étape et en archivant le bulletin figé au passage.
+   */
+  async function publishReport() {
+    if (!liveSnapshot) return;
+    const current = (archived?.status || "calculated") as ReportStatus;
+    if (current === "published")
+      return fail(new Error("Ce bulletin est déjà publié : la famille peut le consulter."));
+    if (!canPublishReports)
+      return fail(
+        new Error(
+          "La publication est réservée au chef d’établissement et à la personne qu’il a désignée.",
+        ),
+      );
+    if (!acceptsIncompleteReport("published")) return;
+
+    const chemin: ReportStatus[] = [
+      "draft",
+      "calculated",
+      "review",
+      "validated",
+      "locked",
+      "published",
+    ];
+    const depart = chemin.indexOf(current);
+    const etapes = depart < 0 ? (["published"] as ReportStatus[]) : chemin.slice(depart + 1);
+    const fige = archived?.status === "locked" ? archived.snapshot : liveSnapshot;
+
+    try {
+      let next = workspace;
+      for (const etape of etapes) next = archiveReport(next, fige, etape, effectiveGradingRole);
+      await persist(next, "Bulletin publié.", {
+        module: "grading",
+        operation: archived ? "update" : "create",
+        entityId: archived?.id || liveSnapshot.studentId,
+        payload: { status: "published", snapshot: fige },
+      });
+      const result = await publishReportCard(
+        fige,
+        workspace.periods.find((item) => item.id === fige.periodId),
+        workspace.settings,
+      );
+      setMessage(result.message);
+      if (!result.published) fail(new Error(result.message));
+    } catch (error) {
+      fail(error);
+    }
+  }
+
   async function setReportStatus(status: ReportStatus) {
     if (!liveSnapshot) return;
     const currentStatus = archived?.status || "calculated";
     if (status === currentStatus) return;
     if (
-      !canTransitionReport(
-        currentStatus,
-        status,
-        workspace.settings.simulatedRole,
-      )
+      !canTransitionReport(currentStatus, status, effectiveGradingRole)
     )
       return fail(
         new Error(
           "Cette transition n’est pas autorisée pour l’état ou le rôle actuel.",
         ),
       );
-    const completeness = currentClass
-      ? reportCompleteness(
-          workspace,
-          classId,
-          periodId,
-          currentClass.students.map((item) => item.id),
-        )
-      : null;
     const officialStatus = (["validated", "locked", "published"] as ReportStatus[]).includes(status);
 
     /**
@@ -754,51 +856,11 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
         ),
       );
 
-    /**
-     * Complétude : un avertissement, non plus un barrage.
-     *
-     * Exiger un bulletin parfaitement rempli rendait toute publication
-     * impossible en pratique — une matière sans devoir, un élève arrivé en
-     * cours de trimestre, et le bulletin de la classe entière restait bloqué.
-     * Or celui qui publie est aussi celui qui en répond devant les familles :
-     * il lui revient de juger si le bulletin peut partir en l'état. Le
-     * logiciel dit ce qui manque, précisément ; il ne décide pas à sa place.
-     */
-    if (officialStatus && completeness && !completeness.complete) {
-      const manques = [
-        completeness.missingScores
-          ? `${completeness.missingScores} note(s) non saisie(s)`
-          : "",
-        completeness.subjectsWithoutAssessments
-          ? `${completeness.subjectsWithoutAssessments} matière(s) sans aucune évaluation`
-          : "",
-        completeness.invalidCoefficients
-          ? `${completeness.invalidCoefficients} coefficient(s) invalide(s)`
-          : "",
-        completeness.assessmentCount === 0 ? "aucune évaluation dans la période" : "",
-      ].filter(Boolean);
-      const verbe =
-        status === "published" ? "publier" : status === "locked" ? "verrouiller" : "valider";
-      if (
-        !window.confirm(
-          `Ce bulletin est incomplet :\n\n• ${manques.join("\n• ")}\n\n` +
-            (status === "published"
-              ? "Une fois publié, il sera visible par la famille en l’état.\n\n"
-              : "") +
-            `Voulez-vous le ${verbe} quand même ?`,
-        )
-      )
-        return;
-    }
+    if (officialStatus && !acceptsIncompleteReport(status)) return;
     const published = archived?.status === "locked" ? archived.snapshot : liveSnapshot;
     try {
       await persist(
-        archiveReport(
-          workspace,
-          published,
-          status,
-          workspace.settings.simulatedRole,
-        ),
+        archiveReport(workspace, published, status, effectiveGradingRole),
         status === "locked"
           ? "Bulletin verrouillé : un snapshot figé a été archivé."
           : "État du bulletin mis à jour.",
@@ -840,12 +902,7 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
     if (reason === null) return;
     try {
       await persist(
-        reopenReport(
-          workspace,
-          archived.id,
-          workspace.settings.simulatedRole,
-          reason,
-        ),
+        reopenReport(workspace, archived.id, effectiveGradingRole, reason),
         "Bulletin rouvert pour vérification.",
         {
           module: "grading",
@@ -1080,6 +1137,30 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
                     >
                       <Unlock /> Rouvrir
                     </button>
+                  )}
+                  {/*
+                    Le geste que cherche le chef d'établissement. Le menu
+                    déroulant ne franchit qu'une étape à la fois : ce bouton
+                    parcourt tout le circuit et remet le bulletin à la famille.
+                  */}
+                  {module !== "bulletins" && archived?.status !== "published" && (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => void publishReport()}
+                      disabled={!canPublishReports}
+                      title={
+                        canPublishReports
+                          ? "Rendre ce bulletin visible par la famille"
+                          : "Réservé au chef d’établissement et à la personne qu’il a désignée"
+                      }
+                    >
+                      <Send /> Publier le bulletin
+                    </button>
+                  )}
+                  {module !== "bulletins" && archived?.status === "published" && (
+                    <span className={styles.readOnlyBadge}>
+                      <Send /> Publié — visible par la famille
+                    </span>
                   )}
                 </div>
                 <form
