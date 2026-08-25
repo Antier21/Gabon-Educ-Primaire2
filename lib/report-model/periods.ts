@@ -90,3 +90,44 @@ export function reportTitleFor(period: PlannedPeriod): string {
   if (period.kind === "annual") return "BILAN ANNUEL";
   return period.label.toLocaleUpperCase("fr");
 }
+
+/**
+ * Clé canonique d'une période, pour reconnaître deux libellés qui désignent
+ * la même chose.
+ *
+ * « Trimestre 1 », « 1er trimestre », « 1ER TRIMESTRE » sont le même
+ * trimestre. Comparer les libellés caractère par caractère a conduit à créer
+ * un second jeu de trimestres par-dessus celui posé à l'ouverture de
+ * l'établissement — six trimestres au lieu de trois, et des enseignants qui
+ * ne savent plus lequel choisir.
+ */
+export function periodKey(label: string): string {
+  const brut = String(label || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!brut) return "";
+
+  const chiffre = brut.match(/\d+/)?.[0] || "";
+
+  if (brut.includes("palier")) return chiffre ? `palier-${Number(chiffre)}` : "palier";
+  if (brut.includes("trimestre")) return chiffre ? `trimestre-${Number(chiffre)}` : "trimestre";
+  if (brut.includes("semestre")) return chiffre ? `semestre-${Number(chiffre)}` : "semestre";
+  // « Bilan annuel », « Bilan de fin d'année », « Annuel ».
+  if (brut.includes("annuel") || brut.includes("annee") || brut.includes("bilan"))
+    return "annuel";
+  return brut.replace(/\s+/g, "-");
+}
+
+/**
+ * Ordre d'affichage : les trimestres, puis les paliers, puis le bilan annuel.
+ *
+ * L'ordre alphabétique des types plaçait « annual » en tête, si bien que le
+ * bilan de fin d'année ouvrait la liste des périodes.
+ */
+export function periodSortRank(kind: string, sequence: number | null): number {
+  const base = kind === "trimester" || kind === "semester" ? 0 : kind === "palier" ? 100 : 200;
+  return base + (sequence ?? 99);
+}

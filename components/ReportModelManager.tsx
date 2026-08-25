@@ -229,6 +229,17 @@ export function ReportModelManager() {
                   }))
                 }
               />
+              {/*
+                Le total est affiché en clair. Le réglage a déjà été ramené à 1
+                sans que rien ne le signale, et un établissement s'est retrouvé
+                avec trois paliers là où il en attendait six.
+              */}
+              <b>
+                soit {periodSettings.paliersPerTerm * 3} palier(s) dans l’année
+                {periodSettings.paliersPerTerm !== 2
+                  ? " — le modèle le plus répandu en compte 2 par trimestre, soit 6"
+                  : ""}
+              </b>
             </label>
           )}
 

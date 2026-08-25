@@ -8,7 +8,7 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
-import { planPeriods, type PeriodScheme } from "./periods";
+import { periodKey, periodSortRank, planPeriods, type PeriodScheme } from "./periods";
 
 export type ReportPeriodSettings = {
   scheme: PeriodScheme;
@@ -97,7 +97,9 @@ export async function loadSchoolPeriods(
         : Number(row.sequence_number),
     parentPeriodId: row.parent_period_id ? String(row.parent_period_id) : null,
     locked: row.is_locked === true,
-  }));
+  })).sort(
+    (a, b) => periodSortRank(a.kind, a.sequenceNumber) - periodSortRank(b.kind, b.sequenceNumber),
+  );
 }
 
 /**
@@ -145,13 +147,23 @@ export async function ensurePeriods(
 
   const client = createClient();
   const existing = await loadSchoolPeriods(schoolId, academicYearId);
-  const known = new Map(existing.map((item) => [item.label, item]));
+  /**
+   * Les périodes déjà là, reconnues par leur clé canonique et non par leur
+   * libellé exact.
+   *
+   * C'est la correction du défaut qui a doublé les trimestres : l'ouverture de
+   * l'établissement pose « Trimestre 1 », le découpage voulait créer « 1er
+   * trimestre », et la comparaison caractère par caractère n'y voyait pas la
+   * même période. On adopte l'existant, on ne le double jamais — le libellé de
+   * l'établissement reste le sien.
+   */
+  const known = new Map(existing.map((item) => [periodKey(item.label), item]));
   const planned = planPeriods(settings.scheme, settings.paliersPerTerm);
 
   // Les trimestres d'abord : un palier ne peut se rattacher qu'à un trimestre
   // qui existe déjà, et son identifiant n'est connu qu'après l'insertion.
   for (const period of planned.filter((item) => item.kind === "trimester")) {
-    if (known.has(period.label)) continue;
+    if (known.has(periodKey(period.label))) continue;
     const { data, error } = await client
       .from("school_periods")
       .insert({
@@ -164,7 +176,7 @@ export async function ensurePeriods(
       .select("id,label,period_kind,sequence_number,parent_period_id,is_locked")
       .single();
     if (error) throw new Error(describe(error));
-    known.set(period.label, {
+    known.set(periodKey(period.label), {
       id: String(data.id),
       label: period.label,
       kind: "trimester",
@@ -176,14 +188,14 @@ export async function ensurePeriods(
 
   let created = 0;
   for (const period of planned) {
-    if (known.has(period.label)) continue;
+    if (known.has(periodKey(period.label))) continue;
     const parentLabel =
       period.kind === "palier" && period.termNumber
         ? planned.find(
             (item) => item.kind === "trimester" && item.termNumber === period.termNumber,
           )?.label
         : undefined;
-    const parentId = parentLabel ? known.get(parentLabel)?.id || null : null;
+    const parentId = parentLabel ? known.get(periodKey(parentLabel))?.id || null : null;
     const { error } = await client.from("school_periods").insert({
       school_id: schoolId,
       academic_year_id: academicYearId,
@@ -193,7 +205,7 @@ export async function ensurePeriods(
       parent_period_id: parentId,
     });
     if (error) throw new Error(describe(error));
-    known.set(period.label, {
+    known.set(periodKey(period.label), {
       id: "",
       label: period.label,
       kind: period.kind,

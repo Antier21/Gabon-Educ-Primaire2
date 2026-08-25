@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { paliersOfTerm, planPeriods, reportTitleFor } from "./periods";
+import {
+  paliersOfTerm,
+  periodKey,
+  periodSortRank,
+  planPeriods,
+  reportTitleFor,
+} from "./periods";
 
 describe("découpage par trimestres", () => {
   it("crée trois trimestres et rien d’autre", () => {
@@ -72,5 +78,55 @@ describe("titre du bulletin", () => {
   it("nomme le bilan annuel par son nom", () => {
     const annuel = planPeriods("palier").find((p) => p.kind === "annual")!;
     expect(reportTitleFor(annuel)).toBe("BILAN ANNUEL");
+  });
+});
+
+describe("reconnaissance d’une période déjà existante", () => {
+  /**
+   * Le défaut qui a produit six trimestres : « Trimestre 1 » posé à
+   * l'ouverture de l'établissement et « 1er trimestre » créé par le découpage
+   * désignent la même période.
+   */
+  it.each([
+    ["Trimestre 1", "1er trimestre"],
+    ["1ER TRIMESTRE", "1er trimestre"],
+    ["1e trimestre", "Trimestre 1"],
+    ["  Trimestre  1  ", "1er trimestre"],
+  ])("reconnaît « %s » et « %s » comme la même période", (a, b) => {
+    expect(periodKey(a)).toBe(periodKey(b));
+  });
+
+  it("distingue deux trimestres différents", () => {
+    expect(periodKey("Trimestre 1")).not.toBe(periodKey("Trimestre 2"));
+  });
+
+  it("distingue un palier d’un trimestre de même numéro", () => {
+    expect(periodKey("Palier 1")).not.toBe(periodKey("Trimestre 1"));
+  });
+
+  it("reconnaît les formulations du bilan annuel", () => {
+    expect(periodKey("Bilan annuel")).toBe("annuel");
+    expect(periodKey("Bilan de fin d’année")).toBe("annuel");
+  });
+
+  it("supporte un libellé vide sans échouer", () => {
+    expect(periodKey("")).toBe("");
+  });
+});
+
+describe("ordre d’affichage des périodes", () => {
+  /** Le bilan annuel ouvrait la liste, par ordre alphabétique des types. */
+  it("place les trimestres avant les paliers, et le bilan en dernier", () => {
+    const rangs = [
+      periodSortRank("annual", null),
+      periodSortRank("palier", 1),
+      periodSortRank("trimester", 1),
+    ];
+    expect(rangs[2]).toBeLessThan(rangs[1]);
+    expect(rangs[1]).toBeLessThan(rangs[0]);
+  });
+
+  it("classe les paliers entre eux par leur numéro", () => {
+    expect(periodSortRank("palier", 1)).toBeLessThan(periodSortRank("palier", 6));
   });
 });
