@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, MessageCircle, UserRoundCheck } from "lucide-react";
 import {
   loadAttendance,
@@ -21,6 +21,14 @@ import {
   type ReportCardSummary,
   type TimetableEntry,
 } from "@/lib/family/store";
+import {
+  badgeLabel,
+  countFresh,
+  markTabSeen,
+  readSeenMarks,
+  seenKey,
+  type SeenMarks,
+} from "@/lib/family/freshness";
 import styles from "./FamilySpaceLive.module.css";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -92,6 +100,20 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [statements, setStatements] = useState<FamilyScoreStatement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  /**
+   * Repères figés à l'ouverture de la page.
+   *
+   * Ils ne sont volontairement pas rafraîchis pendant la visite : si le
+   * repère avançait à mesure que le parent ouvre les onglets, la pastille
+   * disparaîtrait sous ses yeux avant qu'il ait pu la lire. Les onglets déjà
+   * ouverts dans cette visite sont retenus à part.
+   */
+  const [seenAtOpen, setSeenAtOpen] = useState<SeenMarks>({});
+  const [visited, setVisited] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSeenAtOpen(readSeenMarks());
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -133,6 +155,15 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
 
   const child: FamilyChild | undefined = identity?.children.find((item) => item.id === childId);
 
+  // L'onglet affiché est consulté : on pose le repère pour la prochaine visite
+  // et on le retire des pastilles de celle-ci.
+  useEffect(() => {
+    if (!childId) return;
+    markTabSeen(readSeenMarks(), childId, tab, new Date());
+    const key = seenKey(childId, tab);
+    setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
+  }, [childId, tab]);
+
   useEffect(() => {
     if (!child) return;
     void (async () => {
@@ -163,6 +194,37 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
       }
     })();
   }, [child]);
+
+  /**
+   * Ce qui est apparu depuis la dernière visite, onglet par onglet.
+   *
+   * Chaque onglet est jugé sur la date qui décrit le moment où la famille
+   * pouvait l'apprendre — la mise à jour du relevé, la publication du
+   * bulletin, la saisie de l'absence, l'annonce de l'évaluation. Pour cette
+   * dernière, la date de composition ne conviendrait pas : elle est à venir,
+   * et l'épreuve resterait signalée comme neuve jusqu'au jour de l'examen.
+   *
+   * Ce calcul est placé avant les retours anticipés : un hook qui suivrait un
+   * « return » ne serait pas appelé à chaque rendu.
+   */
+  const freshCounts = useMemo(() => {
+    const source: Record<TabKey, Array<string | null | undefined>> = {
+      scores: statements.map((item) => item.updatedAt),
+      results: reports.map((item) => item.publishedAt),
+      lessons: lessons.map((item) => item.updatedAt),
+      evaluations: evaluations.map((item) => item.announcedAt),
+      attendance: attendance.map((item) => item.recordedAt),
+      timetable: [],
+      messages: messages.map((item) => item.receivedAt),
+    };
+    const counts = {} as Record<TabKey, number>;
+    for (const { key } of TABS) {
+      counts[key] = visited.includes(seenKey(childId, key))
+        ? 0
+        : countFresh(source[key], seenAtOpen[seenKey(childId, key)]);
+    }
+    return counts;
+  }, [statements, reports, lessons, evaluations, attendance, messages, childId, seenAtOpen, visited]);
 
   if (loading) return <div className={styles.state}>Chargement de vos informations…</div>;
 
@@ -223,17 +285,30 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
       )}
 
       <nav className={styles.tabs}>
-        {tabsFor(space).map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            className={tab === key ? styles.tabActive : styles.tab}
-            aria-current={tab === key ? "page" : undefined}
-            onClick={() => selectTab(key)}
-          >
-            <Icon /> {label}
-          </button>
-        ))}
+        {tabsFor(space).map(({ key, label, icon: Icon }) => {
+          const fresh = freshCounts[key] || 0;
+          return (
+            <button
+              key={key}
+              type="button"
+              className={tab === key ? styles.tabActive : styles.tab}
+              aria-current={tab === key ? "page" : undefined}
+              onClick={() => selectTab(key)}
+            >
+              <Icon /> {label}
+              {fresh > 0 && (
+                // Le nombre seul ne dit rien à qui n'y voit pas : le texte
+                // caché est ce que le lecteur d'écran annonce à sa place.
+                <span className={styles.badge}>
+                  <span aria-hidden="true">{badgeLabel(fresh)}</span>
+                  <span className={styles.srOnly}>
+                    {fresh} nouveauté(s) depuis votre dernière visite
+                  </span>
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
 
       {tab === "scores" && (

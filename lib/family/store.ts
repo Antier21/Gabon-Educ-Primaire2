@@ -30,6 +30,8 @@ export type ReportCardSummary = {
   status: string;
   subjects: Array<{ name: string; average: number | null; coefficient: number; comment: string }>;
   generalComment: string;
+  /** Dernière mise à jour, qui sert à signaler un bulletin nouvellement publié. */
+  publishedAt: string;
 };
 
 export type AttendanceEntry = {
@@ -39,6 +41,12 @@ export type AttendanceEntry = {
   durationMinutes: number;
   reason: string;
   justified: boolean;
+  /**
+   * Quand l'établissement a saisi le fait — distinct du jour de l'absence.
+   * Une absence de lundi saisie jeudi est une nouveauté du jeudi pour la
+   * famille : c'est ce jour-là qu'elle pouvait l'apprendre.
+   */
+  recordedAt: string;
 };
 
 export type TimetableEntry = {
@@ -109,6 +117,12 @@ export type FamilyEvaluation = {
   date: string;
   /** Vrai tant que la date n'est pas passée. */
   upcoming: boolean;
+  /**
+   * Quand l'enseignant a programmé l'épreuve. La date de composition ne peut
+   * pas servir de repère de nouveauté : elle est dans l'avenir, et une
+   * évaluation resterait « nouvelle » jusqu'au jour où elle a lieu.
+   */
+  announcedAt: string;
 };
 
 function describe(error: unknown): string {
@@ -312,7 +326,7 @@ export async function loadClassEvaluations(classId: string): Promise<FamilyEvalu
   if (!classId) return [];
   const { data, error } = await createClient()
     .from("teacher_evaluations")
-    .select("id,title,subject,evaluation_date")
+    .select("id,title,subject,evaluation_date,created_at")
     .eq("class_group_id", classId)
     .order("evaluation_date", { ascending: false })
     .limit(40);
@@ -328,6 +342,7 @@ export async function loadClassEvaluations(classId: string): Promise<FamilyEvalu
     title?: string;
     subject?: string;
     evaluation_date?: string;
+    created_at?: string;
   };
 
   return ((data || []) as unknown as EvaluationRow[])
@@ -340,6 +355,7 @@ export async function loadClassEvaluations(classId: string): Promise<FamilyEvalu
         subject: String(row.subject || ""),
         date,
         upcoming: Number.isNaN(parsed) ? false : parsed >= startOfToday,
+        announcedAt: String(row.created_at || ""),
       };
     })
     .sort((a, b) => {
@@ -420,7 +436,7 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
   const { data, error } = await client
     .from("report_cards")
     .select(
-      "id,report_status,general_average,general_rank,class_average,grading_period_id,grading_periods(label,period_kind),report_card_subjects(subject_name,average_value,coefficient,appreciation),report_card_comments(general_comment)",
+      "id,report_status,general_average,general_rank,class_average,updated_at,grading_period_id,grading_periods(label,period_kind),report_card_subjects(subject_name,average_value,coefficient,appreciation),report_card_comments(general_comment)",
     )
     .eq("class_student_id", studentId)
     .order("created_at", { ascending: false });
@@ -431,6 +447,7 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
     report_status?: string;
     general_average?: number | null;
     general_rank?: number | null;
+    updated_at?: string;
     grading_period_id?: string;
     grading_periods?: { label?: string; period_kind?: string } | Array<{ label?: string; period_kind?: string }> | null;
     report_card_subjects?: Array<{
@@ -468,6 +485,7 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
         comment: String(subject.appreciation || ""),
       })),
       generalComment: String(comments?.general_comment || ""),
+      publishedAt: String(row.updated_at || ""),
     };
   });
 }
@@ -475,7 +493,7 @@ export async function loadReportCards(studentId: string): Promise<ReportCardSumm
 export async function loadAttendance(studentId: string): Promise<AttendanceEntry[]> {
   const { data, error } = await createClient()
     .from("attendance_records")
-    .select("id,attendance_date,attendance_kind,duration_minutes,reason,is_justified")
+    .select("id,attendance_date,attendance_kind,duration_minutes,reason,is_justified,created_at")
     .eq("student_id", studentId)
     .order("attendance_date", { ascending: false })
     .limit(60);
@@ -487,6 +505,7 @@ export async function loadAttendance(studentId: string): Promise<AttendanceEntry
     durationMinutes: Number(row.duration_minutes || 0),
     reason: String(row.reason || ""),
     justified: Boolean(row.is_justified),
+    recordedAt: String(row.created_at || ""),
   }));
 }
 
