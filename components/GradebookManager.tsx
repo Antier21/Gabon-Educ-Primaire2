@@ -34,6 +34,9 @@ import {
 } from "@/lib/grading/calculations";
 import { publishReportCard } from "@/lib/grading/publish";
 import { syncScoreStatements } from "@/lib/grading/statements";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { resolveMyRoles } from "@/lib/roles/current-role";
+import type { SchoolRole } from "@/lib/platform/types";
 import {
   archiveReport,
   canEditGeneralComment,
@@ -176,6 +179,8 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
   const [assessmentId, setAssessmentId] = useState("");
   const [studentId, setStudentId] = useState("");
   const [printAll, setPrintAll] = useState(false);
+  /** Rôle réel du compte dans l'établissement, distinct du rôle simulé. */
+  const [spaceRole, setSpaceRole] = useState<SchoolRole | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number | undefined>();
 
   useEffect(() => {
@@ -305,6 +310,33 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
     void refreshScoreStatements(workspace);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, periodId, ready]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const context = await resolveActiveSchoolContext();
+        const roles = await resolveMyRoles(context.school.id);
+        if (!cancelled && roles) setSpaceRole(roles.primary);
+      } catch {
+        // Rôle indéterminé : on retombe sur le rôle simulé, comme avant.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Le droit de publier se lit sur le rôle réel du compte, et non plus sur le
+   * seul « rôle simulé » des paramètres — réglé sur « enseignant » par défaut,
+   * il refusait la publication au chef d'établissement lui-même. Ce dernier
+   * reste accepté en secours, tant qu'il existe.
+   */
+  const canPublishReports =
+    (spaceRole !== null &&
+      (["super_admin", "school_admin", "headmaster"] as SchoolRole[]).includes(spaceRole)) ||
+    canLockPeriod(workspace.settings.simulatedRole);
 
   if (!ready)
     return (
@@ -702,27 +734,62 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
           currentClass.students.map((item) => item.id),
         )
       : null;
-    if (
-      (["validated", "locked"] as ReportStatus[]).includes(status) &&
-      completeness &&
-      !completeness.complete
-    )
+    const officialStatus = (["validated", "locked", "published"] as ReportStatus[]).includes(status);
+
+    /**
+     * Qui peut valider, verrouiller et publier.
+     *
+     * Le droit se lit d'abord sur le rôle réel du compte dans l'établissement.
+     * Il ne se lisait auparavant que sur le « rôle simulé » des paramètres,
+     * réglé sur « enseignant » par défaut : un chef d'établissement se voyait
+     * donc refuser la publication de ses propres bulletins tant qu'il n'avait
+     * pas trouvé ce sélecteur, dont rien n'indiquait qu'il commandait ses
+     * droits. Le rôle simulé reste accepté en secours, le temps qu'il
+     * disparaisse.
+     */
+    if (officialStatus && !canPublishReports)
       return fail(
         new Error(
-          `Bulletin incomplet : ${completeness.missingScores} note(s) manquante(s), ${completeness.subjectsWithoutAssessments} matière(s) sans évaluation et ${completeness.invalidCoefficients} coefficient(s) invalide(s).`,
+          "La validation, le verrouillage et la publication sont réservés au chef d’établissement et à la personne qu’il a désignée.",
         ),
       );
-    if (
-      (["validated", "locked", "published"] as ReportStatus[]).includes(
-        status,
-      ) &&
-      !canLockPeriod(workspace.settings.simulatedRole)
-    )
-      return fail(
-        new Error(
-          "La validation, le verrouillage et la publication sont réservés à l’administration ou au chef d’établissement.",
-        ),
-      );
+
+    /**
+     * Complétude : un avertissement, non plus un barrage.
+     *
+     * Exiger un bulletin parfaitement rempli rendait toute publication
+     * impossible en pratique — une matière sans devoir, un élève arrivé en
+     * cours de trimestre, et le bulletin de la classe entière restait bloqué.
+     * Or celui qui publie est aussi celui qui en répond devant les familles :
+     * il lui revient de juger si le bulletin peut partir en l'état. Le
+     * logiciel dit ce qui manque, précisément ; il ne décide pas à sa place.
+     */
+    if (officialStatus && completeness && !completeness.complete) {
+      const manques = [
+        completeness.missingScores
+          ? `${completeness.missingScores} note(s) non saisie(s)`
+          : "",
+        completeness.subjectsWithoutAssessments
+          ? `${completeness.subjectsWithoutAssessments} matière(s) sans aucune évaluation`
+          : "",
+        completeness.invalidCoefficients
+          ? `${completeness.invalidCoefficients} coefficient(s) invalide(s)`
+          : "",
+        completeness.assessmentCount === 0 ? "aucune évaluation dans la période" : "",
+      ].filter(Boolean);
+      const verbe =
+        status === "published" ? "publier" : status === "locked" ? "verrouiller" : "valider";
+      if (
+        !window.confirm(
+          `Ce bulletin est incomplet :\n\n• ${manques.join("\n• ")}\n\n` +
+            (status === "published"
+              ? "Une fois publié, il sera visible par la famille en l’état.\n\n"
+              : "") +
+            `Voulez-vous le ${verbe} quand même ?`,
+        )
+      )
+        return;
+    }
     const published = archived?.status === "locked" ? archived.snapshot : liveSnapshot;
     try {
       await persist(
