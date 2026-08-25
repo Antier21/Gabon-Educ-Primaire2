@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { LockKeyhole, ShieldAlert } from "lucide-react";
 import { SchoolDocumentPreview } from "@/components/SchoolDocumentTemplates";
 import { useSubscriptionAccess } from "@/lib/subscriptions/use-subscription-access";
@@ -15,6 +15,12 @@ import { loadActiveSchoolClasses } from "@/lib/active-school-classes";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
 import { hasPermission, type PermissionResource } from "@/lib/permissions";
+import {
+  closeContactRequest,
+  describeChange,
+  loadPendingContactRequests,
+  type GuardianContactRequest,
+} from "@/lib/guardians/contact-requests";
 import {
   calculateAttendance,
   detectTimetableConflicts,
@@ -1576,6 +1582,88 @@ function StudentsView({ workspace, classes, persist }: ViewProps) {
 function GuardiansView({ workspace, persist }: ViewProps) {
   const [editing, setEditing] = useState<Guardian | null>(null);
   const [notice, setNotice] = useState("");
+  /**
+   * Corrections proposées par les familles.
+   *
+   * Un parent ne modifie pas sa fiche lui-même : il signale que son numéro a
+   * changé. Sans cet écran, sa demande resterait invisible et l'établissement
+   * continuerait d'appeler dans le vide — ce qui était exactement le défaut à
+   * corriger.
+   */
+  const [requests, setRequests] = useState<GuardianContactRequest[]>([]);
+  const [requestBusy, setRequestBusy] = useState("");
+
+  const refreshRequests = useCallback(async () => {
+    try {
+      setRequests(await loadPendingContactRequests(workspace.school?.id || ""));
+    } catch {
+      // Une lecture impossible ne doit pas empêcher de tenir le fichier des
+      // responsables : le panneau reste simplement vide.
+      setRequests([]);
+    }
+  }, [workspace.school?.id]);
+
+  useEffect(() => {
+    void refreshRequests();
+  }, [refreshRequests]);
+
+  /**
+   * Applique une correction : la fiche est enregistrée par le chemin ordinaire,
+   * avec ses contrôles de droits et d'abonnement, puis la demande est close.
+   *
+   * L'ordre compte. Clore la demande d'abord ferait disparaître de l'écran une
+   * correction qui n'aurait pas été enregistrée.
+   */
+  async function decideRequest(
+    request: GuardianContactRequest,
+    decision: "applied" | "rejected",
+  ) {
+    setRequestBusy(request.id);
+    setNotice("");
+    try {
+      if (decision === "applied") {
+        const existing = workspace.guardians.find((item) => item.id === request.guardianId);
+        if (!existing) {
+          setNotice(
+            "Cette fiche de responsable n’est pas présente dans cet espace de travail. Ouvrez le module Parents de l’établissement concerné.",
+          );
+          return;
+        }
+        const guardian: Guardian = {
+          ...existing,
+          phone: request.phone,
+          email: request.email,
+          address: request.address,
+          updatedAt: now(),
+        };
+        const done = await persist(
+          {
+            ...workspace,
+            guardians: workspace.guardians.map((item) =>
+              item.id === guardian.id ? guardian : item,
+            ),
+          },
+          {
+            module: "guardians",
+            operation: "update",
+            entityId: guardian.id,
+            payload: { guardian },
+            baseUpdatedAt: existing.updatedAt,
+          },
+          "Coordonnées mises à jour d’après la demande de la famille.",
+        );
+        if (!done) return;
+      }
+      await closeContactRequest(request.id, decision);
+      await refreshRequests();
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Traitement de la demande impossible.",
+      );
+    } finally {
+      setRequestBusy("");
+    }
+  }
 
   /**
    * Correction d'une fiche existante. Les liens avec les élèves ne sont pas
@@ -1708,6 +1796,51 @@ function GuardiansView({ workspace, persist }: ViewProps) {
   }
   return (
     <>
+      {requests.length > 0 && (
+        <section className={`${styles.card}`}>
+          <h2>
+            Corrections signalées par les familles ({requests.length})
+          </h2>
+          <p>
+            Ces responsables ont signalé un changement depuis leur espace. Tant que la correction
+            n’est pas appliquée, l’établissement continue d’utiliser l’ancien numéro.
+          </p>
+          <DataTable
+            headers={["Responsable", "Ce qui change", "Signalé le", "Décision"]}
+            rows={requests.map((request) => {
+              const guardian = workspace.guardians.find(
+                (item) => item.id === request.guardianId,
+              );
+              return [
+                guardian
+                  ? `${guardian.firstName} ${guardian.lastName}`
+                  : "Responsable hors de cet espace",
+                describeChange(request).join("\n") || "Aucun changement",
+                new Date(request.createdAt).toLocaleDateString("fr-FR"),
+                <div key={request.id} className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.button}
+                    disabled={requestBusy === request.id}
+                    onClick={() => void decideRequest(request, "applied")}
+                  >
+                    Appliquer
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.button} ${styles.buttonSecondary}`}
+                    disabled={requestBusy === request.id}
+                    onClick={() => void decideRequest(request, "rejected")}
+                    title="À utiliser lorsque le numéro proposé est manifestement erroné — la famille en est informée dans son espace"
+                  >
+                    Refuser
+                  </button>
+                </div>,
+              ];
+            })}
+          />
+        </section>
+      )}
       <form className={`${styles.card} ${styles.form}`} onSubmit={submit}>
         <h2>Ajouter un responsable et son lien</h2>
         <div className={styles.three}>
@@ -2090,8 +2223,17 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
           module: "assignments" as const, operation: "delete" as const, entityId: assignment.id,
           payload: { assignment }, baseUpdatedAt: assignment.updatedAt,
         })),
+        // La matière voyage avec son affectation : le transport peut ainsi la
+        // retrouver en base par son code, ou la créer, plutôt que d'échouer
+        // sur une clé étrangère quand son identifiant local est inconnu.
         ...assignments.map((assignment) => ({
-          module: "assignments" as const, operation: "create" as const, entityId: assignment.id, payload: { assignment },
+          module: "assignments" as const,
+          operation: "create" as const,
+          entityId: assignment.id,
+          payload: {
+            assignment,
+            subject: allSubjects.find((item) => item.id === assignment.subjectId),
+          },
         })),
       ],
       createdSubjects.length
@@ -2130,7 +2272,10 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
         module: "assignments",
         operation: "create",
         entityId: assignment.id,
-        payload: { assignment },
+        payload: {
+          assignment,
+          subject: workspace.subjects.find((item) => item.id === assignment.subjectId),
+        },
       },
     );
     form.reset();

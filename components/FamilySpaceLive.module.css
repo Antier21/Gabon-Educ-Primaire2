@@ -135,3 +135,4 @@
 .contactOk{margin:0;padding:10px 12px;border-radius:10px;background:#e7f5ee;color:#08734f;font-size:14px}
 .contactSubmit{align-self:flex-start;padding:11px 20px;border:0;border-radius:999px;background:#08734f;color:#fff;font:inherit;font-weight:600;cursor:pointer}
 .contactSubmit:disabled{opacity:.6;cursor:progress}
+.contactPending{margin:0;padding:10px 12px;border-radius:10px;background:#fff5e0;color:#7a5300;font-size:14px;line-height:1.5}

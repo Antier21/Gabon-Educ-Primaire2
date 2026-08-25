@@ -10,14 +10,16 @@ import {
   loadReportCards,
   loadScoreStatements,
   loadTimetable,
+  loadMyContactRequest,
+  requestMyContactChange,
   resolveFamilyIdentity,
-  saveMyContact,
   type AttendanceEntry,
   type FamilyChild,
   type FamilyEvaluation,
   type FamilyIdentity,
   type FamilyLesson,
   type FamilyMessage,
+  type ContactRequestState,
   type FamilyScoreStatement,
   type ReportCardSummary,
   type TimetableEntry,
@@ -129,6 +131,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [contactMessage, setContactMessage] = useState("");
   const [contactError, setContactError] = useState("");
   const [savingContact, setSavingContact] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<ContactRequestState | null>(null);
 
   useEffect(() => {
     setSeenAtOpen(readSeenMarks());
@@ -142,6 +145,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         setChildId(resolved.children[0]?.id || "");
         setContactForm(resolved.contact);
         setContactSaved(resolved.contact);
+        if (resolved.guardianId) setPendingRequest(await loadMyContactRequest(resolved.guardianId));
         if (resolved.guardianId) setMessages(await loadMessages(resolved.guardianId));
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Chargement impossible.");
@@ -601,10 +605,17 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
               setSavingContact(true);
               setContactError("");
               try {
-                const enregistre = await saveMyContact(cleanContact(contactForm));
-                setContactSaved(enregistre);
-                setContactForm(enregistre);
-                setContactMessage("Vos coordonnées ont été transmises à l’établissement.");
+                const propose = cleanContact(contactForm);
+                await requestMyContactChange(propose);
+                setPendingRequest({
+                  status: "pending",
+                  ...propose,
+                  createdAt: new Date().toISOString(),
+                  reviewedAt: "",
+                });
+                setContactMessage(
+                  "Votre demande a été transmise à l’établissement. Elle sera prise en compte dès que le secrétariat l’aura validée.",
+                );
               } catch (caught) {
                 setContactError(
                   caught instanceof Error ? caught.message : "Enregistrement impossible.",
@@ -616,9 +627,30 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
           >
             <p className={styles.contactIntro}>
               L’établissement vous joint à ce numéro pour les convocations, les absences et les
-              rappels. S’il a changé, corrigez-le ici : personne d’autre ne peut le faire à votre
-              place. Votre nom et le rattachement à vos enfants relèvent du secrétariat.
+              rappels. S’il a changé, signalez-le ici : personne d’autre ne peut le faire à votre
+              place. Le secrétariat validera la correction, puis mettra votre fiche à jour. Votre
+              nom et le rattachement à vos enfants relèvent de l’établissement.
             </p>
+
+            {/*
+              Sans cet avis, un parent qui ne voit pas son numéro changer croit
+              que rien n'est parti et redépose sa demande chaque semaine — et le
+              secrétariat prend cette insistance pour de l'hésitation.
+            */}
+            {pendingRequest?.status === "pending" && (
+              <p className={styles.contactPending}>
+                Demande en attente de validation par l’établissement, déposée le{" "}
+                {formatDate(pendingRequest.createdAt)} : {pendingRequest.phone}
+                {pendingRequest.email ? ` · ${pendingRequest.email}` : ""}. Vos coordonnées
+                actuelles restent affichées ci-dessous jusqu’à la validation.
+              </p>
+            )}
+            {pendingRequest?.status === "rejected" && (
+              <p className={styles.contactError}>
+                Votre dernière demande n’a pas été retenue par l’établissement. Rapprochez-vous du
+                secrétariat, ou déposez-en une nouvelle.
+              </p>
+            )}
 
             <label>
               <span>Téléphone</span>

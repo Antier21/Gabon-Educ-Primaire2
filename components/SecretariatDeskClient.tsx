@@ -17,6 +17,7 @@ import type { PlatformWorkspace } from "@/lib/platform/types";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { formatSchoolProfile } from "@/lib/school-profiles";
 import { storageModeLabel, type StorageMode } from "@/lib/storage-mode";
+import { loadPendingContactRequests } from "@/lib/guardians/contact-requests";
 import { loadEnrollmentForms, type EnrollmentRecord } from "@/lib/enrollment/store";
 import { isPhoneUsable } from "@/lib/communication/whatsapp";
 import { PRODUCT } from "@/lib/product-edition";
@@ -105,6 +106,13 @@ export function SecretariatDeskClient() {
   const [mode, setMode] = useState<StorageMode>("demo");
   const [query, setQuery] = useState("");
   const [loadError, setLoadError] = useState("");
+  /**
+   * Corrections de coordonnées signalées par les familles. Elles vivent dans
+   * Supabase et non dans l'espace de travail local : c'est le seul élément de
+   * ce bureau qui vienne directement du nuage, parce qu'il est écrit par
+   * quelqu'un d'autre que le personnel.
+   */
+  const [contactRequests, setContactRequests] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -123,6 +131,13 @@ export function SecretariatDeskClient() {
         setMode(platform.mode === "demo" ? context.mode : platform.mode);
         setClasses(classResult.items);
         setEnrollments(forms.items);
+        try {
+          const demandes = await loadPendingContactRequests(school.id);
+          setContactRequests(demandes.length);
+        } catch {
+          // Le bureau reste utilisable même si cette lecture échoue.
+          setContactRequests(0);
+        }
       } catch (error) {
         setLoadError(
           error instanceof Error
@@ -195,6 +210,15 @@ export function SecretariatDeskClient() {
         href: "/gabon-educ/parents",
       },
       {
+        key: "contact-requests",
+        label: "Corrections de coordonnées signalées",
+        count: contactRequests,
+        detail: contactRequests
+          ? "Des familles ont signalé un changement de numéro. Tant qu’il n’est pas appliqué, l’établissement appelle l’ancien."
+          : "Aucune correction en attente de validation.",
+        href: "/gabon-educ/parents",
+      },
+      {
         key: "phone",
         label: "Responsables sans numéro joignable",
         count: unreachable.length,
@@ -204,7 +228,7 @@ export function SecretariatDeskClient() {
         href: "/gabon-educ/parents",
       },
     ];
-  }, [activeStudents, enrollments, workspace.guardianLinks, workspace.guardians]);
+  }, [activeStudents, contactRequests, enrollments, workspace.guardianLinks, workspace.guardians]);
 
   const toHandle = pending.reduce((total, item) => total + item.count, 0);
 

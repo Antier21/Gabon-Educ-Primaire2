@@ -584,29 +584,72 @@ export async function loadMessages(guardianId: string): Promise<FamilyMessage[]>
 }
 
 /**
- * Enregistre les coordonnées du responsable connecté.
+ * État d'une demande de correction déposée par le responsable.
  *
- * Passe par une fonction SQL plutôt que par une écriture directe : Supabase
- * accorde les droits colonne par colonne à tous les comptes authentifiés, si
- * bien qu'ouvrir la mise à jour de la ligne ouvrirait aussi la modification du
- * nom. La fonction, elle, ne touche que le téléphone, le courriel et
- * l'adresse — le reste de la fiche appartient à l'établissement.
+ * Le parent doit pouvoir constater que sa demande est partie et qu'elle
+ * attend. Sans cela il la redépose chaque semaine, croyant que rien n'a
+ * fonctionné — et le secrétariat croit à une hésitation.
  */
-export async function saveMyContact(contact: {
+export type ContactRequestState = {
+  status: "pending" | "applied" | "rejected";
   phone: string;
   email: string;
   address: string;
-}): Promise<{ phone: string; email: string; address: string }> {
-  const { data, error } = await createClient().rpc("update_my_guardian_contact", {
+  createdAt: string;
+  reviewedAt: string;
+};
+
+/**
+ * Dépose une demande de correction des coordonnées.
+ *
+ * Le responsable n'écrit pas dans sa fiche : c'est l'établissement qui la met
+ * à jour, par le chemin ordinaire du module Parents. Deux raisons. La fiche
+ * appartient à l'école, qui doit savoir qui elle appelle. Et surtout, le
+ * personnel travaille sur une copie locale poussée vers le nuage : une
+ * écriture directe du parent aurait été effacée à la première sauvegarde du
+ * secrétariat, sans conflit ni message.
+ */
+export async function requestMyContactChange(contact: {
+  phone: string;
+  email: string;
+  address: string;
+}): Promise<void> {
+  const { error } = await createClient().rpc("request_my_contact_change", {
     new_phone: contact.phone,
     new_email: contact.email,
     new_address: contact.address,
   });
   if (error) throw new Error(describe(error));
-  const row = (data || {}) as { phone?: string; email?: string; address?: string };
+}
+
+/** La dernière demande déposée par le responsable connecté, s'il y en a une. */
+export async function loadMyContactRequest(
+  guardianId: string,
+): Promise<ContactRequestState | null> {
+  if (!guardianId) return null;
+  const { data, error } = await createClient()
+    .from("guardian_contact_requests")
+    .select("status,phone,email,address,created_at,reviewed_at")
+    .eq("guardian_id", guardianId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(describe(error));
+  if (!data) return null;
+  const row = data as unknown as {
+    status?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    created_at?: string;
+    reviewed_at?: string;
+  };
   return {
+    status: (row.status || "pending") as ContactRequestState["status"],
     phone: String(row.phone || ""),
     email: String(row.email || ""),
     address: String(row.address || ""),
+    createdAt: String(row.created_at || ""),
+    reviewedAt: String(row.reviewed_at || ""),
   };
 }
