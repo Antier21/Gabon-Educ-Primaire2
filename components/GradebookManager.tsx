@@ -32,6 +32,7 @@ import {
   buildReportCardSnapshot,
   findReportStudent,
 } from "@/lib/grading/calculations";
+import { publishReportCard } from "@/lib/grading/publish";
 import {
   archiveReport,
   canEditGeneralComment,
@@ -683,11 +684,12 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
           "La validation, le verrouillage et la publication sont réservés à l’administration ou au chef d’établissement.",
         ),
       );
+    const published = archived?.status === "locked" ? archived.snapshot : liveSnapshot;
     try {
       await persist(
         archiveReport(
           workspace,
-          archived?.status === "locked" ? archived.snapshot : liveSnapshot,
+          published,
           status,
           workspace.settings.simulatedRole,
         ),
@@ -701,6 +703,24 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
           payload: { status, snapshot: liveSnapshot },
         },
       );
+      /**
+       * Publier, c'est remettre le bulletin à la famille.
+       *
+       * Les notes vivent dans l'espace de l'enseignant, que lui seul peut
+       * lire ; l'espace famille interroge les tables de l'établissement. Sans
+       * cette recopie, l'onglet « Résultats et bulletins » d'un parent restait
+       * vide quoi qu'ait fait l'école. Elle n'a lieu qu'au passage à « publié »,
+       * jamais avant : un bulletin validé peut encore être repris en conseil
+       * de classe.
+       */
+      if (status === "published") {
+        const result = await publishReportCard(
+          published,
+          workspace.periods.find((item) => item.id === published.periodId),
+          workspace.settings,
+        );
+        setMessage(result.message);
+      }
     } catch (error) {
       fail(error);
     }
