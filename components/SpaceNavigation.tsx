@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, BriefcaseBusiness, CalendarDays, ChevronDown, ClipboardCheck, ExternalLink,
   GraduationCap, HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
-  School, ShieldCheck, UserRound, Users, WalletCards, X
+  School, ShieldCheck, UserRound, Users, X
 } from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
@@ -26,6 +26,28 @@ type AdminGroup = {
   hiddenFor?: SchoolRole[];
 };
 
+/**
+ * Menu de l'administration.
+ *
+ * Il annonçait vingt-neuf entrées pour dix-sept destinations réelles. Trois
+ * défauts s'y étaient accumulés :
+ *
+ *   — dix entrées ouvraient une page « Ce module est prévu… ». Elles sont
+ *     réunies sous « Modules à venir », qui les présente pour ce qu'elles
+ *     sont : un programme, pas une fonction ;
+ *
+ *   — « Comptabilité → Inscriptions » menait à la création d'un NOUVEL
+ *     ÉTABLISSEMENT, pas aux inscriptions d'élèves. Un secrétaire cherchant à
+ *     inscrire un enfant arrivait sur un formulaire d'ouverture de compte
+ *     école ;
+ *
+ *   — sept entrées faisaient doublon : quatre libellés différents pour la même
+ *     page du personnel, deux pour les emplois du temps, deux pour la vie
+ *     scolaire. Un menu qui nomme quatre fois la même porte fait douter de
+ *     toutes les autres.
+ *
+ * Chaque entrée mène désormais à une destination distincte et réelle.
+ */
 const adminGroups: AdminGroup[] = [
   {
     label: "Direction et secrétariat",
@@ -36,17 +58,17 @@ const adminGroups: AdminGroup[] = [
       // du chef d'établissement l'envoyait sur des indicateurs qui ne sont pas
       // les siens.
       { label: "Direction", href: "/gabon-educ/administration", hiddenFor: ["secretary"] },
-      { label: "Personnel", href: "/gabon-educ/personnel" },
-      { label: "Emplois du temps — conception", href: "/gabon-educ/emplois-du-temps" },
       { label: "Scolarité", href: "/gabon-educ/eleves" },
-      { label: "Gestion des classes", href: "/gabon-educ/classes" },
       { label: "Inscriptions", href: "/gabon-educ/inscriptions" },
+      { label: "Gestion des classes", href: "/gabon-educ/classes" },
+      { label: "Parents et responsables", href: "/gabon-educ/parents" },
+      { label: "Dossiers du personnel", href: "/gabon-educ/personnel" },
+      { label: "Documents et attestations", href: "/gabon-educ/documents" },
       // Deux entrées distinctes : les annonces s'affichent dans l'application,
       // les messages partent sur le téléphone des parents. Les confondre sous
       // un même intitulé « Communication » rendait le second introuvable.
       { label: "Messages aux parents (WhatsApp)", href: "/gabon-educ/communication" },
       { label: "Annonces", href: "/gabon-educ/annonces" },
-      { label: "Parents et responsables", href: "/gabon-educ/parents" },
       // Le secrétariat inscrit, met à jour et communique, mais ne distribue pas
       // les accès et ne touche pas au contrat : ouvrir un compte, c'est décider
       // qui voit quoi dans l'établissement, et cela reste une décision de
@@ -56,56 +78,41 @@ const adminGroups: AdminGroup[] = [
     ],
   },
   {
-    label: "Pédagogie / Vie scolaire",
+    label: "Pédagogie",
     icon: GraduationCap,
     items: [
-      { label: "Emplois du temps — production", href: "/gabon-educ/emplois-du-temps" },
+      { label: "Matières et affectations", href: "/gabon-educ/matieres" },
+      { label: "Emplois du temps", href: "/gabon-educ/emplois-du-temps" },
       { label: "Créer un enseignant", href: "/gabon-educ/creer-enseignant" },
       { label: "Évaluations", href: "/gabon-educ/evaluations" },
-      { label: "Bulletins", href: "/gabon-educ/notes-bulletins?tab=reports" },
-      { label: "Messages aux parents (WhatsApp)", href: "/gabon-educ/communication" },
-      { label: "Concours", href: "/gabon-educ/modules/concours" },
-      { label: "Surveillance — activité", href: "/gabon-educ/assiduite" },
-      { label: "Vie scolaire", href: "/gabon-educ/assiduite" },
+      { label: "Notes et bulletins", href: "/gabon-educ/notes-bulletins?tab=reports" },
+      { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches" },
     ],
   },
   {
-    label: "Santé / Orientation / Accompagnement",
+    label: "Vie scolaire",
     icon: HeartPulse,
     items: [
-      { label: "Consultations", href: "/gabon-educ/modules/consultations" },
-      { label: "Infirmerie", href: "/gabon-educ/modules/infirmerie" },
-      { label: "Information et orientation", href: "/gabon-educ/modules/orientation" },
-      { label: "Sorties scolaires", href: "/gabon-educ/modules/sorties-scolaires" },
+      { label: "Absences et retards", href: "/gabon-educ/assiduite" },
     ],
   },
   {
-    label: "Ressources humaines",
+    label: "Administration du logiciel",
     icon: BriefcaseBusiness,
     items: [
-      { label: "Dossiers du personnel", href: "/gabon-educ/personnel" },
-      { label: "Surveillants — gestion du personnel", href: "/gabon-educ/personnel" },
-      { label: "Personnel du secrétariat", href: "/gabon-educ/personnel" },
-      { label: "Personnel de direction", href: "/gabon-educ/personnel" },
+      { label: "Établissement", href: "/gabon-educ/etablissement", hiddenFor: ["secretary"] },
+      { label: "Synchronisation", href: "/gabon-educ/synchronisation" },
+      { label: "Import et export", href: "/gabon-educ/import-export", hiddenFor: ["secretary"] },
+      { label: "Journal d’audit", href: "/gabon-educ/journal-audit", hiddenFor: ["secretary"] },
+      { label: "Diagnostic", href: "/gabon-educ/diagnostic", hiddenFor: ["secretary"] },
     ],
   },
   {
-    label: "Comptabilité",
-    icon: WalletCards,
-    items: [
-      { label: "Inscriptions", href: "/gabon-educ/inscription" },
-      { label: "Vacations", href: "/gabon-educ/modules/vacations" },
-      { label: "Salaires", href: "/gabon-educ/modules/salaires" },
-      { label: "Gestion des stocks", href: "/gabon-educ/modules/gestion-stocks" },
-    ],
-  },
-  {
-    label: "Ressources numériques et documentaires",
+    // Une seule entrée pour les onze modules non construits, en fin de menu.
+    label: "Modules à venir",
     icon: Library,
     items: [
-      { label: "Bibliothèque", href: "/gabon-educ/modules/bibliotheque" },
-      { label: "Service informatique", href: "/gabon-educ/modules/service-informatique" },
-      { label: "Cahiers de textes", href: "/gabon-educ/mes-fiches" },
+      { label: "Comptabilité, santé, bibliothèque…", href: "/gabon-educ/modules-a-venir" },
     ],
   },
 ];
