@@ -781,15 +781,32 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
   async function publishReport() {
     if (!liveSnapshot) return;
     const current = (archived?.status || "calculated") as ReportStatus;
-    if (current === "published")
-      return fail(new Error("Ce bulletin est déjà publié : la famille peut le consulter."));
     if (!canPublishReports)
       return fail(
         new Error(
           "La publication est réservée au chef d’établissement et à la personne qu’il a désignée.",
         ),
       );
-    if (!acceptsIncompleteReport("published")) return;
+
+    /**
+     * Un bulletin déjà marqué « publié » doit rester renvoyable.
+     *
+     * L'état est tenu dans l'espace de travail de l'enseignant, la copie
+     * remise aux familles dans les tables de l'établissement : les deux
+     * peuvent diverger — un réseau coupé, un refus d'écriture. Sans cette
+     * reprise, un bulletin marqué publié qui n'a jamais atteint la base ne
+     * pouvait plus être renvoyé, et rien ne permettait de le constater.
+     * Republier remplace la copie en ligne.
+     */
+    const dejaPublie = current === "published";
+    if (dejaPublie) {
+      if (
+        !window.confirm(
+          `Renvoyer le bulletin de ${liveSnapshot.studentName} à la famille ?\n\nLa version en ligne sera remplacée par celle-ci.`,
+        )
+      )
+        return;
+    } else if (!acceptsIncompleteReport("published")) return;
 
     const chemin: ReportStatus[] = [
       "draft",
@@ -801,17 +818,22 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
     ];
     const depart = chemin.indexOf(current);
     const etapes = depart < 0 ? (["published"] as ReportStatus[]) : chemin.slice(depart + 1);
-    const fige = archived?.status === "locked" ? archived.snapshot : liveSnapshot;
+    const fige =
+      archived && (archived.status === "locked" || archived.status === "published")
+        ? archived.snapshot
+        : liveSnapshot;
 
     try {
-      let next = workspace;
-      for (const etape of etapes) next = archiveReport(next, fige, etape, effectiveGradingRole);
-      await persist(next, "Bulletin publié.", {
-        module: "grading",
-        operation: archived ? "update" : "create",
-        entityId: archived?.id || liveSnapshot.studentId,
-        payload: { status: "published", snapshot: fige },
-      });
+      if (!dejaPublie) {
+        let next = workspace;
+        for (const etape of etapes) next = archiveReport(next, fige, etape, effectiveGradingRole);
+        await persist(next, "Bulletin publié.", {
+          module: "grading",
+          operation: archived ? "update" : "create",
+          entityId: archived?.id || liveSnapshot.studentId,
+          payload: { status: "published", snapshot: fige },
+        });
+      }
       const result = await publishReportCard(
         fige,
         workspace.periods.find((item) => item.id === fige.periodId),
@@ -1130,14 +1152,22 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
                     >
                       {statuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                     </select>}
-                  {module !== "bulletins" && archived?.status === "locked" && (
-                    <button
-                      className="btn btn-light"
-                      onClick={() => void reopen()}
-                    >
-                      <Unlock /> Rouvrir
-                    </button>
-                  )}
+                  {/*
+                    Rouvrir vaut aussi pour un bulletin publié : le circuit
+                    l'autorise depuis toujours — « publié » revient à « à
+                    vérifier » — mais le bouton ne s'affichait qu'à l'état
+                    verrouillé, si bien qu'un bulletin publié par erreur ne
+                    pouvait plus être corrigé.
+                  */}
+                  {module !== "bulletins" &&
+                    (archived?.status === "locked" || archived?.status === "published") && (
+                      <button
+                        className="btn btn-light"
+                        onClick={() => void reopen()}
+                      >
+                        <Unlock /> Rouvrir pour corriger
+                      </button>
+                    )}
                   {/*
                     Le geste que cherche le chef d'établissement. Le menu
                     déroulant ne franchit qu'une étape à la fois : ce bouton
@@ -1158,9 +1188,19 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
                     </button>
                   )}
                   {module !== "bulletins" && archived?.status === "published" && (
-                    <span className={styles.readOnlyBadge}>
-                      <Send /> Publié — visible par la famille
-                    </span>
+                    <>
+                      <span className={styles.readOnlyBadge}>
+                        <Send /> Publié
+                      </span>
+                      <button
+                        className="btn btn-light"
+                        onClick={() => void publishReport()}
+                        disabled={!canPublishReports}
+                        title="Renvoyer ce bulletin à la famille et remplacer la version en ligne"
+                      >
+                        <Send /> Renvoyer à la famille
+                      </button>
+                    </>
                   )}
                 </div>
                 <form
