@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, BriefcaseBusiness, CalendarDays, ChevronDown, ClipboardCheck, ExternalLink,
   GraduationCap, HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
-  PenLine, School, ShieldCheck, UserRound, Users, X, PhoneCall} from "lucide-react";
+  PenLine, Printer, School, ShieldCheck, UserRound, Users, X, PhoneCall} from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
 import type { SchoolRole } from "@/lib/platform/types";
@@ -231,6 +231,7 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
     { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches", icon: NotebookPen },
     { label: "Notes", href: "/gabon-educ/notes", icon: ClipboardCheck },
     { label: "Saisie du bulletin", href: "/gabon-educ/saisie-bulletin", icon: PenLine },
+    { label: "Imprimer les bulletins", href: "/gabon-educ/impression-bulletins", icon: Printer },
     { label: "Bulletins", href: "/gabon-educ/bulletins", icon: GraduationCap },
     { label: "Ressources", href: "/gabon-educ/documents", icon: BookOpen },
     { label: "Cahiers d’appel", href: "/gabon-educ/assiduite", icon: School },

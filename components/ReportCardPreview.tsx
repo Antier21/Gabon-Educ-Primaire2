@@ -35,18 +35,40 @@ import styles from "./ReportCardPreview.module.css";
 
 export type PreviewScores = Record<string, number | null>;
 
+/**
+ * Identité et rang, quand le bulletin est celui d'un élève réel.
+ *
+ * Absents dans l'atelier de composition, où la feuille sert à vérifier la
+ * forme : les champs restent alors des pointillés, comme sur le formulaire
+ * vierge.
+ */
+export type PreviewPupil = {
+  fullName?: string;
+  code?: string;
+  sex?: string;
+  className?: string;
+  birthDate?: string;
+  birthPlace?: string;
+  teacherName?: string;
+  rankLabel?: string;
+  classAverage?: string;
+  bestAverage?: string;
+};
+
 export function ReportCardPreview({
   domains,
   schoolName,
   periodLabel = "PALIER 3",
   academicYear = "2025 - 2026",
   scores = {},
+  pupil = {},
 }: {
   domains: ModelDomain[];
   schoolName: string;
   periodLabel?: string;
   academicYear?: string;
   scores?: PreviewScores;
+  pupil?: PreviewPupil;
 }) {
   const allLines: ScoredLine[] = [];
   for (const domain of domains)
@@ -85,15 +107,27 @@ export function ReportCardPreview({
 
       <h1 className={styles.title}>BULLETIN D’ÉVALUATION DU {periodLabel}</h1>
 
+      {/*
+        Chaque champ rempli remplace son pointillé ; les autres restent des
+        traits à compléter à la main, comme sur le formulaire imprimé. Un
+        établissement qui ne saisit pas les lieux de naissance doit pouvoir
+        imprimer quand même.
+      */}
       <div className={styles.pupil}>
-        <p><span>Code de l’élève :</span><i /></p>
-        <p><span>Sexe :</span><i /></p>
-        <p><span>Classe :</span><i /></p>
-        <p className={styles.wide}><span>Nom &amp; Prénoms de l’élève :</span><i /></p>
+        <p><span>Code de l’élève :</span>{pupil.code ? <b>{pupil.code}</b> : <i />}</p>
+        <p><span>Sexe :</span>{pupil.sex ? <b>{pupil.sex}</b> : <i />}</p>
+        <p><span>Classe :</span>{pupil.className ? <b>{pupil.className}</b> : <i />}</p>
+        <p className={styles.wide}>
+          <span>Nom &amp; Prénoms de l’élève :</span>
+          {pupil.fullName ? <b>{pupil.fullName}</b> : <i />}
+        </p>
         <p><span>Année scolaire :</span><b>{academicYear}</b></p>
-        <p><span>Né(e) le :</span><i /></p>
-        <p><span>à :</span><i /></p>
-        <p className={styles.wide}><span>Enseignant(e) :</span><i /></p>
+        <p><span>Né(e) le :</span>{pupil.birthDate ? <b>{pupil.birthDate}</b> : <i />}</p>
+        <p><span>à :</span>{pupil.birthPlace ? <b>{pupil.birthPlace}</b> : <i />}</p>
+        <p className={styles.wide}>
+          <span>Enseignant(e) :</span>
+          {pupil.teacherName ? <b>{pupil.teacherName}</b> : <i />}
+        </p>
       </div>
 
       <table className={styles.grid}>
@@ -214,13 +248,13 @@ export function ReportCardPreview({
               }</span>
             </td>
             <th>Rang</th>
-            <td><i /></td>
+            <td>{pupil.rankLabel ? <b>{pupil.rankLabel}</b> : <i />}</td>
           </tr>
           <tr>
             <th>Moyenne générale de l’élève</th>
             <td className={styles.numStrong}>{formatAverage(general.average)}<span className={styles.max}> /10</span></td>
             <th>Moyenne de la classe</th>
-            <td><i /></td>
+            <td>{pupil.classAverage ? <b>{pupil.classAverage}</b> : <i />}</td>
           </tr>
           <tr>
             <th>Niveau de maîtrise de l’élève</th>
@@ -230,7 +264,7 @@ export function ReportCardPreview({
                 : "Non évalué"}
             </td>
             <th>Meilleure moyenne de la classe</th>
-            <td><i /></td>
+            <td>{pupil.bestAverage ? <b>{pupil.bestAverage}</b> : <i />}</td>
           </tr>
         </tbody>
       </table>
