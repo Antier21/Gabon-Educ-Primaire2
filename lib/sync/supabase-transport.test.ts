@@ -354,6 +354,7 @@ describe("transport complet file vers Supabase", () => {
     const teacherId = "77777777-7777-4777-8777-777777777777";
     const schoolId = "22222222-2222-4222-8222-222222222222";
     const yearId = "55555555-5555-4555-8555-555555555555";
+    const subjectId = "88888888-8888-4888-8888-888888888888";
     const writes: WriteCall[] = [];
     const from = (table: string) => {
       const query = {
@@ -369,7 +370,12 @@ describe("transport complet file vers Supabase", () => {
                 ? { school_id: schoolId, academic_year_id: yearId }
                 : table === "school_memberships"
                   ? { user_id: teacherId }
-                  : null,
+                  : // La matière doit exister : depuis la correction du refus
+                    // « violates foreign key constraint … school_subject_id »,
+                    // le transport vérifie sa présence avant d'écrire.
+                    table === "school_subjects"
+                    ? { id: subjectId }
+                    : null,
           error: null,
         }),
         delete: () => ({ eq: async () => ({ error: null }) }),
@@ -405,7 +411,7 @@ describe("transport complet file vers Supabase", () => {
         assignment: {
           academicYearId: "local",
           classId: "66666666-6666-4666-8666-666666666666",
-          subjectId: "88888888-8888-4888-8888-888888888888",
+          subjectId,
           teacherId,
         },
       },
@@ -418,6 +424,103 @@ describe("transport complet file vers Supabase", () => {
     expect(writes[0]).toMatchObject({
       table: "school_teaching_assignments",
       row: { academic_year_id: yearId, teacher_id: teacherId },
+    });
+  });
+
+  /**
+   * Régression : « violates foreign key constraint …_school_subject_id_fkey ».
+   *
+   * Une matière absente de la base — jamais transmise, ou présente sous un
+   * autre identifiant après dédoublonnage sur (établissement, code) — faisait
+   * échouer toute affectation d'enseignant. Le titulaire ne pouvait plus être
+   * nommé, donc l'enseignant ne voyait pas ses classes, donc aucune note
+   * n'atteignait les familles.
+   */
+  it("crée la matière absente plutôt que de refuser l’affectation", async () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const teacherId = "77777777-7777-4777-8777-777777777777";
+    const schoolId = "22222222-2222-4222-8222-222222222222";
+    const yearId = "55555555-5555-4555-8555-555555555555";
+    const createdSubjectId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const writes: WriteCall[] = [];
+    const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
+    const from = (table: string) => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        ilike: () => query,
+        limit: () => query,
+        maybeSingle: async () => ({
+          data:
+            table === "platform_workspaces"
+              ? { school_id: schoolId }
+              : table === "class_groups"
+                ? { school_id: schoolId, academic_year_id: yearId }
+                : table === "school_memberships"
+                  ? { user_id: teacherId }
+                  : // school_subjects ne renvoie rien : la matière est absente.
+                    null,
+          error: null,
+        }),
+        insert: (row: Record<string, unknown>) => {
+          inserts.push({ table, row });
+          return {
+            select: () => ({
+              single: async () => ({ data: { id: createdSubjectId }, error: null }),
+            }),
+          };
+        },
+        delete: () => ({ eq: async () => ({ error: null }) }),
+        upsert: (
+          row: Record<string, unknown>,
+          options: { onConflict: string },
+        ) => {
+          writes.push({ table, row, key: options.onConflict });
+          return {
+            select: () => ({ single: async () => ({ data: row, error: null }) }),
+          };
+        },
+      };
+      return query;
+    };
+    const fakeClient = {
+      auth: {
+        getUser: async () => ({ data: { user: { id: userId } }, error: null }),
+      },
+      from,
+      rpc: async () => ({ data: null, error: null }),
+    } as unknown as ReturnType<typeof createClient>;
+
+    queueOperation({
+      schoolId: "local",
+      userId: "local-user",
+      module: "assignments",
+      type: "create",
+      entityId: "99999999-9999-4999-8999-999999999999",
+      payload: {
+        assignment: {
+          academicYearId: "local",
+          classId: "66666666-6666-4666-8666-666666666666",
+          subjectId: "88888888-8888-4888-8888-888888888888",
+          teacherId,
+        },
+        subject: { code: "MATHEMATIQUES", label: "Mathématiques", coefficient: 2 },
+      },
+      baseUpdatedAt: null,
+    });
+
+    await processQueue(createSupabaseSyncTransport(fakeClient));
+
+    expect(readSyncQueue()[0].status).toBe("synced");
+    expect(inserts[0]).toMatchObject({
+      table: "school_subjects",
+      row: { code: "MATHEMATIQUES", label: "Mathématiques", school_id: schoolId },
+    });
+    // L'affectation part avec l'identifiant réellement créé, pas le local.
+    expect(writes[0]).toMatchObject({
+      table: "school_teaching_assignments",
+      row: { school_subject_id: createdSubjectId },
     });
   });
 });

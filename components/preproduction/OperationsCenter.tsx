@@ -158,6 +158,7 @@ function SyncView({ notify }: { notify: (value: string) => void }) {
     error: "Erreur",
     conflict: "Conflit",
     cancelled: "Annulée",
+    abandoned: "Abandonnée",
   };
   const refresh = useCallback(() => {
     setQueue(readSyncQueue());
@@ -208,6 +209,7 @@ function SyncView({ notify }: { notify: (value: string) => void }) {
           ["En cours", status.syncing],
           ["Conflits", status.conflicts],
           ["Erreurs", status.errors],
+          ["Abandonnées", status.abandoned],
           ["Synchronisées", status.synced],
         ].map(([label, value]) => (
           <article className={styles.stat} key={label}>
@@ -256,7 +258,9 @@ function SyncView({ notify }: { notify: (value: string) => void }) {
             <StatusBadge
               key="s"
               tone={
-                item.status === "conflict" || item.status === "error"
+                item.status === "conflict" ||
+                item.status === "error" ||
+                item.status === "abandoned"
                   ? "error"
                   : item.status === "pending"
                     ? "warning"
@@ -267,9 +271,13 @@ function SyncView({ notify }: { notify: (value: string) => void }) {
             </StatusBadge>,
             new Date(item.createdAt).toLocaleString("fr-FR"),
             item.retryCount,
-            item.lastError || "—",
+            item.abandonReason
+              ? `${item.abandonReason} (${item.lastError})`
+              : item.nextAttemptAt
+                ? `Nouvelle tentative à ${new Date(item.nextAttemptAt).toLocaleTimeString("fr-FR")} — ${item.lastError}`
+                : item.lastError || "—",
             <div className={styles.toolbar} key={item.id}>
-              {item.status === "error" && (
+              {(item.status === "error" || item.status === "abandoned") && (
                 <Button
                   tone="secondary"
                   disabled={processing}
@@ -289,6 +297,28 @@ function SyncView({ notify }: { notify: (value: string) => void }) {
                   }}
                 >
                   Réessayer
+                </Button>
+              )}
+              {/*
+                Retirer une opération abandonnée, quand la reprise n'a aucun
+                sens — l'élève a été supprimé depuis, la classe n'existe plus.
+                Sans ce geste, la file gardait indéfiniment des lignes mortes.
+              */}
+              {item.status === "abandoned" && (
+                <Button
+                  tone="secondary"
+                  onClick={() => {
+                    if (
+                      !confirm(
+                        `Retirer définitivement cette opération de la file ?\n\n${item.module} · ${item.type}\n${item.abandonReason || item.lastError}\n\nLa modification qu’elle portait ne sera pas enregistrée.`,
+                      )
+                    )
+                      return;
+                    cancelOperation(item.id);
+                    refresh();
+                  }}
+                >
+                  Retirer de la file
                 </Button>
               )}
               {item.status === "conflict" && (
