@@ -103,8 +103,8 @@ describe("stockage local plateforme", () => {
       JSON.stringify([
         {
           id: "class-1",
-          name: "5e A1",
-          level: "5e",
+          name: "5e Année A1",
+          level: "5e Année",
           academicYear: "2026-2027",
           room: "",
           mainSubject: "Français",

@@ -6,6 +6,7 @@ import {
   withTimeout,
   writeLocal,
 } from "@/lib/storage-mode";
+import { decideNextStep, isDue, MAX_ATTEMPTS } from "./retry-policy";
 import type {
   ConflictResolution,
   SyncEntityPayload,
@@ -152,17 +153,28 @@ export function clearCompletedOperations() {
   saveSyncQueue(queue);
   return queue;
 }
+/**
+ * Remet une opération en file.
+ *
+ * Une opération abandonnée repart toujours de zéro : la relancer avec son
+ * compteur épuisé la ferait abandonner de nouveau au premier échec, et le
+ * bouton donnerait l'impression de ne rien faire. Son délai d'attente et son
+ * motif d'abandon sont effacés du même geste.
+ */
 export function retryOperation(id: string, resetAttempts = false) {
   const queue = readSyncQueue();
   const operation = queue.find((item) => item.id === id);
   if (!operation) throw new Error("Opération de synchronisation introuvable.");
-  if (operation.retryCount >= 5 && !resetAttempts)
+  const reprise = resetAttempts || operation.status === "abandoned";
+  if (operation.retryCount >= MAX_ATTEMPTS && !reprise)
     throw new Error("Nombre maximal de tentatives atteint.");
   const updated = {
     ...operation,
     status: "pending" as const,
     lastError: "",
-    retryCount: resetAttempts ? 0 : operation.retryCount,
+    abandonReason: undefined,
+    nextAttemptAt: null,
+    retryCount: reprise ? 0 : operation.retryCount,
     updatedAt: currentTime(),
   };
   saveSyncQueue(queue.map((item) => (item.id === id ? updated : item)));
@@ -241,8 +253,14 @@ export async function processQueue(
   // fermé, page rechargée — laisse des opérations figées dans cet état, que
   // plus rien ne reprenait ensuite. Le traitement étant séquentiel, une telle
   // ligne ne peut être qu'un reliquat.
+  const maintenant = new Date();
+  // « abandoned » est exclu : une opération abandonnée ne repart que sur
+  // décision explicite, depuis le centre de synchronisation.
   const waiting = queue.filter(
-    (item) => ["pending", "error", "syncing"].includes(item.status) && item.retryCount < 5,
+    (item) =>
+      ["pending", "error", "syncing"].includes(item.status) &&
+      item.retryCount < MAX_ATTEMPTS &&
+      isDue(item.nextAttemptAt, maintenant),
   );
   // Les nouvelles opérations sont ajoutées en fin de file. Sans ce classement,
   // une limite basse ne traitait que les plus anciennes : l'action que
@@ -269,6 +287,8 @@ export async function processQueue(
       const synced = {
         ...syncing,
         status: "synced" as const,
+        nextAttemptAt: null,
+        abandonReason: undefined,
         remotePayload: result.remotePayload,
         remoteUpdatedAt: result.remoteUpdatedAt,
         updatedAt: currentTime(),
@@ -282,11 +302,28 @@ export async function processQueue(
       });
     } catch (error) {
       const conflict = error instanceof SyncConflictError;
+      const message =
+        error instanceof Error ? error.message : "Erreur de synchronisation.";
+      // Un conflit n'est pas un échec : il attend un arbitrage humain et ne
+      // relève donc pas de la politique de reprise.
+      const decision = conflict
+        ? null
+        : decideNextStep({
+            message,
+            attempt: syncing.retryCount,
+            createdAt: syncing.createdAt,
+            now: new Date(),
+          });
       const failed = {
         ...syncing,
-        status: conflict ? ("conflict" as const) : ("error" as const),
-        lastError:
-          error instanceof Error ? error.message : "Erreur de synchronisation.",
+        status: conflict
+          ? ("conflict" as const)
+          : decision?.action === "abandon"
+            ? ("abandoned" as const)
+            : ("error" as const),
+        lastError: message,
+        abandonReason: decision?.action === "abandon" ? decision.reason : undefined,
+        nextAttemptAt: decision?.action === "retry" ? decision.nextAttemptAt : null,
         remotePayload: conflict ? error.remotePayload : null,
         remoteUpdatedAt: conflict ? error.remoteUpdatedAt : null,
         updatedAt: currentTime(),
@@ -325,6 +362,7 @@ export function getSyncStatus(): SyncStatus {
     conflicts: queue.filter((item) => item.status === "conflict").length,
     errors: queue.filter((item) => item.status === "error").length,
     synced: queue.filter((item) => item.status === "synced").length,
+    abandoned: queue.filter((item) => item.status === "abandoned").length,
     lastSuccessAt: metadata.lastSuccessAt,
     lastError: metadata.lastError,
   };

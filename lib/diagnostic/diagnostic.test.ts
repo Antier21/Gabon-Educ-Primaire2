@@ -34,6 +34,7 @@ describe("diagnostic non sensible", () => {
         syncing: 0,
         conflicts: 0,
         errors: 0,
+        abandoned: 0,
         synced: 0,
         lastSuccessAt: "",
         lastError: "",
