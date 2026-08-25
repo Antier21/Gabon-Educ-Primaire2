@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Eye, LayoutList, Plus, TriangleAlert, Trash2 } from "lucide-react";
+import { Building2, CalendarRange, Eye, LayoutList, Plus, TriangleAlert, Trash2 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
 import { AdminMegaNav } from "@/components/SpaceNavigation";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
@@ -11,6 +11,16 @@ import { formatSchoolProfile } from "@/lib/school-profiles";
 import { PRODUCT } from "@/lib/product-edition";
 import styles from "./ReportModelManager.module.css";
 import { ReportCardPreview } from "./ReportCardPreview";
+import { planPeriods } from "@/lib/report-model/periods";
+import {
+  ensurePeriods,
+  loadPeriodSettings,
+  loadSchoolPeriods,
+  resolveActiveAcademicYear,
+  savePeriodSettings,
+  type ReportPeriodSettings,
+  type SchoolPeriodRow,
+} from "@/lib/report-model/periods-store";
 import { OFFICIAL_REPORT_MODEL, modelMaxScore } from "@/lib/report-model/official-model";
 import {
   addDomain,
@@ -57,6 +67,12 @@ export function ReportModelManager() {
    * faire défiler une page A4 pour atteindre le champ suivant.
    */
   const [showPreview, setShowPreview] = useState(false);
+  const [periodSettings, setPeriodSettings] = useState<ReportPeriodSettings>({
+    scheme: "trimester",
+    paliersPerTerm: 2,
+  });
+  const [academicYear, setAcademicYear] = useState<{ id: string; label: string } | null>(null);
+  const [schoolPeriods, setSchoolPeriods] = useState<SchoolPeriodRow[]>([]);
 
   const refresh = useCallback(async (id: string) => {
     setDomains(await loadReportModel(id));
@@ -72,6 +88,10 @@ export function ReportModelManager() {
           formatSchoolProfile(context.school.schoolType, context.school.schoolSector),
         );
         await refresh(context.school.id);
+        setPeriodSettings(await loadPeriodSettings(context.school.id));
+        const year = await resolveActiveAcademicYear(context.school.id);
+        setAcademicYear(year);
+        if (year) setSchoolPeriods(await loadSchoolPeriods(context.school.id, year.id));
       } catch (caught) {
         setError(
           caught instanceof Error ? caught.message : "Établissement indisponible.",
@@ -153,6 +173,104 @@ export function ReportModelManager() {
           </span>
         </div>
       </section>
+
+      {!loading && (
+        <section className={styles.panel}>
+          <div className={styles.domainHead}>
+            <h2><CalendarRange /> Découpage de l’année</h2>
+            <span className={styles.yearChip}>
+              {academicYear ? academicYear.label : "Aucune année scolaire déclarée"}
+            </span>
+          </div>
+          <p>
+            Les paliers ne remplacent pas les trimestres : ils se logent dedans. Un
+            établissement qui évalue par paliers conserve ses trois trimestres, y ajoute six
+            paliers et un bilan annuel. Les autres s’en tiennent aux trimestres.
+          </p>
+
+          <div className={styles.schemeChoice}>
+            <label className={periodSettings.scheme === "trimester" ? styles.schemeActive : styles.scheme}>
+              <input
+                type="radio"
+                name="scheme"
+                checked={periodSettings.scheme === "trimester"}
+                onChange={() => setPeriodSettings((p) => ({ ...p, scheme: "trimester" }))}
+              />
+              <b>Trimestres</b>
+              <small>Trois bulletins dans l’année, un par trimestre.</small>
+            </label>
+            <label className={periodSettings.scheme === "palier" ? styles.schemeActive : styles.scheme}>
+              <input
+                type="radio"
+                name="scheme"
+                checked={periodSettings.scheme === "palier"}
+                onChange={() => setPeriodSettings((p) => ({ ...p, scheme: "palier" }))}
+              />
+              <b>Paliers</b>
+              <small>
+                {periodSettings.paliersPerTerm} palier(s) par trimestre, plus le bilan annuel.
+              </small>
+            </label>
+          </div>
+
+          {periodSettings.scheme === "palier" && (
+            <label className={styles.perTerm}>
+              Paliers par trimestre
+              <input
+                type="number"
+                min={1}
+                max={4}
+                value={periodSettings.paliersPerTerm}
+                onChange={(event) =>
+                  setPeriodSettings((p) => ({
+                    ...p,
+                    paliersPerTerm: Math.max(1, Math.min(4, Number(event.target.value) || 2)),
+                  }))
+                }
+              />
+            </label>
+          )}
+
+          {/*
+            Montrer la liste avant d'écrire : basculer en paliers crée sept
+            périodes d'un coup, et un établissement doit voir ce qu'il
+            déclenche avant de le déclencher.
+          */}
+          <p className={styles.plannedList}>
+            À créer pour {academicYear?.label || "l’année active"} :{" "}
+            {planPeriods(periodSettings.scheme, periodSettings.paliersPerTerm)
+              .map((period) => period.label)
+              .join(" · ")}
+          </p>
+
+          {schoolPeriods.length > 0 && (
+            <p className={styles.plannedList}>
+              Déjà en place : {schoolPeriods.map((period) => period.label).join(" · ")}
+            </p>
+          )}
+
+          <button
+            type="button"
+            className={styles.primary}
+            disabled={busy || !schoolId || !academicYear}
+            onClick={() =>
+              void run(async () => {
+                await savePeriodSettings(schoolId, periodSettings);
+                const result = await ensurePeriods(
+                  schoolId,
+                  academicYear?.id || "",
+                  periodSettings,
+                );
+                if (academicYear)
+                  setSchoolPeriods(await loadSchoolPeriods(schoolId, academicYear.id));
+                return result;
+              }, "Découpage enregistré. Les périodes déjà évaluées ont été conservées.")
+            }
+          >
+            Enregistrer le découpage
+          </button>
+        </section>
+      )}
 
       {!loading && domains.length > 0 && (
         <section className={styles.panel}>
