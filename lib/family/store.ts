@@ -58,6 +58,27 @@ export type FamilyMessage = {
   receivedAt: string;
 };
 
+/** Une séance du cahier de texte, telle qu'elle est présentée à la famille. */
+export type FamilyLesson = {
+  id: string;
+  title: string;
+  subject: string;
+  weekNumber: number | null;
+  summary: string;
+  homework: string;
+  updatedAt: string;
+};
+
+/** Une évaluation programmée par un enseignant et publiée à la classe. */
+export type FamilyEvaluation = {
+  id: string;
+  title: string;
+  subject: string;
+  date: string;
+  /** Vrai tant que la date n'est pas passée. */
+  upcoming: boolean;
+};
+
 function describe(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === "object") {
@@ -199,6 +220,93 @@ export async function resolveFamilyIdentity(
       ? ""
       : "Aucun enfant n'est rattaché à votre fiche. Signalez-le au secrétariat de l'établissement.",
   };
+}
+
+/**
+ * Cahier de texte de la classe : séances publiées et travail à faire.
+ *
+ * Les brouillons sont écartés par la politique de la migration 073, pas ici —
+ * un filtre côté navigateur ne protégerait rien.
+ */
+export async function loadClassLessons(classId: string): Promise<FamilyLesson[]> {
+  if (!classId) return [];
+  const { data, error } = await createClient()
+    .from("lesson_plans")
+    .select("id,title,week_number,lesson_summary,homework,updated_at,subjects(name)")
+    .eq("class_group_id", classId)
+    .order("updated_at", { ascending: false })
+    .limit(40);
+  if (error) throw new Error(describe(error));
+
+  type LessonRow = {
+    id: string;
+    title?: string;
+    week_number?: number | null;
+    lesson_summary?: string;
+    homework?: string;
+    updated_at?: string;
+    subjects?: { name?: string } | Array<{ name?: string }> | null;
+  };
+
+  return ((data || []) as unknown as LessonRow[]).map((row) => {
+    const subject = Array.isArray(row.subjects) ? row.subjects[0] : row.subjects;
+    return {
+      id: String(row.id),
+      title: String(row.title || "Séance sans titre"),
+      subject: String(subject?.name || ""),
+      weekNumber: row.week_number ?? null,
+      summary: String(row.lesson_summary || ""),
+      homework: String(row.homework || ""),
+      updatedAt: String(row.updated_at || ""),
+    };
+  });
+}
+
+/**
+ * Évaluations publiées de la classe.
+ *
+ * Les évaluations à venir sont remontées en tête : c'est ce qu'un parent
+ * cherche. Les passées restent consultables en dessous, car elles expliquent
+ * les notes qui arriveront ensuite.
+ */
+export async function loadClassEvaluations(classId: string): Promise<FamilyEvaluation[]> {
+  if (!classId) return [];
+  const { data, error } = await createClient()
+    .from("teacher_evaluations")
+    .select("id,title,subject,evaluation_date")
+    .eq("class_group_id", classId)
+    .order("evaluation_date", { ascending: false })
+    .limit(40);
+  if (error) throw new Error(describe(error));
+
+  // Comparaison au jour près : une composition prévue aujourd'hui est encore
+  // « à venir » pour la famille qui consulte le matin.
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+
+  type EvaluationRow = {
+    id: string;
+    title?: string;
+    subject?: string;
+    evaluation_date?: string;
+  };
+
+  return ((data || []) as unknown as EvaluationRow[])
+    .map((row) => {
+      const date = String(row.evaluation_date || "");
+      const parsed = date ? new Date(date).getTime() : NaN;
+      return {
+        id: String(row.id),
+        title: String(row.title || "Évaluation"),
+        subject: String(row.subject || ""),
+        date,
+        upcoming: Number.isNaN(parsed) ? false : parsed >= startOfToday,
+      };
+    })
+    .sort((a, b) => {
+      if (a.upcoming !== b.upcoming) return a.upcoming ? -1 : 1;
+      return a.upcoming ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
+    });
 }
 
 /**
