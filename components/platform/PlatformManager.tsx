@@ -1625,7 +1625,7 @@ function GuardiansView({ workspace, persist }: ViewProps) {
         const existing = workspace.guardians.find((item) => item.id === request.guardianId);
         if (!existing) {
           setNotice(
-            "Cette fiche de responsable n’est pas présente dans cet espace de travail. Ouvrez le module Parents de l’établissement concerné.",
+            "Cette fiche de responsable n’a pas encore été chargée. Rechargez la page : les fiches sont relues depuis le nuage à l’ouverture du module.",
           );
           return;
         }

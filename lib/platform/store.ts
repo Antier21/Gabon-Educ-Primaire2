@@ -16,7 +16,7 @@ import {
 import { markModuleOperationsSynced, processQueue } from "@/lib/sync/sync-manager";
 import { createSupabaseSyncTransport } from "@/lib/sync/supabase-transport";
 import type { SyncOperationMetadata } from "@/lib/sync/types";
-import type { PlatformWorkspace } from "./types";
+import type { Guardian, GuardianLink, PlatformWorkspace } from "./types";
 import { readClasses } from "@/lib/class-store";
 import { filterLevelsForSchoolType } from "@/lib/school-profiles";
 import { PRODUCT, productAllowsSchoolType } from "@/lib/product-edition";
@@ -441,6 +441,84 @@ export async function loadPlatformWorkspace(): Promise<{
       ).values(),
     );
 
+    /**
+     * Responsables et rattachements.
+     *
+     * Cette lecture manquait, et son absence avait deux effets fâcheux. Le
+     * fichier des responsables était propre à chaque compte : une fiche créée
+     * par la secrétaire n'existait pas pour la directrice. Et une correction
+     * de coordonnées validée dans le nuage — celle qu'un parent signale depuis
+     * son espace — ne redescendait jamais, si bien que la copie locale, restée
+     * en arrière, finissait par la réécrire.
+     *
+     * Comme pour les affectations : la version distante fait autorité quand
+     * elle existe, une fiche connue seulement en local n'est jamais perdue, et
+     * une lecture qui échoue laisse la liste locale intacte plutôt que de la
+     * vider.
+     */
+    const guardiansResult = schoolId
+      ? await withTimeout(
+          createClient()
+            .from("guardians")
+            .select(
+              "id,school_id,first_name,last_name,phone,email,address,contact_allowed,status,created_at,updated_at",
+            )
+            .eq("school_id", schoolId),
+        ).catch(() => ({ data: null, error: null }))
+      : { data: null, error: null };
+    if (guardiansResult.error)
+      console.warn("Responsables indisponibles :", guardiansResult.error);
+
+    const remoteGuardians: Guardian[] = (
+      (guardiansResult.data || []) as Array<Record<string, unknown>>
+    ).map((row) => ({
+      id: String(row.id),
+      schoolId: String(row.school_id || ""),
+      firstName: String(row.first_name || ""),
+      lastName: String(row.last_name || ""),
+      phone: String(row.phone || ""),
+      email: String(row.email || ""),
+      address: String(row.address || ""),
+      contactAllowed: Boolean(row.contact_allowed),
+      status: (String(row.status || "active") === "archived"
+        ? "archived"
+        : "active") as Guardian["status"],
+      createdAt: String(row.created_at || ""),
+      updatedAt: String(row.updated_at || ""),
+    }));
+
+    const linksResult = schoolId
+      ? await withTimeout(
+          createClient()
+            .from("guardian_student_links")
+            .select("id,school_id,guardian_id,student_id,relationship,is_primary,created_at")
+            .eq("school_id", schoolId),
+        ).catch(() => ({ data: null, error: null }))
+      : { data: null, error: null };
+
+    const remoteLinks: GuardianLink[] = (
+      (linksResult.data || []) as Array<Record<string, unknown>>
+    ).map((row) => ({
+      id: String(row.id),
+      schoolId: String(row.school_id || ""),
+      guardianId: String(row.guardian_id || ""),
+      studentId: String(row.student_id || ""),
+      relationship: String(row.relationship || "guardian") as GuardianLink["relationship"],
+      primary: Boolean(row.is_primary),
+      createdAt: String(row.created_at || ""),
+    }));
+
+    const mergedGuardians = Array.from(
+      new Map(
+        [...resolvedBase.guardians, ...remoteGuardians].map((item) => [item.id, item]),
+      ).values(),
+    );
+    const mergedGuardianLinks = Array.from(
+      new Map(
+        [...resolvedBase.guardianLinks, ...remoteLinks].map((item) => [item.id, item]),
+      ).values(),
+    );
+
     const mergedAcceptedUsers = Array.from(
       new Map([...staffTeachers, ...acceptedTeachers].map((item) => [item.id, item])).values(),
     );
@@ -458,6 +536,8 @@ export async function loadPlatformWorkspace(): Promise<{
       students: mapRemoteStudents((studentResult.data || []) as Array<Record<string, unknown>>),
       users: nextUsers,
       assignments: mergedAssignments,
+      guardians: mergedGuardians,
+      guardianLinks: mergedGuardianLinks,
     });
     writeWorkspace(remote);
     return {
