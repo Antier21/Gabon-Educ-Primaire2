@@ -5,8 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, BriefcaseBusiness, CalendarDays, ChevronDown, ClipboardCheck, ExternalLink,
   GraduationCap, HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
-  School, ShieldCheck, UserRound, Users, X
-} from "lucide-react";
+  School, ShieldCheck, UserRound, Users, X, PhoneCall} from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
 import type { SchoolRole } from "@/lib/platform/types";
@@ -245,6 +244,7 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
     { label: "Vie scolaire", href: "/gabon-educ/espace-parent#vie-scolaire", icon: UserRound },
     { label: "Emploi du temps", href: "/gabon-educ/espace-parent#emploi-du-temps", icon: CalendarDays },
     { label: "Messages", href: "/gabon-educ/espace-parent#messages", icon: MessageCircle },
+    { label: "Mes coordonnées", href: "/gabon-educ/espace-parent#mes-coordonnees", icon: PhoneCall },
   ],
   student: [
     { label: "Accueil", href: "/gabon-educ/espace-eleve", icon: Home },
