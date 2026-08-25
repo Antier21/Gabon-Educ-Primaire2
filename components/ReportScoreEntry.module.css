@@ -1,0 +1,30 @@
+/* Saisie des notes du bulletin. La grille peut être large : elle défile dans
+   son cadre plutôt que d'étirer la page, et la colonne des noms reste visible
+   pendant le défilement — sans elle, l'enseignant ne sait plus quelle ligne il
+   remplit. */
+.panel{background:#fff;border:1px solid #e0e5e2;border-radius:13px;box-shadow:0 7px 22px rgba(0,0,0,.05);padding:20px 22px;margin:0 26px 22px}
+.pickers{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.pickers label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:#20302a}
+.pickers select{padding:9px 11px;border:1px solid #dde5e2;border-radius:9px;font:inherit;font-size:14px;font-weight:400;background:#fff;min-width:190px}
+.pickers select:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f}
+
+.hint{margin:12px 0 0;color:#5d6a65;font-size:13.5px;line-height:1.6}
+.error{margin:0 0 12px;padding:11px 14px;border-radius:10px;background:#fdecea;color:#96271b;font-size:14px;display:flex;align-items:center;gap:8px}
+.error svg{width:17px;height:17px;flex:0 0 auto}
+.ok{margin:0 0 12px;padding:11px 14px;border-radius:10px;background:#e7f5ee;color:#08734f;font-size:14px}
+
+.tableWrap{overflow-x:auto;border:1px solid #e6ebe9;border-radius:10px}
+.grid{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px}
+.grid th,.grid td{border-bottom:1px solid #eef2f0;border-right:1px solid #eef2f0;padding:6px 8px}
+.grid thead th{background:#f4f7f6;font-size:11.5px;font-weight:700;color:#3d4d47;text-align:center;vertical-align:bottom;position:sticky;top:0;z-index:2}
+.grid thead th span{display:block;max-width:110px;line-height:1.25}
+.grid thead th small{display:block;color:#7c8783;font-weight:600;margin-top:2px}
+.pupilCol,.pupilCell{position:sticky;left:0;background:#fff;z-index:1;text-align:left;font-weight:600;color:#20302a;min-width:170px;box-shadow:1px 0 0 #e6ebe9}
+.grid thead .pupilCol{background:#f4f7f6;z-index:3}
+.grid td input{width:62px;padding:6px 7px;border:1px solid #dde5e2;border-radius:7px;font:inherit;font-size:13.5px;text-align:center;background:#fbfdfc}
+.grid td input:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f;background:#fff}
+.totalCol,.total{text-align:center;font-weight:700;white-space:nowrap;background:#fafbfb}
+.masteryCol,.mastery{text-align:center;font-weight:700;background:#fafbfb}
+.locked{margin:0 0 12px;padding:11px 14px;border-radius:10px;background:#fff5e0;color:#7a5300;font-size:14px;display:flex;align-items:center;gap:8px;line-height:1.5}
+.locked svg{width:17px;height:17px;flex:0 0 auto}
+.grid td input:disabled{background:#f4f6f5;color:#6b7671;cursor:not-allowed}

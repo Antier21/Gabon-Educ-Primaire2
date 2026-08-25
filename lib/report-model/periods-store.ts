@@ -21,6 +21,8 @@ export type SchoolPeriodRow = {
   kind: string;
   sequenceNumber: number | null;
   parentPeriodId: string | null;
+  /** Verrou posé par la direction : la saisie des notes est alors fermée. */
+  locked: boolean;
 };
 
 const DEFAULTS: ReportPeriodSettings = { scheme: "trimester", paliersPerTerm: 2 };
@@ -79,7 +81,7 @@ export async function loadSchoolPeriods(
   if (!schoolId || !academicYearId) return [];
   const { data, error } = await createClient()
     .from("school_periods")
-    .select("id,label,period_kind,sequence_number,parent_period_id")
+    .select("id,label,period_kind,sequence_number,parent_period_id,is_locked")
     .eq("school_id", schoolId)
     .eq("academic_year_id", academicYearId)
     .order("period_kind")
@@ -94,7 +96,29 @@ export async function loadSchoolPeriods(
         ? null
         : Number(row.sequence_number),
     parentPeriodId: row.parent_period_id ? String(row.parent_period_id) : null,
+    locked: row.is_locked === true,
   }));
+}
+
+/**
+ * Pose ou lève le verrou de saisie sur une période.
+ *
+ * Réservé à la direction par la politique d'écriture de « school_periods » :
+ * la fonction n'ouvre aucun droit, elle horodate le geste et en garde
+ * l'auteur, pour qu'un enseignant à qui l'on répond « c'est fermé » sache par
+ * qui et depuis quand.
+ */
+export async function setPeriodLock(
+  periodId: string,
+  locked: boolean,
+  reason = "",
+): Promise<void> {
+  const { error } = await createClient().rpc("set_period_lock", {
+    target_period: periodId,
+    locked,
+    reason: reason || null,
+  });
+  if (error) throw new Error(describe(error));
 }
 
 /**
@@ -137,7 +161,7 @@ export async function ensurePeriods(
         period_kind: "trimester",
         sequence_number: period.termNumber ?? null,
       })
-      .select("id,label,period_kind,sequence_number,parent_period_id")
+      .select("id,label,period_kind,sequence_number,parent_period_id,is_locked")
       .single();
     if (error) throw new Error(describe(error));
     known.set(period.label, {
@@ -146,6 +170,7 @@ export async function ensurePeriods(
       kind: "trimester",
       sequenceNumber: period.termNumber ?? null,
       parentPeriodId: null,
+      locked: false,
     });
   }
 
@@ -174,6 +199,7 @@ export async function ensurePeriods(
       kind: period.kind,
       sequenceNumber: period.palierNumber ?? null,
       parentPeriodId: parentId,
+      locked: false,
     });
     created += 1;
   }

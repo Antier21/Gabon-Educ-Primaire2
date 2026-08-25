@@ -40,3 +40,11 @@
 .perTerm input{width:70px;padding:7px 9px;border:1px solid #dde5e2;border-radius:8px;font:inherit}
 .plannedList{margin:0 0 10px;font-size:13px;color:#5d6a65;line-height:1.6}
 .panel h2 svg{width:17px;height:17px;vertical-align:-2px;margin-right:6px;color:#08734f}
+.lockTable{border:1px solid #e6ebe9;border-radius:10px;padding:12px 14px;margin:4px 0 14px}
+.lockTable>b{display:block;font-size:13px;color:#20302a;margin-bottom:8px}
+.lockRow{display:flex;align-items:center;gap:12px;padding:6px 0;border-top:1px solid #f0f3f2}
+.lockRow:first-of-type{border-top:0}
+.lockRow>span{flex:1;font-size:14px;color:#3d4d47}
+.lockRow em{font-style:normal;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px}
+.lockOpen{background:#e7f5ee;color:#08734f}
+.lockClosed{background:#fff5e0;color:#7a5300}

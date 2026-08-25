@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, CalendarRange, Eye, LayoutList, Plus, TriangleAlert, Trash2 } from "lucide-react";
+import { Building2, CalendarRange, Eye, LayoutList, Lock, LockOpen, Plus, TriangleAlert, Trash2 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
 import { AdminMegaNav } from "@/components/SpaceNavigation";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
@@ -18,6 +18,7 @@ import {
   loadSchoolPeriods,
   resolveActiveAcademicYear,
   savePeriodSettings,
+  setPeriodLock,
   type ReportPeriodSettings,
   type SchoolPeriodRow,
 } from "@/lib/report-model/periods-store";
@@ -247,6 +248,46 @@ export function ReportModelManager() {
             <p className={styles.plannedList}>
               Déjà en place : {schoolPeriods.map((period) => period.label).join(" · ")}
             </p>
+          )}
+
+          {/*
+            Le verrou de saisie.
+            Aucune note ne se modifie sur le bulletin : elles entrent depuis
+            l'espace de l'enseignant. Ce que la direction tient ici, c'est
+            l'interrupteur — fermer avant un conseil de classe, rouvrir pour
+            une correction. Le refus est posé en base, pas seulement à l'écran.
+          */}
+          {schoolPeriods.length > 0 && (
+            <div className={styles.lockTable}>
+              <b>Saisie des notes par les enseignants</b>
+              {schoolPeriods.map((period) => (
+                <div key={period.id} className={styles.lockRow}>
+                  <span>{period.label}</span>
+                  <em className={period.locked ? styles.lockClosed : styles.lockOpen}>
+                    {period.locked ? "Saisie fermée" : "Saisie ouverte"}
+                  </em>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await setPeriodLock(period.id, !period.locked);
+                        if (academicYear)
+                          setSchoolPeriods(
+                            await loadSchoolPeriods(schoolId, academicYear.id),
+                          );
+                      }, period.locked
+                        ? `Saisie rouverte pour « ${period.label} ».`
+                        : `Saisie fermée pour « ${period.label} ». Les enseignants ne peuvent plus modifier ces notes.`)
+                    }
+                  >
+                    {period.locked ? <LockOpen /> : <Lock />}
+                    {period.locked ? "Rouvrir" : "Fermer"}
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
 
           <button
