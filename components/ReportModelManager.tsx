@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, LayoutList, Plus, TriangleAlert, Trash2 } from "lucide-react";
+import { Building2, Eye, LayoutList, Plus, TriangleAlert, Trash2 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
 import { AdminMegaNav } from "@/components/SpaceNavigation";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
@@ -10,6 +10,7 @@ import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { formatSchoolProfile } from "@/lib/school-profiles";
 import { PRODUCT } from "@/lib/product-edition";
 import styles from "./ReportModelManager.module.css";
+import { ReportCardPreview } from "./ReportCardPreview";
 import { OFFICIAL_REPORT_MODEL, modelMaxScore } from "@/lib/report-model/official-model";
 import {
   addDomain,
@@ -48,6 +49,14 @@ export function ReportModelManager() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  /**
+   * L'aperçu du bulletin, replié par défaut.
+   *
+   * Composer la structure et vérifier la mise en page sont deux gestes
+   * différents : dérouler la maquette entre chaque modification obligerait à
+   * faire défiler une page A4 pour atteindre le champ suivant.
+   */
+  const [showPreview, setShowPreview] = useState(false);
 
   const refresh = useCallback(async (id: string) => {
     setDomains(await loadReportModel(id));
@@ -144,6 +153,31 @@ export function ReportModelManager() {
           </span>
         </div>
       </section>
+
+      {!loading && domains.length > 0 && (
+        <section className={styles.panel}>
+          <div className={styles.domainHead}>
+            <h2>Aperçu du bulletin</h2>
+            <button
+              type="button"
+              className={styles.ghost}
+              onClick={() => setShowPreview((previous) => !previous)}
+            >
+              <Eye /> {showPreview ? "Replier l’aperçu" : "Voir le bulletin"}
+            </button>
+          </div>
+          <p>
+            La mise en page telle qu’elle sera imprimée, alimentée par le modèle ci-dessous.
+            Les notes sont absentes : ce que cet aperçu sert à vérifier, c’est que la forme
+            correspond au bulletin que vous remettez déjà aux familles.
+          </p>
+          {showPreview && (
+            <div className={styles.previewFrame}>
+              <ReportCardPreview domains={domains} schoolName={schoolName} />
+            </div>
+          )}
+        </section>
+      )}
 
       {error && (
         <p className={styles.error}>
