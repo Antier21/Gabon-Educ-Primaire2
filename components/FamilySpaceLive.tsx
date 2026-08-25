@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarDays, GraduationCap, Info, MessageCircle, UserRoundCheck } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, MessageCircle, UserRoundCheck } from "lucide-react";
 import {
   loadAttendance,
+  loadClassEvaluations,
+  loadClassLessons,
   loadMessages,
   loadReportCards,
+  loadScoreStatements,
   loadTimetable,
   resolveFamilyIdentity,
   type AttendanceEntry,
   type FamilyChild,
+  type FamilyEvaluation,
   type FamilyIdentity,
+  type FamilyLesson,
   type FamilyMessage,
+  type FamilyScoreStatement,
   type ReportCardSummary,
   type TimetableEntry,
 } from "@/lib/family/store";
@@ -25,13 +31,25 @@ const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dima
  * ensuite retrouver l'onglet à la main.
  */
 const TABS = [
-  { key: "results", hash: "resultats", label: "Résultats et bulletins", icon: GraduationCap },
+  // Le relevé précède le bulletin, parce qu'il change toutes les semaines
+  // tandis que le bulletin ne paraît qu'une fois par trimestre.
+  { key: "scores", hash: "releve-de-notes", label: "Relevé de notes", icon: ListChecks },
+  { key: "results", hash: "bulletins", label: "Bulletins", icon: GraduationCap },
+  { key: "lessons", hash: "cahiers-de-texte", label: "Cahiers de texte", icon: BookOpen },
+  { key: "evaluations", hash: "evaluations", label: "Évaluations", icon: ClipboardCheck },
   { key: "attendance", hash: "vie-scolaire", label: "Vie scolaire", icon: UserRoundCheck },
   { key: "timetable", hash: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
   { key: "messages", hash: "messages", label: "Messages", icon: MessageCircle },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+/** Une absence ou une dispense se dit en toutes lettres, pas par une case vide. */
+const STATUS_LABELS_SCORE: Record<string, string> = {
+  absent: "Absent",
+  exempt: "Dispensé",
+  not_graded: "En attente",
+};
 
 const ATTENDANCE_LABELS: Record<AttendanceEntry["kind"], string> = {
   absence: "Absence",
@@ -53,6 +71,9 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
   const [messages, setMessages] = useState<FamilyMessage[]>([]);
+  const [lessons, setLessons] = useState<FamilyLesson[]>([]);
+  const [evaluations, setEvaluations] = useState<FamilyEvaluation[]>([]);
+  const [statements, setStatements] = useState<FamilyScoreStatement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -100,14 +121,27 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
     if (!child) return;
     void (async () => {
       try {
-        const [reportList, attendanceList, timetableList] = await Promise.all([
+        const [
+          reportList,
+          attendanceList,
+          timetableList,
+          lessonList,
+          evaluationList,
+          statementList,
+        ] = await Promise.all([
           loadReportCards(child.id),
           loadAttendance(child.id),
           loadTimetable(child.classId),
+          loadClassLessons(child.classId),
+          loadClassEvaluations(child.classId),
+          loadScoreStatements(child.id),
         ]);
         setReports(reportList);
         setAttendance(attendanceList);
         setTimetable(timetableList);
+        setLessons(lessonList);
+        setEvaluations(evaluationList);
+        setStatements(statementList);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Lecture des données impossible.");
       }
@@ -186,6 +220,71 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         ))}
       </nav>
 
+      {tab === "scores" && (
+        <section className={styles.panel}>
+          {!statements.length ? (
+            <p className={styles.empty}>
+              Aucune note enregistrée pour le moment. Le relevé se remplit dès la première évaluation
+              corrigée, sans attendre le bulletin.
+            </p>
+          ) : (
+            statements.map((statement) => (
+              <article key={`${statement.periodLabel}-${statement.updatedAt}`} className={styles.statement}>
+                <header>
+                  <div>
+                    <b>{statement.periodLabel}</b>
+                    <small>
+                      {statement.assessmentCount} note(s) · barème sur {statement.maxScore}
+                    </small>
+                  </div>
+                  {statement.generalAverage !== null && (
+                    <span className={styles.average}>
+                      {Number(statement.generalAverage).toFixed(2)}
+                    </span>
+                  )}
+                </header>
+                {statement.subjects.map((subject) => (
+                  <div key={`${statement.periodLabel}-${subject.subject}`} className={styles.statementSubject}>
+                    <div className={styles.statementSubjectHead}>
+                      <b>{subject.subject}</b>
+                      <span>
+                        {subject.average === null
+                          ? "Moyenne en attente"
+                          : `Moyenne ${Number(subject.average).toFixed(2)}`}
+                      </span>
+                    </div>
+                    <ul>
+                      {subject.assessments.map((line, index) => (
+                        <li key={`${subject.subject}-${index}`}>
+                          <div>
+                            <b>{line.title}</b>
+                            <small>{formatDate(line.date)}</small>
+                          </div>
+                          <span className={styles.scoreValue}>
+                            {line.status !== "graded" || line.rawScore === null ? (
+                              <em>{STATUS_LABELS_SCORE[line.status] || "En attente"}</em>
+                            ) : (
+                              <>
+                                {line.rawScore}
+                                <small>/{line.maxScore}</small>
+                              </>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                <p className={styles.statementNote}>
+                  Relevé provisoire, mis à jour à chaque note saisie. Les appréciations et le classement
+                  figurent sur le bulletin.
+                </p>
+              </article>
+            ))
+          )}
+        </section>
+      )}
+
       {tab === "results" && (
         <section className={styles.panel}>
           {!reports.length ? (
@@ -228,6 +327,66 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
                 {report.generalComment && <p className={styles.comment}>{report.generalComment}</p>}
               </article>
             ))
+          )}
+        </section>
+      )}
+
+      {tab === "lessons" && (
+        <section className={styles.panel}>
+          {!lessons.length ? (
+            <p className={styles.empty}>
+              Aucune séance publiée pour cette classe. Les enseignants publient leurs fiches lorsqu’ils
+              souhaitent les rendre visibles aux familles.
+            </p>
+          ) : (
+            <ul className={styles.lessonList}>
+              {lessons.map((lesson) => (
+                <li key={lesson.id} className={styles.lessonItem}>
+                  <div className={styles.lessonHead}>
+                    <b>{lesson.title}</b>
+                    <small>
+                      {[lesson.subject, lesson.weekNumber ? `Semaine ${lesson.weekNumber}` : ""]
+                        .filter(Boolean)
+                        .join(" · ") || "Matière non précisée"}
+                    </small>
+                  </div>
+                  {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
+                  {lesson.homework && (
+                    <p className={styles.homework}>
+                      <b>Travail à faire :</b> {lesson.homework}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {tab === "evaluations" && (
+        <section className={styles.panel}>
+          {!evaluations.length ? (
+            <p className={styles.empty}>
+              Aucune évaluation publiée pour cette classe.
+            </p>
+          ) : (
+            <ul className={styles.evaluationList}>
+              {evaluations.map((evaluation) => (
+                <li
+                  key={evaluation.id}
+                  className={evaluation.upcoming ? styles.evaluationSoon : styles.evaluationPast}
+                >
+                  <div>
+                    <b>{evaluation.title}</b>
+                    <small>{evaluation.subject || "Matière non précisée"}</small>
+                  </div>
+                  <span className={styles.evaluationDate}>
+                    {formatDate(evaluation.date)}
+                    <em>{evaluation.upcoming ? "À venir" : "Passée"}</em>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       )}

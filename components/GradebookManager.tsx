@@ -33,6 +33,7 @@ import {
   findReportStudent,
 } from "@/lib/grading/calculations";
 import { publishReportCard } from "@/lib/grading/publish";
+import { syncScoreStatements } from "@/lib/grading/statements";
 import {
   archiveReport,
   canEditGeneralComment,
@@ -517,15 +518,38 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
       updatedAt: new Date().toISOString(),
     };
     try {
-      await persist(upsertScore(workspace, score), "Note enregistrée.", {
+      const next = upsertScore(workspace, score);
+      await persist(next, "Note enregistrée.", {
         module: "grading",
         operation: "update",
         entityId: score.id,
         payload: { score },
       });
+      await refreshScoreStatements(next);
     } catch (error) {
       fail(error);
     }
+  }
+  /**
+   * Remet à jour le relevé de notes des familles.
+   *
+   * Les notes vivent dans l'espace de l'enseignant, que lui seul peut lire ;
+   * sans cette recopie, un parent ne verrait rien avant la publication du
+   * bulletin — soit un trimestre entier de silence. Le relevé de toute la
+   * classe part en une seule requête, dont l'échec est signalé sans annuler
+   * l'enregistrement de la note : celle-ci est acquise de toute façon.
+   */
+  async function refreshScoreStatements(next: GradingWorkspace) {
+    if (!currentClass || !classId || !periodId) return;
+    const result = await syncScoreStatements({
+      workspace: next,
+      classId,
+      periodId,
+      periodLabel:
+        next.periods.find((item) => item.id === periodId)?.label || "",
+      students: currentClass.students,
+    });
+    if (result.error) setMessage(result.error);
   }
   function exportScores() {
     if (!currentAssessment || !currentClass) return;
@@ -555,6 +579,7 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
       for (const score of parseScoresCsv(await file.text(), currentAssessment))
         next = upsertScore(next, score);
       await persist(next, "Notes CSV importées.");
+      await refreshScoreStatements(next);
     } catch (error) {
       fail(error);
     } finally {

@@ -69,6 +69,38 @@ export type FamilyLesson = {
   updatedAt: string;
 };
 
+/**
+ * Relevé de notes : ce que la famille voit en continu, dès la première
+ * évaluation. À ne pas confondre avec le bulletin, qui n'apparaît qu'une fois
+ * publié par l'établissement.
+ */
+export type FamilyScoreLine = {
+  title: string;
+  date: string;
+  score: number | null;
+  rawScore: number | null;
+  maxScore: number;
+  coefficient: number;
+  status: string;
+};
+
+export type FamilyScoreSubject = {
+  subject: string;
+  coefficient: number;
+  average: number | null;
+  assessments: FamilyScoreLine[];
+};
+
+export type FamilyScoreStatement = {
+  periodLabel: string;
+  academicYear: string;
+  maxScore: number;
+  generalAverage: number | null;
+  assessmentCount: number;
+  updatedAt: string;
+  subjects: FamilyScoreSubject[];
+};
+
 /** Une évaluation programmée par un enseignant et publiée à la classe. */
 export type FamilyEvaluation = {
   id: string;
@@ -307,6 +339,69 @@ export async function loadClassEvaluations(classId: string): Promise<FamilyEvalu
       if (a.upcoming !== b.upcoming) return a.upcoming ? -1 : 1;
       return a.upcoming ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
     });
+}
+
+/**
+ * Relevés de notes d'un élève, période par période.
+ *
+ * Plusieurs enseignants peuvent alimenter la même période, chacun pour ses
+ * matières : leurs lignes sont réunies ici, et les matières triées par ordre
+ * alphabétique pour que le relevé ne change pas d'aspect d'une visite à
+ * l'autre selon l'ordre de saisie.
+ */
+export async function loadScoreStatements(studentId: string): Promise<FamilyScoreStatement[]> {
+  if (!studentId) return [];
+  const { data, error } = await createClient()
+    .from("student_score_statements")
+    .select(
+      "period_ref,period_label,academic_year,max_score,general_average,assessment_count,statement,updated_at",
+    )
+    .eq("class_student_id", studentId)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(describe(error));
+
+  type StatementRow = {
+    period_ref?: string;
+    period_label?: string;
+    academic_year?: string;
+    max_score?: number;
+    general_average?: number | null;
+    assessment_count?: number;
+    updated_at?: string;
+    statement?: { subjects?: FamilyScoreSubject[] } | null;
+  };
+
+  const byPeriod = new Map<string, FamilyScoreStatement>();
+  for (const row of (data || []) as unknown as StatementRow[]) {
+    const key = String(row.period_ref || "");
+    const subjects = row.statement?.subjects || [];
+    const existing = byPeriod.get(key);
+    if (!existing) {
+      byPeriod.set(key, {
+        periodLabel: String(row.period_label || "Période"),
+        academicYear: String(row.academic_year || ""),
+        maxScore: Number(row.max_score || 20),
+        generalAverage: row.general_average ?? null,
+        assessmentCount: Number(row.assessment_count || 0),
+        updatedAt: String(row.updated_at || ""),
+        subjects: [...subjects],
+      });
+      continue;
+    }
+    existing.subjects.push(...subjects);
+    existing.assessmentCount += Number(row.assessment_count || 0);
+    // Une moyenne générale calculée sur une partie des matières n'a pas de
+    // sens une fois plusieurs enseignants réunis : on préfère ne rien
+    // afficher plutôt qu'un chiffre trompeur.
+    existing.generalAverage = null;
+  }
+
+  return [...byPeriod.values()]
+    .map((statement) => ({
+      ...statement,
+      subjects: statement.subjects.sort((a, b) => a.subject.localeCompare(b.subject, "fr")),
+    }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /**
