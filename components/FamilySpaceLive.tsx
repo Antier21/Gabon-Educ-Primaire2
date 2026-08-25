@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, MessageCircle, UserRoundCheck } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, MessageCircle, PhoneCall, UserRoundCheck } from "lucide-react";
 import {
   loadAttendance,
   loadClassEvaluations,
@@ -11,6 +11,7 @@ import {
   loadScoreStatements,
   loadTimetable,
   resolveFamilyIdentity,
+  saveMyContact,
   type AttendanceEntry,
   type FamilyChild,
   type FamilyEvaluation,
@@ -21,6 +22,12 @@ import {
   type ReportCardSummary,
   type TimetableEntry,
 } from "@/lib/family/store";
+import {
+  cleanContact,
+  isUnchanged,
+  validateContact,
+  type GuardianContact,
+} from "@/lib/family/contact";
 import {
   badgeLabel,
   countFresh,
@@ -48,6 +55,9 @@ const TABS = [
   { key: "attendance", hash: "vie-scolaire", label: "Vie scolaire", icon: UserRoundCheck },
   { key: "timetable", hash: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
   { key: "messages", hash: "messages", label: "Messages", icon: MessageCircle },
+  // En dernier, parce qu'on y va rarement — mais présent, parce qu'un numéro
+  // périmé rend muet tout le reste de cet espace.
+  { key: "contact", hash: "mes-coordonnees", label: "Mes coordonnées", icon: PhoneCall },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -63,7 +73,11 @@ type TabKey = (typeof TABS)[number]["key"];
  * le défaut corrigé.
  */
 function tabsFor(space: "parent" | "student") {
-  return space === "student" ? TABS.filter((item) => item.key !== "messages") : TABS;
+  // L'élève n'a ni messagerie ni coordonnées à lui : sa fiche est tenue par
+  // l'établissement, et la modifier relève du secrétariat.
+  return space === "student"
+    ? TABS.filter((item) => item.key !== "messages" && item.key !== "contact")
+    : TABS;
 }
 
 /** Une absence ou une dispense se dit en toutes lettres, pas par une case vide. */
@@ -110,6 +124,11 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
    */
   const [seenAtOpen, setSeenAtOpen] = useState<SeenMarks>({});
   const [visited, setVisited] = useState<string[]>([]);
+  const [contactForm, setContactForm] = useState<GuardianContact>({ phone: "", email: "", address: "" });
+  const [contactSaved, setContactSaved] = useState<GuardianContact>({ phone: "", email: "", address: "" });
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactError, setContactError] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
 
   useEffect(() => {
     setSeenAtOpen(readSeenMarks());
@@ -121,6 +140,8 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         const resolved = await resolveFamilyIdentity(space);
         setIdentity(resolved);
         setChildId(resolved.children[0]?.id || "");
+        setContactForm(resolved.contact);
+        setContactSaved(resolved.contact);
         if (resolved.guardianId) setMessages(await loadMessages(resolved.guardianId));
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Chargement impossible.");
@@ -146,6 +167,9 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
 
   function selectTab(next: TabKey) {
     setTab(next);
+    // Le parent ouvre l'onglet lui-même : sa pastille a fait son travail.
+    const key = seenKey(childId, next);
+    setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
     const found = TABS.find((item) => item.key === next);
     // replaceState plutôt que push : parcourir les onglets ne doit pas
     // remplir l'historique au point que le bouton « retour » du téléphone
@@ -155,13 +179,18 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
 
   const child: FamilyChild | undefined = identity?.children.find((item) => item.id === childId);
 
-  // L'onglet affiché est consulté : on pose le repère pour la prochaine visite
-  // et on le retire des pastilles de celle-ci.
+  /**
+   * L'onglet affiché est consulté : on pose le repère pour la prochaine visite.
+   *
+   * On ne le retire pas des pastilles de la visite en cours, et c'est
+   * délibéré. L'onglet d'accueil — le relevé de notes — serait sinon marqué lu
+   * avant que le parent ait rien vu, et la pastille ne pourrait jamais
+   * apparaître là où elle sert le plus : sur les notes qui viennent d'arriver.
+   * Seul un clic du parent efface une pastille, plus bas dans « selectTab ».
+   */
   useEffect(() => {
     if (!childId) return;
     markTabSeen(readSeenMarks(), childId, tab, new Date());
-    const key = seenKey(childId, tab);
-    setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
   }, [childId, tab]);
 
   useEffect(() => {
@@ -216,6 +245,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
       attendance: attendance.map((item) => item.recordedAt),
       timetable: [],
       messages: messages.map((item) => item.receivedAt),
+      contact: [],
     };
     const counts = {} as Record<TabKey, number>;
     for (const { key } of TABS) {
@@ -548,6 +578,93 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
               </article>
             ))
           )}
+        </section>
+      )}
+
+      {space === "parent" && tab === "contact" && (
+        <section className={styles.panel}>
+          <form
+            className={styles.contactForm}
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setContactMessage("");
+              const probleme = validateContact(contactForm);
+              if (probleme) {
+                setContactError(probleme);
+                return;
+              }
+              if (isUnchanged(contactForm, contactSaved)) {
+                setContactError("");
+                setContactMessage("Vos coordonnées sont déjà à jour.");
+                return;
+              }
+              setSavingContact(true);
+              setContactError("");
+              try {
+                const enregistre = await saveMyContact(cleanContact(contactForm));
+                setContactSaved(enregistre);
+                setContactForm(enregistre);
+                setContactMessage("Vos coordonnées ont été transmises à l’établissement.");
+              } catch (caught) {
+                setContactError(
+                  caught instanceof Error ? caught.message : "Enregistrement impossible.",
+                );
+              } finally {
+                setSavingContact(false);
+              }
+            }}
+          >
+            <p className={styles.contactIntro}>
+              L’établissement vous joint à ce numéro pour les convocations, les absences et les
+              rappels. S’il a changé, corrigez-le ici : personne d’autre ne peut le faire à votre
+              place. Votre nom et le rattachement à vos enfants relèvent du secrétariat.
+            </p>
+
+            <label>
+              <span>Téléphone</span>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={contactForm.phone}
+                onChange={(event) =>
+                  setContactForm((previous) => ({ ...previous, phone: event.target.value }))
+                }
+                placeholder="077 03 77 07"
+                required
+              />
+            </label>
+
+            <label>
+              <span>Adresse électronique (facultative)</span>
+              <input
+                type="email"
+                value={contactForm.email}
+                onChange={(event) =>
+                  setContactForm((previous) => ({ ...previous, email: event.target.value }))
+                }
+                placeholder="parent@exemple.ga"
+              />
+            </label>
+
+            <label>
+              <span>Adresse (facultative)</span>
+              <input
+                type="text"
+                value={contactForm.address}
+                onChange={(event) =>
+                  setContactForm((previous) => ({ ...previous, address: event.target.value }))
+                }
+                placeholder="Quartier, ville"
+              />
+            </label>
+
+            {contactError && <p className={styles.contactError}>{contactError}</p>}
+            {contactMessage && <p className={styles.contactOk}>{contactMessage}</p>}
+
+            <button type="submit" className={styles.contactSubmit} disabled={savingContact}>
+              {savingContact ? "Enregistrement…" : "Enregistrer mes coordonnées"}
+            </button>
+          </form>
         </section>
       )}
     </div>
