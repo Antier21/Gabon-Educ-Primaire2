@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { PRODUCT } from "@/lib/product-edition";
-import { Bell, CalendarDays, GraduationCap, MessageCircle, UserRoundCheck } from "lucide-react";
+import { Bell, CalendarDays, GraduationCap, ListChecks, MessageCircle, UserRoundCheck } from "lucide-react";
 import { SimpleSpaceNav, type SimpleSpace } from "@/components/SpaceNavigation";
 import { FamilySpaceLive } from "@/components/FamilySpaceLive";
 
@@ -26,10 +26,11 @@ export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "par
           l'établissement alimente réellement.
         */}
         <div className="family-quick-cards">
-          <a href={`${base}#resultats`}><GraduationCap /><b>Résultats et bulletins</b><span>Moyennes, rangs et appréciations</span></a>
+          <a href={`${base}#releve-de-notes`}><ListChecks /><b>Relevé de notes</b><span>Les notes dès leur saisie</span></a>
+          <a href={`${base}#bulletins`}><GraduationCap /><b>Bulletins</b><span>Moyennes, rangs et appréciations</span></a>
           <a href={`${base}#vie-scolaire`}><UserRoundCheck /><b>Vie scolaire</b><span>Absences, retards et justificatifs</span></a>
           <a href={`${base}#emploi-du-temps`}><CalendarDays /><b>Emploi du temps</b><span>Voir la semaine scolaire</span></a>
-          <a href={`${base}#messages`}><MessageCircle /><b>Messages</b><span>Informations reçues de l’établissement</span></a>
+          {isParent && <a href={`${base}#messages`}><MessageCircle /><b>Messages</b><span>Informations reçues de l’établissement</span></a>}
         </div>
       </section>
       <div className="family-space-data"><FamilySpaceLive space={space} /></div>

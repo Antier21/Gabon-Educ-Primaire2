@@ -44,6 +44,20 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+/**
+ * Onglets réellement offerts à chaque espace.
+ *
+ * L'élève n'a pas de messagerie. Les messages de l'établissement partent aux
+ * responsables — convocations, réunions, rappels de paiement — et la règle de
+ * lecture les réserve aux comptes de parents : l'onglet aurait été vide quoi
+ * qu'il arrive. Or nous venons précisément de retirer de cet espace les
+ * entrées qui ne menaient nulle part ; en laisser une ici serait retomber dans
+ * le défaut corrigé.
+ */
+function tabsFor(space: "parent" | "student") {
+  return space === "student" ? TABS.filter((item) => item.key !== "messages") : TABS;
+}
+
 /** Une absence ou une dispense se dit en toutes lettres, pas par une case vide. */
 const STATUS_LABELS_SCORE: Record<string, string> = {
   absent: "Absent",
@@ -66,7 +80,9 @@ function formatDate(value: string) {
 export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [identity, setIdentity] = useState<FamilyIdentity | null>(null);
   const [childId, setChildId] = useState("");
-  const [tab, setTab] = useState<TabKey>("results");
+  // Le relevé est l'écran d'accueil : il change chaque semaine, tandis que
+  // les bulletins restent vides entre deux trimestres.
+  const [tab, setTab] = useState<TabKey>("scores");
   const [reports, setReports] = useState<ReportCardSummary[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
@@ -98,13 +114,13 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   useEffect(() => {
     const applyHash = () => {
       const wanted = window.location.hash.replace(/^#/, "");
-      const found = TABS.find((item) => item.hash === wanted);
+      const found = tabsFor(space).find((item) => item.hash === wanted);
       if (found) setTab(found.key);
     };
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
-  }, []);
+  }, [space]);
 
   function selectTab(next: TabKey) {
     setTab(next);
@@ -207,7 +223,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
       )}
 
       <nav className={styles.tabs}>
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {tabsFor(space).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             type="button"
@@ -441,7 +457,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         </section>
       )}
 
-      {tab === "messages" && (
+      {space === "parent" && tab === "messages" && (
         <section className={styles.panel}>
           {!messages.length ? (
             <p className={styles.empty}>Aucun message reçu de l’établissement.</p>

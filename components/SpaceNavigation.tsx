@@ -247,7 +247,6 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
     { label: "Évaluations", href: "/gabon-educ/espace-eleve#evaluations", icon: CalendarDays },
     { label: "Vie scolaire", href: "/gabon-educ/espace-eleve#vie-scolaire", icon: UserRound },
     { label: "Emploi du temps", href: "/gabon-educ/espace-eleve#emploi-du-temps", icon: CalendarDays },
-    { label: "Messages", href: "/gabon-educ/espace-eleve#messages", icon: MessageCircle },
   ],
 };
 

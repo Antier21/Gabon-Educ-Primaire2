@@ -163,10 +163,17 @@ export async function resolveFamilyIdentity(
   if (!userId) return { ...empty, reason: "Session expirée. Reconnectez-vous." };
 
   if (space === "student") {
+    // Un même profil peut se retrouver rattaché à deux dossiers d'élève —
+    // réinscription, doublon de saisie. maybeSingle() échouerait alors sur une
+    // erreur technique incompréhensible pour l'élève ; on prend le dossier le
+    // plus récent, qui est celui de sa scolarité en cours.
     const { data, error } = await client
       .from("student_records")
-      .select("id,first_name,last_name,class_group_id,class_groups(name)")
+      .select("id,first_name,last_name,class_group_id,status,class_groups(name)")
       .eq("profile_id", userId)
+      .neq("status", "archived")
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw new Error(describe(error));
     if (!data)
