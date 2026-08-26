@@ -205,6 +205,68 @@ export function richTextToPlain(input: string): string {
     .trim();
 }
 
+/* ===================================================================
+ * L'aller-retour entre une zone de saisie simple et le HTML stocké.
+ *
+ * Le travail à effectuer tient en deux lignes — « Exercices 4 et 5 page 87.
+ * Apprendre la leçon. » — et se saisit dans une zone de texte ordinaire, sans
+ * barre d'outils : y poser un éditeur complet coûterait à l'enseignant plus de
+ * gestes que le contenu n'en vaut.
+ *
+ * La colonne, elle, reste du HTML : c'est le même contenu que la famille lira,
+ * au même endroit que le reste du cahier, et l'uniformité vaut mieux qu'une
+ * exception qu'il faudrait traiter partout à l'affichage.
+ *
+ * Les deux fonctions doivent donc composer exactement : ce qui est écrit doit
+ * se relire à l'identique, faute de quoi le texte se dégraderait un peu à
+ * chaque ouverture de la séance.
+ * =================================================================== */
+
+/** Une saisie simple, convertie en paragraphes. Rien n'est interprété. */
+export function plainToRichText(text: string): string {
+  return String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((ligne) => ligne.trim())
+    .filter(Boolean)
+    .map(
+      (ligne) =>
+        `<p>${ligne.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`,
+    )
+    .join("");
+}
+
+/**
+ * Le chemin inverse : le HTML rendu à ses lignes.
+ *
+ * Distinct de « richTextToPlain », qui écrase tout sur une seule ligne pour un
+ * aperçu de tableau. Ici les retours à la ligne sont le sens même du texte :
+ * trois devoirs écrits l'un sous l'autre ne doivent pas revenir en un seul
+ * paragraphe.
+ *
+ * « &amp; » est décodé en dernier, et c'est nécessaire : le décoder d'abord
+ * transformerait « &amp;lt; » — la façon correcte d'écrire « &lt; » — en
+ * « < », c'est-à-dire en balise.
+ */
+export function richTextToLines(input: string): string {
+  return sanitizeRichText(input)
+    .replace(/<(br|hr)\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h3|h4|blockquote)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/gi, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/[ \t]+/g, " ")
+    .split("\n")
+    .map((ligne) => ligne.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Un contenu est vide s'il ne reste rien une fois la mise en forme retirée. */
 export function isRichTextEmpty(input: string): boolean {
   return richTextToPlain(input).length === 0;

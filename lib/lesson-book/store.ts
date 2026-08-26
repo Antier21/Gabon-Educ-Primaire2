@@ -11,7 +11,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { confirmWrite } from "@/lib/supabase/confirm-write";
-import { sanitizeRichText } from "./rich-text";
+import { plainToRichText, richTextToLines, sanitizeRichText } from "./rich-text";
 import { shortTime, toISODate, weekDays } from "./week";
 
 /** Un créneau de l'emploi du temps de l'enseignant. */
@@ -304,6 +304,128 @@ export async function deleteEntry(id: string): Promise<void> {
     .eq("id", id)
     .select("id");
   confirmWrite(result, "la suppression de cette séance");
+}
+
+/* ===================================================================
+ * Le travail à effectuer.
+ *
+ * Une séance peut n'en donner aucun, ou trois : une lecture pour demain, un
+ * exercice pour la semaine prochaine, un exposé pour le mois. Chacun porte donc
+ * sa propre échéance — et c'est elle qui compte pour l'élève, pas la date de la
+ * séance où le travail a été donné. Un cahier de textes qui ne dirait que « du
+ * travail a été donné le 12 » obligerait chaque famille à recalculer ce qui est
+ * dû demain.
+ * =================================================================== */
+
+/**
+ * Comment le travail se rend.
+ *
+ * La liste est celle de la base, et elle y est contrainte : une valeur inventée
+ * serait refusée par le serveur. « aucun » n'est pas un vide poli — c'est le
+ * cas réel de la leçon à apprendre, qui se contrôle sans rien ramasser.
+ */
+export const HOMEWORK_MODES = [
+  { value: "papier", label: "Sur papier" },
+  { value: "oral", label: "À l’oral" },
+  { value: "en ligne", label: "En ligne" },
+  { value: "aucun", label: "Rien à rendre" },
+] as const;
+
+export type HomeworkMode = (typeof HOMEWORK_MODES)[number]["value"];
+
+function toMode(valeur: unknown): HomeworkMode {
+  const brut = String(valeur || "papier");
+  return (HOMEWORK_MODES.find((mode) => mode.value === brut)?.value || "papier") as HomeworkMode;
+}
+
+export type Homework = {
+  id: string;
+  /** Le texte tel qu'il se saisit et se relit : des lignes, pas du HTML. */
+  description: string;
+  dueDate: string;
+  mode: HomeworkMode;
+  durationMinutes: number | null;
+};
+
+export async function loadHomework(entryId: string): Promise<Homework[]> {
+  if (!entryId) return [];
+  const { data, error } = await createClient()
+    .from("lesson_book_homework")
+    .select("id,description_html,due_date,submission_mode,duration_minutes,position")
+    .eq("entry_id", entryId)
+    .order("position");
+  if (error) throw new Error(describe(error));
+  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    description: richTextToLines(String(row.description_html || "")),
+    dueDate: String(row.due_date || ""),
+    mode: toMode(row.submission_mode),
+    durationMinutes:
+      row.duration_minutes === null || row.duration_minutes === undefined
+        ? null
+        : Number(row.duration_minutes),
+  }));
+}
+
+/**
+ * Met la liste des travaux en accord avec ce qui est à l'écran.
+ *
+ * Trois opérations plutôt qu'un « tout effacer puis tout réécrire » : ce
+ * dernier est plus court à écrire, mais si la réécriture échoue après
+ * l'effacement, le travail donné aux élèves a disparu sans que personne ne
+ * l'ait demandé. On ne supprime donc que ce que l'enseignant a retiré.
+ *
+ * Un travail dont la description a été vidée est un travail retiré : c'est le
+ * geste naturel, et l'exiger autrement serait un piège.
+ */
+export async function saveHomework(
+  entryId: string,
+  schoolId: string,
+  items: Homework[],
+): Promise<Homework[]> {
+  if (!entryId) return [];
+  const client = createClient();
+  const gardes = items.filter((item) => item.description.trim().length > 0);
+  const conserves = new Set(gardes.map((item) => item.id).filter(Boolean));
+
+  for (const ancien of await loadHomework(entryId)) {
+    if (conserves.has(ancien.id)) continue;
+    const result = await client
+      .from("lesson_book_homework")
+      .delete()
+      .eq("id", ancien.id)
+      .select("id");
+    confirmWrite(result, "le retrait de ce travail à effectuer");
+  }
+
+  for (let rang = 0; rang < gardes.length; rang += 1) {
+    const item = gardes[rang];
+    const payload = {
+      entry_id: entryId,
+      school_id: schoolId,
+      description_html: plainToRichText(item.description),
+      // « null » et non chaîne vide : la colonne est une date, et « » n'en est
+      // pas une.
+      due_date: item.dueDate || null,
+      submission_mode: item.mode,
+      duration_minutes:
+        item.durationMinutes && item.durationMinutes > 0 ? Math.round(item.durationMinutes) : null,
+      position: rang,
+    };
+    if (item.id) {
+      const result = await client
+        .from("lesson_book_homework")
+        .update(payload)
+        .eq("id", item.id)
+        .select("id");
+      confirmWrite(result, "l’enregistrement de ce travail à effectuer");
+    } else {
+      const { error } = await client.from("lesson_book_homework").insert(payload).select("id");
+      if (error) throw new Error(describe(error));
+    }
+  }
+
+  return loadHomework(entryId);
 }
 
 /* ===================================================================

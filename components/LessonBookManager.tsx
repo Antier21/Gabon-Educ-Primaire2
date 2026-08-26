@@ -7,7 +7,9 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  NotebookPen,
   Paperclip,
+  Plus,
   Save,
   TriangleAlert,
   X,
@@ -19,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { isRichTextEmpty } from "@/lib/lesson-book/rich-text";
 import {
+  HOMEWORK_MODES,
   LESSON_CATEGORIES,
   attachPlan,
   deleteLessonFile,
@@ -26,15 +29,19 @@ import {
   formatFileSize,
   lessonFileUrl,
   loadAttachments,
+  loadHomework,
   loadLessonFiles,
   loadTeacherAssignments,
   loadTeacherPlans,
   loadTeacherSlots,
   loadWeekEntries,
   saveEntry,
+  saveHomework,
   setEntryPublished,
   uploadLessonFile,
   type Attachment,
+  type Homework,
+  type HomeworkMode,
   type LessonFile,
   type LessonBookEntry,
   type TeacherPlan,
@@ -102,6 +109,28 @@ const BROUILLON_VIDE: Brouillon = {
   isPublished: false,
 };
 
+/**
+ * Un travail à effectuer, augmenté d'une clé locale.
+ *
+ * Un travail que l'on vient d'ajouter n'a pas encore d'identifiant en base ;
+ * sans clé propre, React devrait se rabattre sur le rang dans la liste, et
+ * retirer le premier travail ferait glisser tous les autres d'un cran. La zone
+ * de saisie serait alors démontée sous les doigts de l'enseignant, qui perdrait
+ * le curseur au milieu d'une phrase.
+ */
+type DevoirLocal = Homework & { cle: string };
+
+function devoirVide(): DevoirLocal {
+  return {
+    cle: crypto.randomUUID(),
+    id: "",
+    description: "",
+    dueDate: "",
+    mode: "papier",
+    durationMinutes: null,
+  };
+}
+
 function brouillonDe(entree: LessonBookEntry | undefined): Brouillon {
   if (!entree) return BROUILLON_VIDE;
   return {
@@ -148,6 +177,8 @@ export function LessonBookManager() {
   /** Les fichiers déposés depuis l'ordinateur, et leur champ caché. */
   const [files, setFiles] = useState<LessonFile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Le travail à effectuer, tenu à l'écran et écrit avec la séance. */
+  const [devoirs, setDevoirs] = useState<DevoirLocal[]>([]);
 
   const jours = useMemo(() => weekDays(monday), [monday]);
 
@@ -221,12 +252,17 @@ export function LessonBookManager() {
       setChoixFiche(false);
       setMessage("");
       setError("");
-      // Les pièces jointes suivent la séance affichée, jamais l'inverse.
+      // Les pièces jointes et le travail donné suivent la séance affichée,
+      // jamais l'inverse.
       setAttachments([]);
       setFiles([]);
+      setDevoirs([]);
       if (existante?.id) {
         void loadAttachments(existante.id).then(setAttachments).catch(() => undefined);
         void loadLessonFiles(existante.id).then(setFiles).catch(() => undefined);
+        void loadHomework(existante.id)
+          .then((liste) => setDevoirs(liste.map((item) => ({ ...item, cle: item.id }))))
+          .catch(() => undefined);
       }
     },
     [entryFor],
@@ -334,10 +370,28 @@ export function LessonBookManager() {
     }
   }
 
+  /* -----------------------------------------------------------------
+   * Le travail à effectuer.
+   *
+   * Il se tient à l'écran et part avec la séance, dans le même geste : un
+   * bouton « enregistrer le travail » séparé produirait, tôt ou tard, une
+   * séance enregistrée dont les devoirs seraient restés dans le navigateur.
+   * ----------------------------------------------------------------- */
+
+  function modifierDevoir(cle: string, champs: Partial<DevoirLocal>) {
+    setDevoirs((liste) =>
+      liste.map((devoir) => (devoir.cle === cle ? { ...devoir, ...champs } : devoir)),
+    );
+  }
+
+  function retirerDevoir(cle: string) {
+    setDevoirs((liste) => liste.filter((devoir) => devoir.cle !== cle));
+  }
+
   /** L'écriture nue, partagée par l'enregistrement et le rattachement. */
   async function enregistrerSeance(): Promise<string> {
     if (!seance.classId) throw new Error("Choisissez d’abord la classe et la matière.");
-    return saveEntry({
+    const identifiant = await saveEntry({
       id: brouillon.id,
       schoolId,
       academicYearId,
@@ -354,6 +408,12 @@ export function LessonBookManager() {
       category: brouillon.category,
       themes: brouillon.themes.split(",").map((theme) => theme.trim()).filter(Boolean),
     });
+    // Les devoirs suivent la séance dans la même écriture. L'enseignant qui
+    // note « exercices 4 et 5 » puis joint le sujet en pièce jointe ne doit
+    // pas perdre l'un en faisant l'autre.
+    const enregistres = await saveHomework(identifiant, schoolId, devoirs);
+    setDevoirs(enregistres.map((item) => ({ ...item, cle: item.id })));
+    return identifiant;
   }
 
   async function enregistrer(publier?: boolean) {
@@ -361,7 +421,8 @@ export function LessonBookManager() {
       setError("Choisissez d’abord la classe et la matière de cette séance.");
       return;
     }
-    if (isRichTextEmpty(brouillon.contentHtml) && !brouillon.title.trim()) {
+    const travailDonne = devoirs.some((devoir) => devoir.description.trim());
+    if (isRichTextEmpty(brouillon.contentHtml) && !brouillon.title.trim() && !travailDonne) {
       setError("Une séance vide ne s’enregistre pas : indiquez au moins un titre ou un contenu.");
       return;
     }
@@ -793,6 +854,104 @@ export function LessonBookManager() {
               ))}
             </div>
           )}
+
+          {/*
+            Le travail à effectuer.
+
+            Séparé du contenu, et non ajouté au bas du récit de la séance : ce
+            que l'élève doit faire pour la semaine prochaine ne se cherche pas
+            dans un paragraphe. Chaque travail porte sa propre échéance, parce
+            qu'une séance peut donner une lecture pour demain et un exposé pour
+            le mois — et que c'est l'échéance, non la date du cours, qui compte
+            pour la famille.
+          */}
+          <div className={styles.homework}>
+            <div className={styles.homeworkHead}>
+              <NotebookPen />
+              <div>
+                <b>Travail à effectuer</b>
+                <small>
+                  {devoirs.length
+                    ? `${devoirs.length} travail${devoirs.length > 1 ? "aux" : ""} pour cette séance`
+                    : "Aucun travail donné pour cette séance."}
+                </small>
+              </div>
+              <button type="button" className={styles.ghost} onClick={() => setDevoirs((liste) => [...liste, devoirVide()])}>
+                <Plus /> Ajouter un travail
+              </button>
+            </div>
+
+            {devoirs.map((devoir, rang) => (
+              <div className={styles.hwRow} key={devoir.cle}>
+                <label className={styles.hwText}>
+                  {/* Numérotés : une famille lit « le travail 2 », et
+                      l'enseignant qui en donne trois s'y retrouve. */}
+                  Travail {rang + 1}
+                  <textarea
+                    rows={2}
+                    value={devoir.description}
+                    onChange={(event) =>
+                      modifierDevoir(devoir.cle, { description: event.target.value })
+                    }
+                    placeholder="Exercices 4 et 5 page 87. Apprendre la leçon."
+                  />
+                </label>
+                <div className={styles.hwMeta}>
+                  <label>
+                    Pour le
+                    <input
+                      type="date"
+                      value={devoir.dueDate}
+                      onChange={(event) =>
+                        modifierDevoir(devoir.cle, { dueDate: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    À rendre
+                    <select
+                      value={devoir.mode}
+                      onChange={(event) =>
+                        modifierDevoir(devoir.cle, { mode: event.target.value as HomeworkMode })
+                      }
+                    >
+                      {HOMEWORK_MODES.map((mode) => (
+                        <option key={mode.value} value={mode.value}>
+                          {mode.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Durée (min)
+                    <input
+                      type="number"
+                      min={5}
+                      step={5}
+                      value={devoir.durationMinutes ?? ""}
+                      onChange={(event) =>
+                        modifierDevoir(devoir.cle, {
+                          durationMinutes: event.target.value
+                            ? Number(event.target.value)
+                            : null,
+                        })
+                      }
+                      placeholder="30"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={styles.hwRemove}
+                    onClick={() => retirerDevoir(devoir.cle)}
+                    aria-label="Retirer ce travail"
+                    title="Retirer ce travail"
+                  >
+                    <X />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
 
           <div className={styles.row}>
             <label>

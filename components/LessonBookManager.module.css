@@ -163,3 +163,42 @@
 .linkPlan{justify-self:start;border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;
   color:#08734f;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .attachActions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* ------------------------------------------------------------------
+   Le travail à effectuer.
+
+   Encadré et détaché du contenu : ce que l'élève doit faire ne se cherche
+   pas au milieu du récit de la séance. Le fond très légèrement teinté suffit
+   à le séparer sans ajouter une seconde carte blanche dans une carte blanche.
+   ------------------------------------------------------------------ */
+.homework{border:1px solid #e2ede8;border-radius:11px;padding:13px 14px;background:#f8fbf9;display:grid;gap:11px}
+.homeworkHead{display:flex;align-items:center;gap:10px}
+.homeworkHead>svg{width:19px;height:19px;color:#08734f;flex:none}
+.homeworkHead>div{flex:1;min-width:0;display:flex;flex-direction:column}
+.homeworkHead b{font-size:12.5px;color:#20302a}
+.homeworkHead small{color:var(--muted);font-size:12px}
+
+.hwRow{display:grid;gap:9px;padding:11px 12px;border:1px solid #dde8e3;border-radius:10px;background:#fff}
+.hwText textarea{padding:9px 10px;border:1px solid #cedbd5;border-radius:9px;font:inherit;font-size:13.5px;
+  font-weight:400;background:#fff;resize:vertical;min-height:44px;line-height:1.5}
+.hwText textarea:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f}
+
+/* L'échéance, le mode et la durée sur une ligne : trois précisions courtes qui
+   ne méritent pas chacune sa rangée. La croix ferme la ligne, alignée sur le
+   bas des champs et non sur leur étiquette. */
+.hwMeta{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.hwMeta label{font-size:11px}
+.hwMeta input,.hwMeta select{padding:8px 9px;border:1px solid #cedbd5;border-radius:8px;font:inherit;
+  font-size:13px;font-weight:400;background:#fff}
+.hwMeta input:focus,.hwMeta select:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f}
+.hwMeta input[type="number"]{width:84px}
+.hwRemove{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;
+  border:1px solid #e6ded0;border-radius:8px;background:#fff;color:#8b7a5e;cursor:pointer;margin-left:auto}
+.hwRemove:hover{border-color:#c0442f;color:#c0442f;background:#fdf3f1}
+.hwRemove svg{width:14px;height:14px}
+
+@media (max-width:640px){
+  .homeworkHead{flex-wrap:wrap}
+  .hwMeta{gap:8px}
+  .hwMeta input[type="number"]{width:70px}
+}

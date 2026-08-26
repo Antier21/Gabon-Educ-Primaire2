@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   isRichTextEmpty,
+  plainToRichText,
   richTextExcerpt,
+  richTextToLines,
   richTextToPlain,
   sanitizeRichText,
 } from "./rich-text";
@@ -170,5 +172,57 @@ describe("sanitizeRichText — la barre étendue", () => {
 
   it("retire un style vidé de toute déclaration admise", () => {
     expect(sanitizeRichText('<p style="z-index:9;opacity:0">T</p>')).toBe("<p>T</p>");
+  });
+});
+
+describe("plainToRichText / richTextToLines — l’aller-retour du travail à effectuer", () => {
+  it("rend exactement ce qui a été écrit", () => {
+    const saisi = "Exercices 4 et 5 page 87.\nApprendre la leçon.";
+    expect(richTextToLines(plainToRichText(saisi))).toBe(saisi);
+  });
+
+  it("produit des paragraphes, un par ligne", () => {
+    expect(plainToRichText("Un\nDeux")).toBe("<p>Un</p><p>Deux</p>");
+  });
+
+  it("ignore les lignes vides et les espaces de bord", () => {
+    expect(plainToRichText("  Un  \n\n\n  Deux ")).toBe("<p>Un</p><p>Deux</p>");
+    expect(plainToRichText("   ")).toBe("");
+    expect(plainToRichText("")).toBe("");
+  });
+
+  it("n’interprète rien de ce que l’enseignant tape", () => {
+    // Une consigne peut légitimement contenir « < » : « x < 10 ». Elle doit
+    // rester du texte, et se relire telle quelle.
+    const saisi = "Résoudre x < 10 & y > 2";
+    expect(plainToRichText(saisi)).toBe("<p>Résoudre x &lt; 10 &amp; y &gt; 2</p>");
+    expect(richTextToLines(plainToRichText(saisi))).toBe(saisi);
+  });
+
+  it("ne laisse pas « &amp;lt; » redevenir une balise", () => {
+    // Le décodage de « &amp; » doit venir en dernier : dans l'autre ordre,
+    // « &amp;lt;script&amp;gt; » se retransformerait en balise.
+    expect(richTextToLines("<p>&amp;lt;script&amp;gt;</p>")).toBe("&lt;script&gt;");
+  });
+
+  it("garde les lignes séparées, là où l’aperçu les écrase", () => {
+    const html = "<p>Un</p><p>Deux</p>";
+    expect(richTextToLines(html)).toBe("Un\nDeux");
+    expect(richTextToPlain(html)).toBe("Un Deux");
+  });
+
+  it("rend leurs lignes à une liste et à des sauts", () => {
+    expect(richTextToLines("<ul><li>Un</li><li>Deux</li></ul>")).toBe("Un\nDeux");
+    expect(richTextToLines("<p>Un<br>Deux</p>")).toBe("Un\nDeux");
+  });
+
+  it("filtre ce qui viendrait d’ailleurs", () => {
+    expect(richTextToLines('<p>Devoir</p><script>voler()</script>')).toBe("Devoir");
+  });
+
+  it("est stable : relire puis réécrire ne dégrade pas", () => {
+    const saisi = "Lecture pages 12 à 14.\nRésumé en dix lignes.";
+    const unTour = richTextToLines(plainToRichText(saisi));
+    expect(richTextToLines(plainToRichText(unTour))).toBe(unTour);
   });
 });
