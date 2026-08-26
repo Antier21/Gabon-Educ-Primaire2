@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpenCheck, CalendarPlus, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Save, TriangleAlert } from "lucide-react";
+import {
+  BookOpenCheck,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Save,
+  TriangleAlert,
+} from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { BackToSpace } from "@/components/BackToSpace";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -38,20 +46,25 @@ import styles from "./LessonBookManager.module.css";
  * Une trace, et non une préparation : ce qui s'écrit ici dit ce qui a eu lieu,
  * et fait foi. La fiche pédagogique reste l'outil privé de l'enseignant.
  *
- * La disposition suit le geste réel : la semaine à gauche, la séance choisie à
- * droite. On ne consigne pas un cahier de textes « en général » — on consigne
- * le cours de mercredi, à 9h30, en 5A3. Choisir la classe, puis la matière,
- * puis la date dans trois listes séparées ferait perdre à chaque fois ce que
- * l'emploi du temps sait déjà.
+ * **L'éditeur est toujours à l'écran.** Les premières versions le cachaient
+ * derrière le choix d'un cours dans l'emploi du temps ; un établissement qui
+ * n'avait pas saisi ses horaires voyait donc une page vide et un message, sans
+ * aucun moyen d'écrire. La leçon vaut au-delà de cet écran : une fonction
+ * placée derrière une condition que l'utilisateur ne peut pas remplir est une
+ * fonction absente.
+ *
+ * L'identité de la séance — date, classe, matière, horaire — est donc une
+ * rangée de champs en tête du formulaire, toujours modifiable. L'emploi du
+ * temps, à gauche, ne fait que la pré-remplir d'un clic. Il aide ; il ne
+ * commande pas.
  */
 
-type Selection = {
+/** Ce qui identifie la séance en cours d'écriture. */
+type Seance = {
   slotId?: string;
   classId: string;
-  className: string;
   subjectId: string;
-  subjectLabel: string;
-  date: Date;
+  date: string;
   startsAt: string;
   endsAt: string;
 };
@@ -75,28 +88,34 @@ const BROUILLON_VIDE: Brouillon = {
   isPublished: false,
 };
 
+function brouillonDe(entree: LessonBookEntry | undefined): Brouillon {
+  if (!entree) return BROUILLON_VIDE;
+  return {
+    id: entree.id,
+    title: entree.title,
+    contentHtml: entree.contentHtml,
+    programElements: entree.programElements,
+    category: entree.category,
+    themes: entree.themes.join(", "),
+    isPublished: entree.isPublished,
+  };
+}
+
 export function LessonBookManager() {
   const [schoolId, setSchoolId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
   const [teacherId, setTeacherId] = useState("");
   const [slots, setSlots] = useState<TeacherSlot[]>([]);
-  /**
-   * Les classes et matières confiées à l'enseignant.
-   *
-   * L'emploi du temps est un raccourci, pas une condition. Un établissement
-   * qui ne l'a pas encore saisi — c'est-à-dire presque tous, en début d'année,
-   * au moment précis où l'on tient son cahier — doit pouvoir consigner ses
-   * séances malgré tout. La première version rendait l'écran inutilisable dans
-   * ce cas, ce qui revenait à livrer une fonction que personne ne pouvait
-   * ouvrir.
-   */
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
-  const [libre, setLibre] = useState(false);
-  /** Le jour pré-rempli quand la saisie libre s'ouvre depuis un « + ». */
-  const [libreDate, setLibreDate] = useState("");
   const [entries, setEntries] = useState<LessonBookEntry[]>([]);
   const [monday, setMonday] = useState<Date>(() => weekStart(new Date()));
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [seance, setSeance] = useState<Seance>(() => ({
+    classId: "",
+    subjectId: "",
+    date: toISODate(new Date()),
+    startsAt: "08:00",
+    endsAt: "09:00",
+  }));
   const [brouillon, setBrouillon] = useState<Brouillon>(BROUILLON_VIDE);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -124,6 +143,15 @@ export function LessonBookManager() {
         ]);
         setSlots(creneaux);
         setAssignments(affectations);
+        // La première classe est proposée d'office : l'enseignant qui n'en a
+        // qu'une — le cas du primaire — n'a alors rien à choisir du tout.
+        if (affectations[0]) {
+          setSeance((actuelle) => ({
+            ...actuelle,
+            classId: actuelle.classId || affectations[0].classId,
+            subjectId: actuelle.subjectId || affectations[0].subjectId,
+          }));
+        }
         await rafraichir(identifiant, monday);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Chargement impossible.");
@@ -131,7 +159,6 @@ export function LessonBookManager() {
         setLoading(false);
       }
     })();
-    // Volontairement au premier rendu : le changement de semaine a son propre effet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -142,86 +169,37 @@ export function LessonBookManager() {
     );
   }, [teacherId, monday, rafraichir]);
 
-  /** La séance déjà consignée pour un créneau donné, s'il y en a une. */
   const entryFor = useCallback(
-    (date: Date, classId: string, subjectId: string) =>
+    (date: string, classId: string, subjectId: string) =>
       entries.find(
         (item) =>
-          item.sessionDate === toISODate(date) &&
-          item.classId === classId &&
-          item.subjectId === subjectId,
+          item.sessionDate === date && item.classId === classId && item.subjectId === subjectId,
       ),
     [entries],
   );
 
-  function choisir(slot: TeacherSlot, date: Date) {
-    const existante = entryFor(date, slot.classId, slot.subjectId);
-    setSelection({
-      slotId: slot.id,
-      classId: slot.classId,
-      className: slot.className,
-      subjectId: slot.subjectId,
-      subjectLabel: slot.subjectLabel,
-      date,
-      startsAt: slot.startsAt,
-      endsAt: slot.endsAt,
-    });
-    setBrouillon(
-      existante
-        ? {
-            id: existante.id,
-            title: existante.title,
-            contentHtml: existante.contentHtml,
-            programElements: existante.programElements,
-            category: existante.category,
-            themes: existante.themes.join(", "),
-            isPublished: existante.isPublished,
-          }
-        : BROUILLON_VIDE,
-    );
-    setMessage("");
-    setError("");
-  }
-
   /**
-   * Ouvre une séance sans passer par l'emploi du temps.
+   * Change de séance et charge ce qui a déjà été écrit pour elle.
    *
-   * Même chemin d'enregistrement que par la grille : seule la provenance des
-   * quatre informations change — c'est l'enseignant qui les donne au lieu du
-   * créneau. La séance produite est identique, et se rattachera d'elle-même à
-   * la grille le jour où l'emploi du temps sera saisi.
+   * Un seul chemin, qu'on vienne d'un clic dans l'emploi du temps ou d'un
+   * champ modifié à la main : la séance produite est la même, et le brouillon
+   * suit toujours la séance affichée.
    */
-  function ouvrirSaisieLibre(affectation: TeacherAssignment, date: Date, debut: string, fin: string) {
-    const existante = entryFor(date, affectation.classId, affectation.subjectId);
-    setSelection({
-      classId: affectation.classId,
-      className: affectation.className,
-      subjectId: affectation.subjectId,
-      subjectLabel: affectation.subjectLabel,
-      date,
-      startsAt: debut,
-      endsAt: fin,
-    });
-    setBrouillon(
-      existante
-        ? {
-            id: existante.id,
-            title: existante.title,
-            contentHtml: existante.contentHtml,
-            programElements: existante.programElements,
-            category: existante.category,
-            themes: existante.themes.join(", "),
-            isPublished: existante.isPublished,
-          }
-        : BROUILLON_VIDE,
-    );
-    setLibre(false);
-    setMessage("");
-    setError("");
-  }
+  const ouvrir = useCallback(
+    (suivante: Seance) => {
+      setSeance(suivante);
+      setBrouillon(brouillonDe(entryFor(suivante.date, suivante.classId, suivante.subjectId)));
+      setMessage("");
+      setError("");
+    },
+    [entryFor],
+  );
 
   async function enregistrer(publier?: boolean) {
-    if (!selection) return;
+    if (!seance.classId) {
+      setError("Choisissez d’abord la classe et la matière de cette séance.");
+      return;
+    }
     if (isRichTextEmpty(brouillon.contentHtml) && !brouillon.title.trim()) {
       setError("Une séance vide ne s’enregistre pas : indiquez au moins un titre ou un contenu.");
       return;
@@ -234,13 +212,13 @@ export function LessonBookManager() {
         id: brouillon.id,
         schoolId,
         academicYearId,
-        classId: selection.classId,
-        subjectId: selection.subjectId,
+        classId: seance.classId,
+        subjectId: seance.subjectId,
         teacherId,
-        timetableSlotId: selection.slotId,
-        sessionDate: toISODate(selection.date),
-        startsAt: selection.startsAt,
-        endsAt: selection.endsAt,
+        timetableSlotId: seance.slotId,
+        sessionDate: seance.date,
+        startsAt: seance.startsAt,
+        endsAt: seance.endsAt,
         title: brouillon.title,
         contentHtml: brouillon.contentHtml,
         programElements: brouillon.programElements,
@@ -268,9 +246,10 @@ export function LessonBookManager() {
     }
   }
 
-  const officiel = selection
-    ? `${formatDayLong(selection.date)} · ${selection.startsAt}–${selection.endsAt} · ${selection.className} · ${selection.subjectLabel}`
-    : "";
+  const cleAffectation = `${seance.classId}|${seance.subjectId}`;
+  const affectationCourante = assignments.find(
+    (item) => `${item.classId}|${item.subjectId}` === cleAffectation,
+  );
 
   return (
     <main className={styles.page}>
@@ -284,25 +263,27 @@ export function LessonBookManager() {
           </div>
         </div>
         <div className={styles.weekNav}>
-          <button type="button" onClick={() => setMonday((m) => shiftWeek(m, -1))} aria-label="Semaine précédente">
+          <button
+            type="button"
+            onClick={() => setMonday((m) => shiftWeek(m, -1))}
+            aria-label="Semaine précédente"
+          >
             <ChevronLeft />
           </button>
           <span>{formatWeekRange(monday)}</span>
-          <button type="button" onClick={() => setMonday((m) => shiftWeek(m, 1))} aria-label="Semaine suivante">
+          <button
+            type="button"
+            onClick={() => setMonday((m) => shiftWeek(m, 1))}
+            aria-label="Semaine suivante"
+          >
             <ChevronRight />
-          </button>
-          <button type="button" className={styles.today} onClick={() => setMonday(weekStart(new Date()))}>
-            Cette semaine
           </button>
           <button
             type="button"
             className={styles.today}
-            onClick={() => {
-              setLibreDate("");
-              setLibre(true);
-            }}
+            onClick={() => setMonday(weekStart(new Date()))}
           >
-            <CalendarPlus /> Hors emploi du temps
+            Cette semaine
           </button>
         </div>
       </header>
@@ -316,31 +297,18 @@ export function LessonBookManager() {
 
       <section className={styles.shell}>
         {/*
-          La semaine, toujours.
-
-          La version précédente remplaçait la colonne par une explication quand
-          l'emploi du temps n'était pas saisi : l'écran devenait une page vide
-          avec un texte au milieu. Or la semaine existe indépendamment de
-          l'emploi du temps — six jours, du lundi au samedi. C'est elle le
-          squelette ; les créneaux ne sont qu'un remplissage, et les séances
-          consignées hors emploi du temps se rangent aux mêmes jours.
-
-          Chaque jour porte donc son « + » : sans horaires saisis, l'enseignant
-          clique sur le jour et consigne sa séance. Avec eux, il clique sur le
-          cours.
+          La semaine : un repère, jamais un péage. Cliquer sur un cours
+          pré-remplit les champs de la séance ; ne pas cliquer n'empêche rien.
         */}
         <div className={styles.grid}>
           {loading ? (
-            <p className={styles.hint}>Chargement de votre semaine…</p>
+            <p className={styles.hint}>Chargement…</p>
           ) : (
             jours.map((jour) => {
               const iso = toISODate(jour);
               const duJour = slots
                 .filter((slot) => slot.weekday === weekdayOf(jour))
                 .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-              // Les séances de ce jour qui ne correspondent à aucun créneau :
-              // remplacements, rattrapages, ou tout le cahier tant que
-              // l'emploi du temps n'est pas saisi.
               const horsCreneau = entries
                 .filter(
                   (entree) =>
@@ -354,46 +322,36 @@ export function LessonBookManager() {
 
               return (
                 <div className={styles.day} key={iso}>
-                  <h2>
-                    {formatDayShort(jour)}
-                    <button
-                      type="button"
-                      className={styles.addDay}
-                      title={`Consigner une séance le ${formatDayLong(jour)}`}
-                      aria-label={`Consigner une séance le ${formatDayLong(jour)}`}
-                      onClick={() => {
-                        setLibreDate(iso);
-                        setLibre(true);
-                      }}
-                    >
-                      <Plus />
-                    </button>
-                  </h2>
+                  <h2>{formatDayShort(jour)}</h2>
 
                   {duJour.map((slot) => {
-                    const consignee = entryFor(jour, slot.classId, slot.subjectId);
-                    const choisie =
-                      selection?.slotId === slot.id && toISODate(selection.date) === iso;
+                    const consignee = entryFor(iso, slot.classId, slot.subjectId);
+                    const choisie = seance.date === iso && seance.slotId === slot.id;
                     return (
                       <button
                         type="button"
                         key={slot.id}
-                        onClick={() => choisir(slot, jour)}
+                        onClick={() =>
+                          ouvrir({
+                            slotId: slot.id,
+                            classId: slot.classId,
+                            subjectId: slot.subjectId,
+                            date: iso,
+                            startsAt: slot.startsAt,
+                            endsAt: slot.endsAt,
+                          })
+                        }
                         className={`${styles.slot} ${choisie ? styles.slotActive : ""} ${
-                          consignee ? (consignee.isPublished ? styles.slotDone : styles.slotDraft) : ""
+                          consignee
+                            ? consignee.isPublished
+                              ? styles.slotDone
+                              : styles.slotDraft
+                            : ""
                         }`}
                       >
-                        {/* L'heure de début suffit dans une colonne étroite ;
-                            l'horaire complet reste en tête du formulaire. */}
                         <small>{slot.startsAt}</small>
                         <b>{slot.className}</b>
                         <em>{slot.subjectLabel}</em>
-                        {/*
-                          Trois états lisibles d'un coup d'œil : rien de
-                          consigné, consigné mais pas remis, remis aux
-                          familles. C'est ce que l'enseignant vient vérifier en
-                          fin de semaine.
-                        */}
                         {consignee && (
                           <span className={styles.badge}>
                             {consignee.isPublished ? "remis" : "brouillon"}
@@ -409,21 +367,22 @@ export function LessonBookManager() {
                         item.classId === entree.classId && item.subjectId === entree.subjectId,
                     );
                     const choisie =
-                      !selection?.slotId &&
-                      selection?.classId === entree.classId &&
-                      toISODate(selection.date) === iso;
+                      seance.date === iso &&
+                      !seance.slotId &&
+                      seance.classId === entree.classId &&
+                      seance.subjectId === entree.subjectId;
                     return (
                       <button
                         type="button"
                         key={entree.id}
                         onClick={() =>
-                          affectation &&
-                          ouvrirSaisieLibre(
-                            affectation,
-                            jour,
-                            entree.startsAt,
-                            entree.endsAt,
-                          )
+                          ouvrir({
+                            classId: entree.classId,
+                            subjectId: entree.subjectId,
+                            date: iso,
+                            startsAt: entree.startsAt || "08:00",
+                            endsAt: entree.endsAt || "09:00",
+                          })
                         }
                         className={`${styles.slot} ${choisie ? styles.slotActive : ""} ${
                           entree.isPublished ? styles.slotDone : styles.slotDraft
@@ -440,7 +399,14 @@ export function LessonBookManager() {
                   })}
 
                   {!duJour.length && !horsCreneau.length && (
-                    <span className={styles.free}>—</span>
+                    <button
+                      type="button"
+                      className={styles.emptyDay}
+                      onClick={() => ouvrir({ ...seance, slotId: undefined, date: iso })}
+                      title={`Écrire la séance du ${formatDayLong(jour)}`}
+                    >
+                      Écrire ce jour
+                    </button>
                   )}
                 </div>
               );
@@ -448,212 +414,163 @@ export function LessonBookManager() {
           )}
         </div>
 
-        {/*
-          La saisie hors emploi du temps.
-
-          Utile même quand la grille existe : un remplacement, un rattrapage,
-          une séance ajoutée ne figurent dans aucun créneau, et l'enseignant
-          doit pouvoir les consigner comme les autres.
-        */}
-        {libre && (
-          <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Consigner une séance">
-            <form
-              className={styles.dialog}
-              onSubmit={(event) => {
-                event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                const cle = String(data.get("affectation") || "");
-                const affectation = assignments.find(
-                  (item) => `${item.classId}|${item.subjectId}` === cle,
-                );
-                const date = String(data.get("date") || "");
-                if (!affectation || !date) {
-                  setError("Choisissez une classe et une date.");
-                  return;
-                }
-                ouvrirSaisieLibre(
-                  affectation,
-                  fromISODate(date),
-                  String(data.get("debut") || ""),
-                  String(data.get("fin") || ""),
-                );
-              }}
-            >
-              <h2>Consigner une séance</h2>
-              {!assignments.length ? (
-                <p className={styles.hint}>
-                  Aucune classe ne vous est encore affectée. C’est l’administration qui pose les
-                  affectations, dans « Matières et affectations » : sans elles, l’application ne
-                  sait pas quelles classes sont les vôtres.
-                </p>
-              ) : (
-                <>
-                  <label>
-                    Classe et matière
-                    <select name="affectation" defaultValue="">
-                      <option value="" disabled>
-                        Choisir…
-                      </option>
-                      {assignments.map((item) => (
-                        <option
-                          key={`${item.classId}|${item.subjectId}`}
-                          value={`${item.classId}|${item.subjectId}`}
-                        >
-                          {item.className} · {item.subjectLabel}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className={styles.row}>
-                    <label>
-                      Date
-                      <input
-                        type="date"
-                        name="date"
-                        defaultValue={libreDate || toISODate(jours[0])}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Début
-                      <input type="time" name="debut" defaultValue="08:00" />
-                    </label>
-                    <label>
-                      Fin
-                      <input type="time" name="fin" defaultValue="09:00" />
-                    </label>
-                  </div>
-                </>
-              )}
-              <div className={styles.actions}>
-                {assignments.length > 0 && (
-                  <button type="submit" className={styles.primary}>
-                    Ouvrir la séance
-                  </button>
-                )}
-                <button type="button" className={styles.ghost} onClick={() => setLibre(false)}>
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* La séance choisie. */}
+        {/* La séance : toujours ouverte, toujours modifiable. */}
         <div className={styles.form}>
-          {!selection ? (
-            <p className={styles.hint}>
-              Choisissez un cours dans la semaine pour consigner ce qui y a été fait.
+          <div className={styles.formHead}>
+            <BookOpenCheck />
+            <div>
+              <b>{formatDayLong(fromISODate(seance.date))}</b>
+              <small>
+                {brouillon.id
+                  ? brouillon.isPublished
+                    ? "Séance remise aux familles."
+                    : "Séance enregistrée, pas encore remise aux familles."
+                  : "Nouvelle séance."}
+              </small>
+            </div>
+          </div>
+
+          {!loading && !assignments.length && (
+            <p className={styles.warn}>
+              <TriangleAlert /> Aucune classe ne vous est affectée. Vous pouvez écrire, mais
+              l’enregistrement restera impossible tant que l’administration n’aura pas posé vos
+              affectations dans « Matières et affectations ».
             </p>
-          ) : (
-            <>
-              <div className={styles.formHead}>
-                <BookOpenCheck />
-                <div>
-                  <b>{officiel}</b>
-                  <small>
-                    {brouillon.id
-                      ? brouillon.isPublished
-                        ? "Séance remise aux familles."
-                        : "Séance enregistrée, pas encore remise aux familles."
-                      : "Nouvelle séance."}
-                  </small>
-                </div>
-              </div>
-
-              <div className={styles.row}>
-                <label>
-                  Titre
-                  <input
-                    value={brouillon.title}
-                    onChange={(event) =>
-                      setBrouillon((b) => ({ ...b, title: event.target.value }))
-                    }
-                    placeholder="La phrase simple et ses constituants"
-                  />
-                </label>
-                <label>
-                  Catégorie
-                  <input
-                    list="lesson-categories"
-                    value={brouillon.category}
-                    onChange={(event) =>
-                      setBrouillon((b) => ({ ...b, category: event.target.value }))
-                    }
-                    placeholder="Cours et activités orales"
-                  />
-                  {/* Une proposition, pas une contrainte : aucune liste ne
-                      couvrira toutes les disciplines. */}
-                  <datalist id="lesson-categories">
-                    {LESSON_CATEGORIES.map((categorie) => (
-                      <option value={categorie} key={categorie} />
-                    ))}
-                  </datalist>
-                </label>
-              </div>
-
-              <label className={styles.full}>
-                Contenu de la séance
-                <RichTextEditor
-                  value={brouillon.contentHtml}
-                  onChange={(html) => setBrouillon((b) => ({ ...b, contentHtml: html }))}
-                />
-              </label>
-
-              <div className={styles.row}>
-                <label>
-                  Éléments du programme
-                  <input
-                    value={brouillon.programElements}
-                    onChange={(event) =>
-                      setBrouillon((b) => ({ ...b, programElements: event.target.value }))
-                    }
-                    placeholder="Compétence 2 — Maniement de la langue"
-                  />
-                </label>
-                <label>
-                  Thèmes
-                  <input
-                    value={brouillon.themes}
-                    onChange={(event) =>
-                      setBrouillon((b) => ({ ...b, themes: event.target.value }))
-                    }
-                    placeholder="Grammaire, Conjugaison"
-                  />
-                </label>
-              </div>
-
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.primary}
-                  disabled={busy}
-                  onClick={() => void enregistrer()}
-                >
-                  <Save /> Enregistrer
-                </button>
-                {brouillon.isPublished ? (
-                  <button
-                    type="button"
-                    className={styles.ghost}
-                    disabled={busy}
-                    onClick={() => void enregistrer(false)}
-                  >
-                    <EyeOff /> Retirer aux familles
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.ghost}
-                    disabled={busy}
-                    onClick={() => void enregistrer(true)}
-                  >
-                    <Eye /> Enregistrer et remettre aux familles
-                  </button>
-                )}
-              </div>
-            </>
           )}
+
+          {/* L'identité de la séance, en clair et modifiable. */}
+          <div className={styles.identity}>
+            <label>
+              Date
+              <input
+                type="date"
+                value={seance.date}
+                onChange={(event) =>
+                  ouvrir({ ...seance, slotId: undefined, date: event.target.value })
+                }
+              />
+            </label>
+            <label className={styles.wide}>
+              Classe et matière
+              <select
+                value={cleAffectation}
+                onChange={(event) => {
+                  const [classId, subjectId] = event.target.value.split("|");
+                  ouvrir({ ...seance, slotId: undefined, classId, subjectId });
+                }}
+              >
+                {!affectationCourante && <option value={cleAffectation}>Choisir…</option>}
+                {assignments.map((item) => (
+                  <option
+                    key={`${item.classId}|${item.subjectId}`}
+                    value={`${item.classId}|${item.subjectId}`}
+                  >
+                    {item.className} · {item.subjectLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Début
+              <input
+                type="time"
+                value={seance.startsAt}
+                onChange={(event) => setSeance((s) => ({ ...s, startsAt: event.target.value }))}
+              />
+            </label>
+            <label>
+              Fin
+              <input
+                type="time"
+                value={seance.endsAt}
+                onChange={(event) => setSeance((s) => ({ ...s, endsAt: event.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.row}>
+            <label>
+              Titre
+              <input
+                value={brouillon.title}
+                onChange={(event) => setBrouillon((b) => ({ ...b, title: event.target.value }))}
+                placeholder="La phrase simple et ses constituants"
+              />
+            </label>
+            <label>
+              Catégorie
+              <input
+                list="lesson-categories"
+                value={brouillon.category}
+                onChange={(event) => setBrouillon((b) => ({ ...b, category: event.target.value }))}
+                placeholder="Cours et activités orales"
+              />
+              <datalist id="lesson-categories">
+                {LESSON_CATEGORIES.map((categorie) => (
+                  <option value={categorie} key={categorie} />
+                ))}
+              </datalist>
+            </label>
+          </div>
+
+          <label className={styles.full}>
+            Contenu de la séance
+            <RichTextEditor
+              value={brouillon.contentHtml}
+              onChange={(html) => setBrouillon((b) => ({ ...b, contentHtml: html }))}
+            />
+          </label>
+
+          <div className={styles.row}>
+            <label>
+              Éléments du programme
+              <input
+                value={brouillon.programElements}
+                onChange={(event) =>
+                  setBrouillon((b) => ({ ...b, programElements: event.target.value }))
+                }
+                placeholder="Compétence 2 — Maniement de la langue"
+              />
+            </label>
+            <label>
+              Thèmes
+              <input
+                value={brouillon.themes}
+                onChange={(event) => setBrouillon((b) => ({ ...b, themes: event.target.value }))}
+                placeholder="Grammaire, Conjugaison"
+              />
+            </label>
+          </div>
+
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={busy || !assignments.length}
+              onClick={() => void enregistrer()}
+            >
+              <Save /> Enregistrer
+            </button>
+            {brouillon.isPublished ? (
+              <button
+                type="button"
+                className={styles.ghost}
+                disabled={busy}
+                onClick={() => void enregistrer(false)}
+              >
+                <EyeOff /> Retirer aux familles
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles.ghost}
+                disabled={busy || !assignments.length}
+                onClick={() => void enregistrer(true)}
+              >
+                <Eye /> Enregistrer et remettre aux familles
+              </button>
+            )}
+          </div>
         </div>
       </section>
     </main>
