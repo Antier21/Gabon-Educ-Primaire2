@@ -8,6 +8,7 @@ import { validateClass, validateStudent } from "@/lib/classes/validation";
 import { Brand } from "./Brand";
 import styles from "./ClassesManager.module.css";
 import { confirmWrite } from "@/lib/supabase/confirm-write";
+import { BackToSpace } from "@/components/BackToSpace";
 
 type Grade = { id: string; code: string; name: string };
 type Student = { id: string; first_name: string; last_name: string; email: string | null };
@@ -166,7 +167,7 @@ export function ClassesManager() {
   const studentCount = classes.reduce((sum, item) => sum + item.class_students.length, 0);
 
   return <main className={styles.page}>
-    <header className={styles.topbar}><div className={styles.topLeft}><Link className="icon-btn" href="/gabon-educ/tableau-de-bord" aria-label="Retour au tableau de bord"><ArrowLeft/></Link><Brand/><div><b>Mes classes</b><small>Organisation et suivi des élèves</small></div></div><button className="btn btn-primary" onClick={() => { setEditing(null); setClassModal(true); }}><Plus/> Créer une classe</button></header>
+    <header className={styles.topbar}><div className={styles.topLeft}><BackToSpace /><Brand/><div><b>Mes classes</b><small>Organisation et suivi des élèves</small></div></div><button className="btn btn-primary" onClick={() => { setEditing(null); setClassModal(true); }}><Plus/> Créer une classe</button></header>
     <section className={styles.shell}>
       <div className={styles.heading}><div><small>ESPACE ENSEIGNANT</small><h1>Mes classes</h1><p>Créez vos classes et gérez simplement vos listes d’élèves.</p></div><div className={styles.stats}><span><GraduationCap/> {classes.length} classes</span><span><Users/> {studentCount} élèves</span></div></div>
       <p className={styles.mode}>{cloudMode ? "Sauvegarde Supabase activée" : "Mode démonstration : données conservées sur cet appareil"}</p>

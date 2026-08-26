@@ -54,6 +54,7 @@ import {
   type ClassWhatsAppGroup,
 } from "@/lib/communication/groups";
 import styles from "./CommunicationManager.module.css";
+import { BackToSpace } from "@/components/BackToSpace";
 
 const AUDIENCES: Array<{ kind: AudienceKind; label: string; hint: string }> = [
   { kind: "class", label: "Une classe", hint: "Tous les parents d'une même classe" },
@@ -306,9 +307,7 @@ export function CommunicationManager() {
     <main className={styles.page}>
       <header className={styles.topbar}>
         <div className={styles.brand}>
-          <Link href="/gabon-educ/tableau-de-bord" className={styles.back} aria-label="Retour">
-            <ArrowLeft />
-          </Link>
+          <BackToSpace className={styles.back} />
           <Brand />
           <div>
             <b>Communication</b>

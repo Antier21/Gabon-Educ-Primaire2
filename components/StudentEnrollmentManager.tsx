@@ -18,6 +18,7 @@ import {
   saveEnrollmentForm,
   type EnrollmentRecord,
 } from "@/lib/enrollment/store";
+import { BackToSpace } from "@/components/BackToSpace";
 
 function now() {
   return new Date().toISOString();
@@ -362,7 +363,7 @@ export function StudentEnrollmentManager() {
     <main className="enrollment-page">
       <header className="enrollment-topbar">
         <div className="enrollment-top-left">
-          <Link className="icon-btn" href="/gabon-educ/tableau-de-bord" aria-label="Retour"><ArrowLeft /></Link>
+          <BackToSpace />
           <Brand />
           <div>
             <b>Inscriptions scolaires</b>

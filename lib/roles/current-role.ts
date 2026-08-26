@@ -136,6 +136,20 @@ export async function resolveMyRoles(
   };
 }
 
+/**
+ * Le rôle le plus étendu connu localement, sans aucun appel réseau.
+ *
+ * Sert à orienter un lien de retour dès le premier rendu. Il n'accorde rien :
+ * un rôle lu ici ne fait qu'indiquer quel accueil proposer, et toute écriture
+ * reste soumise aux politiques du serveur.
+ */
+export function readCachedPrimaryRole(): SchoolRole | null {
+  const cached = readLocal<CachedRoles | null>(ROLE_CACHE_KEY, null);
+  const roles = Array.isArray(cached?.roles) ? cached.roles : [];
+  if (!roles.length) return null;
+  return pickPrimary(roles);
+}
+
 /** Rôles autorisés à ouvrir l'espace d'administration. */
 export const MANAGEMENT_ROLES: SchoolRole[] = [
   "super_admin",

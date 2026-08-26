@@ -72,6 +72,7 @@ import {
   writeLocal,
 } from "@/lib/storage-mode";
 import styles from "./OperationsCenter.module.css";
+import { BackToSpace } from "@/components/BackToSpace";
 export type OperationsModule =
   "sync" | "audit" | "notifications" | "import-export" | "diagnostic";
 const titles: Record<OperationsModule, [string, string]> = {
@@ -120,7 +121,7 @@ export function OperationsCenter({ module }: { module: OperationsModule }) {
     <main className={styles.page}>
       <header className={styles.top}>
         <div>
-          <Link href="/gabon-educ/tableau-de-bord">←</Link>
+          <BackToSpace className="">←</BackToSpace>
           <Brand />
           <span>
             <b>Préproduction connectée</b>

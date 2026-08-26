@@ -12,6 +12,7 @@ import { SubscriptionReadOnlyPanel } from "@/components/SubscriptionReadOnlyPane
 import { getDefaultLevelsForSchoolType, getDefaultSubjectsForSchoolType, type SchoolEducationLevel } from "@/lib/school-profiles";
 import { PRODUCT, productAllowsSchoolType } from "@/lib/product-edition";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { BackToSpace } from "@/components/BackToSpace";
 
 type Notice = { kind: "success" | "error"; text: string } | null;
 
@@ -111,7 +112,7 @@ export function ClassesManagerLocal() {
   const filtered = useMemo(()=>{const needle=query.trim().toLocaleLowerCase("fr");return classes.map(item=>({...item,students:item.students.filter(student=>!needle||`${student.firstName} ${student.lastName} ${student.email}`.toLocaleLowerCase("fr").includes(needle))})).filter(item=>!needle||item.students.length||`${item.name} ${item.level}`.toLocaleLowerCase("fr").includes(needle));},[classes,query]);
   const count=classes.reduce((sum,item)=>sum+item.students.length,0);
 
-  return <main className={styles.page}><header className={styles.topbar}><div className={styles.topLeft}><Link className="icon-btn" href="/gabon-educ/tableau-de-bord" aria-label="Retour"><ArrowLeft/></Link><Brand/><div><b>Gestion des classes</b><small>Organisation et suivi des élèves</small></div></div><button className="btn btn-primary" disabled={subscriptionAccess.loading || subscriptionAccess.blocked || !ready || !activeSchoolId || !schoolType || classLevels.length === 0} title={subscriptionAccess.blocked?"Fonction indisponible pendant la suspension de l’abonnement.":undefined} onClick={()=>{setEditingClass(null);setClassModal(true);}}><Plus/> Créer une classe</button></header><section className={styles.shell}>
+  return <main className={styles.page}><header className={styles.topbar}><div className={styles.topLeft}><BackToSpace /><Brand/><div><b>Gestion des classes</b><small>Organisation et suivi des élèves</small></div></div><button className="btn btn-primary" disabled={subscriptionAccess.loading || subscriptionAccess.blocked || !ready || !activeSchoolId || !schoolType || classLevels.length === 0} title={subscriptionAccess.blocked?"Fonction indisponible pendant la suspension de l’abonnement.":undefined} onClick={()=>{setEditingClass(null);setClassModal(true);}}><Plus/> Créer une classe</button></header><section className={styles.shell}>
     {!subscriptionAccess.loading&&subscriptionAccess.blocked&&<SubscriptionReadOnlyPanel message={subscriptionAccess.message}/>} 
     <fieldset className="subscription-write-lock" disabled={subscriptionAccess.loading || subscriptionAccess.blocked}>
     <div className={styles.heading}><div><small>ESPACE ADMINISTRATION</small><h1>Gestion des classes</h1><p>Créez les classes de l’établissement et suivez leurs listes d’élèves.</p></div><div className={styles.stats}><span><GraduationCap/> {classes.length} classes</span><span><Users/> {count} élèves</span></div></div>

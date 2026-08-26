@@ -6,6 +6,7 @@ import { ArrowLeft, BookOpen, Copy, Download, Edit3, FilePlus2, Filter, Search, 
 import { deleteLesson, listLessonsWithStatus, saveLesson, syncLocalLessons, type LessonRecord } from "@/lib/lesson-store";
 import type { StorageMode } from "@/lib/storage-mode";
 import { AcademicWeekStrip } from "@/components/AcademicWeekStrip";
+import { BackToSpace } from "@/components/BackToSpace";
 
 function formatDate(value: string) {
   try { return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)); }
@@ -70,7 +71,7 @@ export function LessonsManager() {
 
   return <main className="lessons-page">
     <header className="builder-topbar">
-      <div className="builder-top-left"><Link href="/gabon-educ/tableau-de-bord" className="icon-btn"><ArrowLeft /></Link><div><small>Espace enseignant</small><b>Mes fiches pédagogiques</b></div></div>
+      <div className="builder-top-left"><BackToSpace /><div><small>Espace enseignant</small><b>Mes fiches pédagogiques</b></div></div>
       <Link className="btn btn-primary" href="/gabon-educ/preparer-un-cours"><FilePlus2 /> Nouvelle fiche</Link>
     </header>
     <section className="lessons-shell">
