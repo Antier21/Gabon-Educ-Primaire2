@@ -38,6 +38,20 @@ import styles from "./ReportScoreEntry.module.css";
  * « enregistrer » global, et c'est délibéré : une saisie de trente élèves
  * interrompue par une coupure de courant ne doit pas être perdue en bloc.
  */
+
+/**
+ * La période proposée d'office.
+ *
+ * Jamais le bilan annuel : c'est le document de fin d'année, et le proposer
+ * d'office a déjà conduit à y saisir les notes d'un palier. On prend la
+ * première période ordinaire, et le bilan reste accessible dans la liste pour
+ * qui le cherche.
+ */
+function defaultPeriodId(periods: readonly SchoolPeriodRow[]): string {
+  const ordinaire = periods.find((item) => item.kind !== "annual");
+  return (ordinaire || periods[0])?.id || "";
+}
+
 export function ReportScoreEntry() {
   const router = useRouter();
   const [schoolId, setSchoolId] = useState("");
@@ -72,7 +86,7 @@ export function ReportScoreEntry() {
         if (year) {
           const periodList = await loadSchoolPeriods(school.id, year.id);
           setPeriods(periodList);
-          setPeriodId(periodList[0]?.id || "");
+          setPeriodId(defaultPeriodId(periodList));
         }
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Chargement impossible.");

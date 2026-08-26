@@ -34,6 +34,20 @@ import styles from "./ReportCardPrinter.module.css";
  * trente bulletins un par un occuperait une matinée, et le premier réflexe
  * serait alors de revenir au tableur.
  */
+
+/**
+ * La période proposée d'office.
+ *
+ * Jamais le bilan annuel : c'est le document de fin d'année, et le proposer
+ * d'office a déjà conduit à y saisir les notes d'un palier. On prend la
+ * première période ordinaire, et le bilan reste accessible dans la liste pour
+ * qui le cherche.
+ */
+function defaultPeriodId(periods: readonly SchoolPeriodRow[]): string {
+  const ordinaire = periods.find((item) => item.kind !== "annual");
+  return (ordinaire || periods[0])?.id || "";
+}
+
 export function ReportCardPrinter() {
   const router = useRouter();
   const [schoolId, setSchoolId] = useState("");
@@ -68,7 +82,7 @@ export function ReportCardPrinter() {
           setYearLabel(year.label);
           const periodList = await loadSchoolPeriods(school.id, year.id);
           setPeriods(periodList);
-          setPeriodId(periodList[0]?.id || "");
+          setPeriodId(defaultPeriodId(periodList));
         }
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Chargement impossible.");
