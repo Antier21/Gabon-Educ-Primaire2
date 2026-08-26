@@ -19,6 +19,7 @@ const protectedPrefixes = [
   // Espace enseignant
   "/gabon-educ/tableau-de-bord",
   "/gabon-educ/mes-fiches",
+  "/gabon-educ/cahier-de-textes",
   "/gabon-educ/mes-classes",
   "/gabon-educ/preparer-un-cours",
   "/gabon-educ/generateur-ia",

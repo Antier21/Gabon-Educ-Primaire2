@@ -87,7 +87,8 @@ const adminGroups: AdminGroup[] = [
       { label: "Notes et bulletins", href: "/gabon-educ/notes-bulletins?tab=reports" },
       { label: "Modèle de bulletin", href: "/gabon-educ/modele-bulletin" },
       { label: "Bulletins et publication", href: "/gabon-educ/bulletins-publication" },
-      { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches" },
+      { label: "Cahier de textes", href: "/gabon-educ/cahier-de-textes" },
+      { label: "Fiches de préparation", href: "/gabon-educ/mes-fiches" },
     ],
   },
   {
@@ -229,7 +230,12 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
   teacher: [
     { label: "Accueil", href: "/gabon-educ/tableau-de-bord", icon: Home },
     { label: "Voir mes classes", href: "/gabon-educ/mes-classes", icon: Users },
-    { label: "Cahiers de texte", href: "/gabon-educ/mes-fiches", icon: NotebookPen },
+    // Deux objets distincts, et l'intitulé doit le dire : le cahier de
+    // textes est la trace de ce qui a eu lieu ; la fiche est la préparation
+    // écrite avant le cours. Les confondre sous un même libellé conduisait
+    // à publier des brouillons aux familles.
+    { label: "Cahier de textes", href: "/gabon-educ/cahier-de-textes", icon: NotebookPen },
+    { label: "Fiches de préparation", href: "/gabon-educ/mes-fiches", icon: BookOpen },
     { label: "Notes", href: "/gabon-educ/notes", icon: ClipboardCheck },
     { label: "Saisie du bulletin", href: "/gabon-educ/saisie-bulletin", icon: PenLine },
     { label: "Imprimer les bulletins", href: "/gabon-educ/impression-bulletins", icon: Printer },

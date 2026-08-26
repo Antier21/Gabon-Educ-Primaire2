@@ -53,6 +53,7 @@ export const LOGIN_BY_PREFIX: ReadonlyArray<readonly [string, string]> = [
   ["/gabon-educ/tableau-de-bord", "/gabon-educ/connexion"],
   ["/gabon-educ/mes-classes", "/gabon-educ/connexion"],
   ["/gabon-educ/mes-fiches", "/gabon-educ/connexion"],
+  ["/gabon-educ/cahier-de-textes", "/gabon-educ/connexion"],
   ["/gabon-educ/notes", "/gabon-educ/connexion"],
   ["/gabon-educ/saisie-bulletin", "/gabon-educ/connexion"],
   ["/gabon-educ/impression-bulletins", "/gabon-educ/connexion"],
