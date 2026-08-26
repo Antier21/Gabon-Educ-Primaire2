@@ -92,3 +92,15 @@
   .row_pending,.row_sent,.row_failed,.row_skipped{flex-wrap:wrap}
   .rowActions{margin-left:0;width:100%}
 }
+
+/* L'envoi enchaîné : le parent suivant se présente de lui-même.
+   Encadré nettement pour se distinguer de la liste complète qui suit, sans
+   la remplacer — on doit toujours pouvoir reprendre un cas particulier. */
+.focus{border:2px solid #08734f;border-radius:13px;padding:16px 18px;margin-bottom:16px;background:#f6fbf8;display:grid;gap:11px}
+.focusHead{display:grid;gap:3px}
+.focusRank{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#08734f}
+.focusHead b{font-size:17px;color:#16241f}
+.focusHead small{color:#65766f;font-size:12px;overflow-wrap:anywhere}
+.focusBody{margin:0;padding:11px 13px;background:#fff;border:1px solid #d8e7e0;border-radius:9px;font-size:13.5px;line-height:1.55;color:#2a3a34;white-space:pre-wrap}
+.focusActions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.focusHint{color:#65766f;font-size:12px}

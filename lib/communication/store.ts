@@ -41,12 +41,16 @@ export type MessageTemplate = {
   body: string;
 };
 
+/** Par quel canal le parent a réellement été joint. Vide tant qu'il ne l'est pas. */
+export type SentChannel = "whatsapp" | "sms" | "manual" | "";
+
 export type CampaignRecipient = RecipientDraft & {
   id: string;
   resolvedBody: string;
   status: "pending" | "sent" | "failed" | "skipped";
   failureReason: string;
   sentAt: string;
+  sentChannel: SentChannel;
 };
 
 export type Campaign = {
@@ -333,13 +337,31 @@ export async function listCampaignRecipients(campaignId: string): Promise<Campai
     status: String(row.status || "pending") as CampaignRecipient["status"],
     failureReason: String(row.failure_reason || ""),
     sentAt: String(row.sent_at || ""),
+    sentChannel: String(row.sent_channel || "") as SentChannel,
   }));
+}
+
+/**
+ * Le canal à inscrire en base pour un état donné.
+ *
+ * Deux règles, et chacune répare une confusion possible : un envoi dont le
+ * canal n'est pas déclaré est un envoi fait à la main, et non un envoi sans
+ * canal ; une ligne remise en attente doit oublier par quoi on avait cru la
+ * joindre, sans quoi elle garderait la trace d'un envoi qui n'a pas eu lieu.
+ */
+export function channelToStore(
+  status: "sent" | "failed" | "pending" | "skipped",
+  channel: SentChannel,
+): SentChannel | null {
+  if (status !== "sent") return null;
+  return channel || "manual";
 }
 
 export async function markRecipient(
   recipientId: string,
   status: "sent" | "failed" | "pending" | "skipped",
   failureReason = "",
+  channel: SentChannel = "",
 ): Promise<void> {
   const result = await createClient()
     .from("message_recipients")
@@ -347,6 +369,7 @@ export async function markRecipient(
       status,
       failure_reason: failureReason || null,
       sent_at: status === "sent" ? new Date().toISOString() : null,
+      sent_channel: channelToStore(status, channel),
     })
     .eq("id", recipientId)
     .select("id");

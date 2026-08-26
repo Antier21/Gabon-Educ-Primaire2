@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Send,
   SkipForward,
+  Smartphone,
   Users,
   X,
 } from "lucide-react";
@@ -32,9 +33,11 @@ import {
   type CampaignTarget,
   type MessageTemplate,
   type RecipientDraft,
+  type SentChannel,
 } from "@/lib/communication/store";
 import {
   MESSAGE_VARIABLES,
+  buildSmsLink,
   buildWhatsAppAppLink,
   buildWhatsAppLink,
 } from "@/lib/communication/whatsapp";
@@ -165,11 +168,15 @@ export function CommunicationManager() {
     }
   }
 
-  async function sendOne(recipient: CampaignRecipient) {
+  async function sendOne(recipient: CampaignRecipient, channel: SentChannel = "whatsapp") {
     // Le lien ouvre déjà WhatsApp : appeler le transporteur ici ouvrait un
     // second onglet pour le même message. On se contente donc d'enregistrer
     // l'envoi, que WhatsApp ne peut de toute façon pas nous confirmer.
-    await markRecipient(recipient.id, "sent");
+    //
+    // Le canal est retenu parent par parent : une famille jointe par SMS ne
+    // doit pas se confondre avec une famille jointe par WhatsApp, sans quoi on
+    // ne saurait plus laquelle a réellement reçu quoi.
+    await markRecipient(recipient.id, "sent", "", channel);
     await refreshCampaignProgress(campaignId);
     setRecipients(await listCampaignRecipients(campaignId));
     setCampaigns(await listCampaigns(schoolId));
@@ -200,6 +207,15 @@ export function CommunicationManager() {
   const excluded = drafts.filter((item) => !item.contactAllowed || !item.phoneUsable);
   const pending = recipients.filter((item) => item.status === "pending");
   const sent = recipients.filter((item) => item.status === "sent");
+  /**
+   * Le parent qui se présente maintenant, et le compte de ceux déjà traités.
+   *
+   * « Traité » et non « envoyé » : un parent volontairement passé fait avancer
+   * la file au même titre qu'un parent joint. Ne compter que les envois ferait
+   * reculer le rang affiché dès qu'on passe quelqu'un.
+   */
+  const handled = recipients.filter((item) => item.status !== "pending");
+  const current = pending[0];
   const preview = drafts[0] ? resolveBodyFor(body, drafts[0], schoolName) : "";
 
   return (
@@ -431,6 +447,75 @@ export function CommunicationManager() {
               Chaque bouton ouvre WhatsApp avec le message déjà écrit. Il ne vous reste qu’à appuyer sur
               envoyer, puis à revenir ici — la ligne passe automatiquement en « envoyé ».
             </p>
+
+            {/*
+              L'envoi enchaîné.
+
+              WhatsApp exige une action humaine par parent : soixante familles
+              feront toujours soixante gestes, et aucune astuce ne changera
+              cela. Ce qu'on peut supprimer, ce sont les deux gestes qui
+              entourent chacun — chercher la bonne ligne dans une liste de
+              soixante, puis y revenir. Le prochain parent se présente ici de
+              lui-même, et la liste complète reste dessous pour reprendre un
+              cas particulier.
+            */}
+            {current && (
+              <div className={styles.focus}>
+                <div className={styles.focusHead}>
+                  <span className={styles.focusRank}>
+                    Parent {handled.length + 1} sur {recipients.length}
+                  </span>
+                  <b>{current.guardianName}</b>
+                  <small>
+                    {current.studentName}
+                    {current.className ? ` · ${current.className}` : ""} · {current.phone}
+                  </small>
+                </div>
+                <p className={styles.focusBody}>{current.resolvedBody}</p>
+                <div className={styles.focusActions}>
+                  <a
+                    className={styles.sendButton}
+                    href={buildWhatsAppLink(current.phone, current.resolvedBody)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => void sendOne(current, "whatsapp")}
+                  >
+                    <Send /> Envoyer par WhatsApp
+                  </a>
+                  {/*
+                    Le repli SMS existait dans le code depuis le début, mais
+                    n'était branché nulle part : un parent sans WhatsApp était
+                    laissé de côté sans que rien ne le signale au secrétariat.
+                  */}
+                  <a
+                    className={styles.ghost}
+                    href={buildSmsLink(current.phone, current.resolvedBody)}
+                    onClick={() => void sendOne(current, "sms")}
+                    title="Pour un parent qui n’utilise pas WhatsApp"
+                  >
+                    <Smartphone /> Par SMS
+                  </a>
+                  <a
+                    className={styles.ghost}
+                    href={buildWhatsAppAppLink(current.phone, current.resolvedBody)}
+                    title="Ouvrir l’application WhatsApp installée sur cet ordinateur"
+                  >
+                    Application
+                  </a>
+                  <button
+                    type="button"
+                    className={styles.ghost}
+                    onClick={() => void changeStatus(current, "skipped")}
+                  >
+                    <SkipForward /> Passer
+                  </button>
+                </div>
+                <small className={styles.focusHint}>
+                  Après l’envoi, revenez sur cet onglet : le parent suivant s’affiche ici.
+                </small>
+              </div>
+            )}
+
             <ul className={styles.recipientList}>
               {recipients.map((recipient) => (
                 <li key={recipient.id} className={styles[`row_${recipient.status}`] || styles.row_pending}>
@@ -446,6 +531,11 @@ export function CommunicationManager() {
                     {recipient.status === "sent" && (
                       <span className={styles.sentTag}>
                         <CheckCircle2 /> Envoyé
+                        {recipient.sentChannel === "sms"
+                          ? " · SMS"
+                          : recipient.sentChannel === "whatsapp"
+                            ? " · WhatsApp"
+                            : ""}
                       </span>
                     )}
                     {recipient.status === "pending" && (
@@ -464,6 +554,14 @@ export function CommunicationManager() {
                           ouverture directe de l'application installée, ou copie
                           du message pour un envoi à la main.
                         */}
+                        <a
+                          className={styles.ghost}
+                          href={buildSmsLink(recipient.phone, recipient.resolvedBody)}
+                          onClick={() => void sendOne(recipient, "sms")}
+                          title="Pour un parent qui n’utilise pas WhatsApp"
+                        >
+                          <Smartphone /> SMS
+                        </a>
                         <a
                           className={styles.ghost}
                           href={buildWhatsAppAppLink(recipient.phone, recipient.resolvedBody)}
