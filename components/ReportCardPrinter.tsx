@@ -466,9 +466,9 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
         l'enseignant et le bouton suivant.
       */}
       {ready && (
-        <div className={styles.printOnly}>
+        <div className={`${styles.printOnly} bulletin-print-stack`}>
           {pupils.map((pupil) => (
-            <div key={pupil.id} className={styles.page}>
+            <div key={pupil.id} className={`${styles.page} bulletin-print-page`}>
               <ReportCardPreview
                 domains={domains}
                 schoolName={schoolName}

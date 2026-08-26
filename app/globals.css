@@ -1430,3 +1430,31 @@ textarea:focus {
   background: #ffffff;
   color: #12342d;
 }
+
+
+/* ---------------------------------------------------------------------------
+   Impression des bulletins.
+
+   Le bandeau du logiciel, le menu et la barre de contexte s'imprimaient en
+   tête du document : un en-tête de logiciel sur un bulletin officiel le
+   disqualifie. On rend donc tout invisible, puis on ne redonne la visibilité
+   qu'à la pile des bulletins.
+
+   « visibility » plutôt que « display » : la règle atteint ainsi les ancêtres
+   de la pile sans avoir à les nommer un par un, et il n'y aura rien à corriger
+   le jour où l'écran change d'ossature.
+   --------------------------------------------------------------------------- */
+@media print {
+  body * { visibility: hidden !important; }
+  .bulletin-print-stack,
+  .bulletin-print-stack * { visibility: visible !important; }
+  .bulletin-print-stack {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .bulletin-print-page { break-after: page; page-break-after: always; }
+  .bulletin-print-page:last-child { break-after: auto; page-break-after: auto; }
+}

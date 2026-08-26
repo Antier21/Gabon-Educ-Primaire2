@@ -1,66 +1,95 @@
 /* Le bulletin imprimé.
-   Dimensions A4 portrait à l'échelle réelle : ce qui est à l'écran doit
-   correspondre au papier, sinon l'aperçu ne sert à rien. */
+ *
+ * Une règle gouverne tout ce fichier : **l'écran et le papier partagent
+ * exactement la même géométrie**. Les anciennes règles d'impression
+ * remplaçaient la largeur, la hauteur et les marges par d'autres valeurs, si
+ * bien que le document sortait différent de celui qu'on avait sous les yeux.
+ * Le bloc « @media print » ne retire donc plus que l'habillage d'écran —
+ * l'ombre, la bordure, le fond de l'atelier — et ne touche à aucune dimension.
+ *
+ * Tout est en millimètres et en points, jamais en pixels : une feuille A4 se
+ * décrit dans les unités du papier.
+ */
+
+/* Marge nulle côté navigateur : c'est la feuille elle-même qui porte ses
+   marges. Sans cela, les marges par défaut du navigateur s'ajoutent aux
+   nôtres et poussent la dernière ligne sur une deuxième page. */
+@page { size: A4 portrait; margin: 0; }
+
 .sheet{
-  width:210mm;min-height:297mm;padding:11mm 12mm;margin:0 auto;
-  background:#fff;color:#111;
-  font-family:"Times New Roman",Georgia,serif;font-size:10.5pt;line-height:1.28;
+  /* « min-height » et non « height » : un établissement qui ajoute beaucoup de
+     lignes doit voir sa feuille déborder honnêtement sur une seconde page
+     plutôt que de perdre le bas du document sans le savoir. Avec le modèle
+     officiel — dix-neuf lignes —, la feuille tient exactement en une page. */
+  width:210mm;min-height:297mm;padding:8mm 9mm;margin:0 auto;
+  background:#fff;color:#111;box-sizing:border-box;
+  font-family:"Times New Roman",Georgia,serif;font-size:9.5pt;line-height:1.2;
   border:1px solid #d5ddd9;box-shadow:0 8px 26px rgba(0,0,0,.09);
+  display:flex;flex-direction:column;
+  break-inside:avoid;page-break-inside:avoid;
 }
 
-.head{display:grid;grid-template-columns:1.05fr 1.25fr 1fr;gap:8mm;align-items:start;margin-bottom:5mm}
-.identityBlock{display:flex;flex-direction:column;line-height:1.2}
-.identityBlock b{font-size:12pt;text-transform:uppercase}
-.identityBlock small{font-size:8pt;font-style:italic}
-.ministry{display:flex;flex-direction:column;align-items:center;text-align:center;font-size:9pt;line-height:1.35}
+.head{display:grid;grid-template-columns:1.05fr 1.2fr .95fr;gap:5mm;align-items:start;margin-bottom:2.5mm}
+.identityBlock{display:flex;flex-direction:column;line-height:1.15}
+.identityBlock b{font-size:11pt;text-transform:uppercase}
+.identityBlock small{font-size:7pt;font-style:italic}
+.ministry{display:flex;flex-direction:column;align-items:center;text-align:center;font-size:8pt;line-height:1.25}
 
-.legend{border-collapse:collapse;font-size:7.5pt;width:100%}
-.legend th,.legend td{border:1px solid #333;padding:1mm 1.6mm}
-.legend th{width:6mm;text-align:center;font-weight:700}
+.legend{border-collapse:collapse;font-size:6.5pt;width:100%}
+.legend th,.legend td{border:1px solid #333;padding:.5mm 1.2mm}
+.legend th{width:5mm;text-align:center;font-weight:700}
 .legend td:last-child{white-space:nowrap;text-align:right}
 
-.title{margin:0 0 4mm;text-align:center;font-size:13pt;letter-spacing:.04em;text-decoration:underline;text-underline-offset:3px}
+.title{margin:0 0 2.5mm;text-align:center;font-size:11.5pt;letter-spacing:.03em;text-decoration:underline;text-underline-offset:2px}
 
-/* Bloc d'identité de l'élève : les champs vides sont des traits à remplir,
-   comme sur le formulaire imprimé. */
-.pupil{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6mm 6mm;margin-bottom:4mm;font-size:10pt}
-.pupil p{margin:0;display:flex;align-items:baseline;gap:2mm}
+.pupil{display:grid;grid-template-columns:repeat(3,1fr);gap:1mm 5mm;margin-bottom:2.5mm;font-size:9pt}
+.pupil p{margin:0;display:flex;align-items:baseline;gap:1.5mm;min-width:0}
 .pupil .wide{grid-column:span 3}
 .pupil span{white-space:nowrap}
-.pupil i{flex:1;border-bottom:1px dotted #555;min-width:22mm;height:.9em}
+.pupil b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pupil i{flex:1;border-bottom:1px dotted #555;min-width:15mm;height:.85em}
 
-.grid{width:100%;border-collapse:collapse;font-size:9.5pt}
-.grid th,.grid td{border:1px solid #333;padding:1.1mm 1.8mm;vertical-align:middle}
-.grid thead th{background:#f1f3f2;font-size:8.5pt;text-transform:uppercase;letter-spacing:.03em}
-.skillCol{width:11mm}
-.numCol{width:22mm}
-.masteryCol{width:18mm}
+/* Le tableau occupe la place restante : c'est lui qui absorbe les écarts
+   quand un établissement ajoute ou retire des lignes de notes. */
+.grid{width:100%;border-collapse:collapse;font-size:8.5pt}
+.grid th,.grid td{border:1px solid #333;padding:.5mm 1.5mm;vertical-align:middle}
+.grid thead th{background:#f1f3f2;font-size:7.5pt;text-transform:uppercase;letter-spacing:.02em;padding:.8mm 1.5mm}
+.skillCol{width:9mm}
+.numCol{width:19mm}
+.masteryCol{width:16mm}
 .skillCell{text-align:center;font-weight:700;background:#fafbfa}
 .num{text-align:right;white-space:nowrap}
 .numStrong{text-align:center;font-weight:700;white-space:nowrap}
-.max{color:#555;font-size:8.5pt}
+.max{color:#555;font-size:7.5pt}
 .mastery{text-align:center;font-weight:700}
-.domainRow td{background:#e9edeb;font-weight:700;text-transform:uppercase;letter-spacing:.03em;font-size:9pt}
+.domainRow td{background:#e9edeb;font-weight:700;text-transform:uppercase;letter-spacing:.02em;font-size:8pt;padding:.6mm 1.5mm}
 .totalRow td{background:#f6f7f7;font-weight:700}
-.levelRow td{font-style:italic}
+.levelRow td{font-style:italic;font-size:8pt}
 .levelRow td:last-child{text-align:center;font-style:normal;font-weight:700}
 .empty{text-align:center;font-style:italic;color:#666;padding:6mm}
 
-.footTable{width:100%;border-collapse:collapse;font-size:9.5pt;margin-top:3mm}
-.footTable th,.footTable td{border:1px solid #333;padding:1.4mm 1.8mm}
-.footTable th{background:#f6f7f7;text-align:left;width:26%}
-.footTable td i{display:block;border-bottom:1px dotted #555;height:.9em}
+.footTable{width:100%;border-collapse:collapse;font-size:8.5pt;margin-top:2mm}
+.footTable th,.footTable td{border:1px solid #333;padding:.8mm 1.5mm}
+.footTable th{background:#f6f7f7;text-align:left;width:26%;font-weight:700}
+.footTable td i{display:block;border-bottom:1px dotted #555;height:.85em}
 
-.appreciation{margin-top:4mm}
-.appreciation b{display:block;text-align:center;text-transform:uppercase;font-size:9.5pt;letter-spacing:.03em;margin-bottom:2mm}
-.lines i{display:block;border-bottom:1px dotted #555;height:6mm}
+/* L'appréciation absorbe l'espace restant : c'est la zone que l'enseignant
+   remplit à la main, et elle doit être généreuse plutôt que de laisser un
+   blanc entre elle et les signatures. */
+.appreciation{margin-top:2.5mm;flex:1;display:flex;flex-direction:column;min-height:22mm}
+.appreciation b{display:block;text-align:center;text-transform:uppercase;font-size:8.5pt;letter-spacing:.02em;margin-bottom:2mm}
+.lines{flex:1;display:flex;flex-direction:column;justify-content:space-evenly}
+.lines i{display:block;border-bottom:1px dotted #555;height:0}
 
-.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm;margin-top:8mm;text-align:center}
-.signatures div{border-top:1px solid #333;padding-top:1.5mm;font-size:9.5pt}
+/* Les signatures sont poussées en pied de feuille : elles doivent tomber au
+   même endroit sur tous les bulletins d'une classe, sinon la pile imprimée
+   donne l'impression de documents dépareillés. */
+.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm;margin-top:4mm;padding-top:5mm;text-align:center}
+.signatures div{border-top:1px solid #333;padding-top:1mm;font-size:8.5pt}
 .signatures span{font-weight:600}
 
-/* À l'impression, le bulletin occupe seul la page : ni ombre, ni marge
-   d'écran, ni fond d'atelier autour de lui. */
 @media print{
-  .sheet{width:auto;min-height:auto;margin:0;border:0;box-shadow:none;padding:8mm 10mm}
+  /* Rien ici ne touche aux dimensions : l'écran et le papier montrent la même
+     feuille. On retire seulement ce qui n'a de sens que sur un écran. */
+  .sheet{border:0;box-shadow:none}
 }

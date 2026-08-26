@@ -271,7 +271,7 @@ export function ReportCardPreview({
 
       <section className={styles.appreciation}>
         <b>Niveau de maîtrise de l’élève en fin de {periodLabel.toLowerCase()}</b>
-        <div className={styles.lines}><i /><i /></div>
+        <div className={styles.lines}><i /><i /><i /></div>
       </section>
 
       <footer className={styles.signatures}>
