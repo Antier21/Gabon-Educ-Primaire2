@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Bell, Printer, TriangleAlert } from "lucide-react";
+import { Bell, Printer, Send, TriangleAlert, Undo2 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
 import { SimpleSpaceNav } from "@/components/SpaceNavigation";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
@@ -18,6 +18,14 @@ import {
 import { cellKey, loadClassPupils, loadScoreGrid, type ClassPupil } from "@/lib/report-model/scores";
 import { buildClassReport, formatRank } from "@/lib/report-model/report-card";
 import { formatAverage } from "@/lib/report-model/scale";
+import { isManagementRole, resolveMyRoles } from "@/lib/roles/current-role";
+import {
+  isPublished,
+  loadPublications,
+  publishReports,
+  unpublishReports,
+  type ReportPublication,
+} from "@/lib/report-model/publication";
 import { ReportCardPreview } from "./ReportCardPreview";
 import styles from "./ReportCardPrinter.module.css";
 
@@ -63,6 +71,15 @@ export function ReportCardPrinter() {
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  /**
+   * Publier reste à la direction : « seul le responsable et celui à qui il
+   * aura confié le rôle sont habilités à publier les bulletins ». L'enseignant
+   * saisit et imprime, il ne décide pas de la remise aux familles.
+   */
+  const [mayPublish, setMayPublish] = useState(false);
+  const [publications, setPublications] = useState<ReportPublication[]>([]);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -78,6 +95,11 @@ export function ReportCardPrinter() {
         ]);
         setClasses(classResult.items);
         setDomains(model);
+        const roles = await resolveMyRoles(school.id);
+        setMayPublish(
+          Boolean(roles?.roles?.some((role) => isManagementRole(role) && role !== "secretary")),
+        );
+        setPublications(await loadPublications(school.id));
         if (year) {
           setYearLabel(year.label);
           const periodList = await loadSchoolPeriods(school.id, year.id);
@@ -162,6 +184,7 @@ export function ReportCardPrinter() {
   }
 
   const ready = Boolean(classId && periodId && domains.length && pupils.length);
+  const published = isPublished(publications, classId, periodId);
   const current = pupils.find((item) => item.id === selected) || null;
 
   return (
@@ -231,9 +254,60 @@ export function ReportCardPrinter() {
           >
             <Printer /> Imprimer toute la classe
           </button>
+
+          {/*
+            La publication porte sur la classe et la période entières : remettre
+            son bulletin à un enfant et pas à son voisin ne se fait pas, et
+            laisser ce choix ouvert reviendrait à l'autoriser.
+          */}
+          {mayPublish && (
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={!ready || busy}
+              onClick={() =>
+                void (async () => {
+                  setBusy(true);
+                  setError("");
+                  setMessage("");
+                  try {
+                    if (published) {
+                      await unpublishReports(classId, periodId);
+                      setMessage(
+                        "Bulletin retiré de l’espace des familles. Les notes restent inchangées.",
+                      );
+                    } else {
+                      await publishReports(schoolId, classId, periodId);
+                      setMessage(
+                        `Bulletin de « ${period?.label} » remis aux familles de la classe.`,
+                      );
+                    }
+                    setPublications(await loadPublications(schoolId));
+                  } catch (caught) {
+                    setError(
+                      caught instanceof Error ? caught.message : "Publication impossible.",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                })()
+              }
+            >
+              {published ? <Undo2 /> : <Send />}
+              {published ? "Retirer aux familles" : "Publier aux familles"}
+            </button>
+          )}
         </div>
 
         {error && <p className={styles.error}><TriangleAlert /> {error}</p>}
+        {message && !error && <p className={styles.ok}>{message}</p>}
+        {ready && (
+          <p className={published ? styles.publishedTag : styles.draftTag}>
+            {published
+              ? "Ce bulletin est visible par les familles de la classe."
+              : "Ce bulletin n’est pas encore remis aux familles. Elles voient le relevé de notes, pas le document."}
+          </p>
+        )}
 
         {loading ? (
           <p className={styles.hint}>Chargement…</p>

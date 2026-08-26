@@ -39,9 +39,13 @@ import {
   type SeenMarks,
 } from "@/lib/family/freshness";
 import {
+  loadFamilyBulletins,
   loadFamilyLineStatements,
+  type FamilyBulletin,
   type FamilyPeriodStatement,
 } from "@/lib/family/report-lines";
+import { ReportCardPreview } from "@/components/ReportCardPreview";
+import type { ModelDomain } from "@/lib/report-model/store";
 import { formatAverage, MASTERY_LABELS } from "@/lib/report-model/scale";
 import styles from "./FamilySpaceLive.module.css";
 
@@ -127,6 +131,16 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
    * basculé sur le nouveau modèle.
    */
   const [lineStatements, setLineStatements] = useState<FamilyPeriodStatement[]>([]);
+  /**
+   * Bulletins publiés, dans le gabarit officiel.
+   *
+   * Ils n'apparaissent qu'une fois remis par l'établissement : le relevé
+   * arrive en continu, le bulletin est un acte de l'école. Et ils s'affichent
+   * sans bouton d'impression — le document imprimé reste remis par
+   * l'établissement, pas tiré par la famille.
+   */
+  const [bulletins, setBulletins] = useState<FamilyBulletin[]>([]);
+  const [bulletinModel, setBulletinModel] = useState<ModelDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   /**
@@ -222,6 +236,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
           evaluationList,
           statementList,
           lineList,
+          bulletinResult,
         ] = await Promise.all([
           loadReportCards(child.id),
           loadAttendance(child.id),
@@ -230,6 +245,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
           loadClassEvaluations(child.classId),
           loadScoreStatements(child.id),
           loadFamilyLineStatements(child.id),
+          loadFamilyBulletins(child.id, child.classId),
         ]);
         setReports(reportList);
         setAttendance(attendanceList);
@@ -238,6 +254,8 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         setEvaluations(evaluationList);
         setStatements(statementList);
         setLineStatements(lineList);
+        setBulletins(bulletinResult.bulletins);
+        setBulletinModel(bulletinResult.domains);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Lecture des données impossible.");
       }
@@ -262,7 +280,10 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         ...statements.map((item) => item.updatedAt),
         ...lineStatements.map((item) => item.updatedAt),
       ],
-      results: reports.map((item) => item.publishedAt),
+      results: [
+        ...reports.map((item) => item.publishedAt),
+        ...bulletins.map((item) => item.publishedAt),
+      ],
       lessons: lessons.map((item) => item.updatedAt),
       evaluations: evaluations.map((item) => item.announcedAt),
       attendance: attendance.map((item) => item.recordedAt),
@@ -280,6 +301,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   }, [
     statements,
     lineStatements,
+    bulletins,
     reports,
     lessons,
     evaluations,
@@ -495,6 +517,25 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
 
       {tab === "results" && (
         <section className={styles.panel}>
+          {/*
+            Le bulletin dans son gabarit officiel, tel que l'établissement le
+            remet. Aucun bouton d'impression : le document papier reste délivré
+            par l'école, jamais tiré par la famille.
+          */}
+          {bulletins.map((bulletin) => (
+            <div key={bulletin.periodId} className={styles.bulletinFrame}>
+              <ReportCardPreview
+                domains={bulletinModel}
+                schoolName=""
+                periodLabel={bulletin.periodLabel.toLocaleUpperCase("fr")}
+                scores={bulletin.scores}
+                pupil={{
+                  fullName: child?.fullName,
+                  className: child?.className,
+                }}
+              />
+            </div>
+          ))}
           {!reports.length ? (
             <p className={styles.empty}>
               Aucun bulletin publié pour le moment. Les bulletins apparaissent ici une fois validés par

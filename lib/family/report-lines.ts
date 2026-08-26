@@ -209,3 +209,97 @@ export async function loadFamilyLineStatements(
     })),
   );
 }
+
+/**
+ * Les bulletins publiés d'un élève, prêts à être affichés dans le gabarit.
+ *
+ * Deux différences avec le relevé, et elles portent la règle de
+ * l'établissement : seules les périodes publiées apparaissent, et les notes
+ * sont rendues telles quelles au gabarit du bulletin plutôt que résumées.
+ * La famille lit le document ; elle ne l'imprime pas — l'impression reste à
+ * l'établissement.
+ */
+export type FamilyBulletin = {
+  periodId: string;
+  periodLabel: string;
+  /** Date de remise par l'établissement, qui sert d'indicateur de nouveauté. */
+  publishedAt: string;
+  scores: Record<string, number | null>;
+};
+
+export async function loadFamilyBulletins(
+  studentId: string,
+  classId: string,
+): Promise<{ domains: ModelDomain[]; bulletins: FamilyBulletin[] }> {
+  if (!studentId || !classId) return { domains: [], bulletins: [] };
+  const client = createClient();
+
+  const publication = await client
+    .from("report_publications")
+    .select("period_id,published_at")
+    .eq("class_group_id", classId);
+  if (publication.error) throw new Error(describe(publication.error));
+  const publishedAtByPeriod = new Map(
+    ((publication.data || []) as Array<Record<string, unknown>>).map((row) => [
+      String(row.period_id || ""),
+      String(row.published_at || ""),
+    ]),
+  );
+  const publishedIds = new Set(publishedAtByPeriod.keys());
+  if (!publishedIds.size) return { domains: [], bulletins: [] };
+
+  const scoreResult = await client
+    .from("report_line_scores")
+    .select("school_id,period_id,line_id,score")
+    .eq("student_id", studentId);
+  if (scoreResult.error) throw new Error(describe(scoreResult.error));
+  const rows = ((scoreResult.data || []) as Array<Record<string, unknown>>).filter((row) =>
+    publishedIds.has(String(row.period_id)),
+  );
+  if (!rows.length) return { domains: [], bulletins: [] };
+
+  const schoolId = String(rows[0].school_id || "");
+  const periodIds = Array.from(new Set(rows.map((row) => String(row.period_id))));
+
+  const [domains, periodResult] = await Promise.all([
+    loadReportModel(schoolId),
+    client
+      .from("school_periods")
+      .select("id,label,period_kind,sequence_number")
+      .in("id", periodIds),
+  ]);
+  if (periodResult.error) throw new Error(describe(periodResult.error));
+
+  const periods = ((periodResult.data || []) as Array<Record<string, unknown>>)
+    .map((row) => ({
+      id: String(row.id),
+      label: String(row.label || "Période"),
+      kind: String(row.period_kind || ""),
+      sequenceNumber:
+        row.sequence_number === null || row.sequence_number === undefined
+          ? null
+          : Number(row.sequence_number),
+    }))
+    // La période la plus avancée en tête : c'est le dernier bulletin remis.
+    .sort(
+      (a, b) =>
+        periodSortRank(b.kind, b.sequenceNumber) - periodSortRank(a.kind, a.sequenceNumber),
+    );
+
+  const bulletins: FamilyBulletin[] = periods.map((period) => {
+    const scores: Record<string, number | null> = {};
+    for (const row of rows) {
+      if (String(row.period_id) !== period.id) continue;
+      scores[String(row.line_id)] =
+        row.score === null || row.score === undefined ? null : Number(row.score);
+    }
+    return {
+      periodId: period.id,
+      periodLabel: period.label,
+      publishedAt: publishedAtByPeriod.get(period.id) || "",
+      scores,
+    };
+  });
+
+  return { domains, bulletins };
+}

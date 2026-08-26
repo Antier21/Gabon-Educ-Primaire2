@@ -147,3 +147,6 @@
 .lineDomain li span{color:#3d4d47}
 .lineDomain li b{white-space:nowrap;color:#20302a}
 .lineDomain li b small{color:#7c8783;font-weight:600}
+/* Le bulletin officiel dans l'espace famille. La feuille A4 est plus large
+   qu'un téléphone : elle défile dans son cadre plutôt que d'étirer la page. */
+.bulletinFrame{overflow-x:auto;background:#eef1f0;padding:14px;border-radius:11px;margin-bottom:16px}
