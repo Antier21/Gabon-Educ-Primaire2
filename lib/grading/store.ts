@@ -24,6 +24,12 @@ import type {
   SubjectComment,
 } from "./types";
 import { PRODUCT } from "@/lib/product-edition";
+import { adoptSchoolPeriods } from "./adopt-periods";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
+import {
+  loadSchoolPeriods,
+  resolveActiveAcademicYear,
+} from "@/lib/report-model/periods-store";
 
 export const defaultSettings: SchoolSettings = {
   academicYear: "2026-2027",
@@ -129,6 +135,41 @@ export function canLockPeriod(role: GradingRole) {
   return ["school_admin", "headmaster"].includes(role);
 }
 
+
+/**
+ * Aligne les périodes du cahier de notes sur le découpage de l'établissement.
+ *
+ * Elles étaient écrites en dur dans le navigateur — « Trimestre 1, 2, 3 » —
+ * si bien qu'un établissement qui évalue par paliers n'en voyait aucun côté
+ * enseignant. On les adopte à chaque chargement, sans jamais perdre ce qui
+ * porte des notes.
+ *
+ * Une lecture qui échoue ne fait rien : mieux vaut un cahier de notes avec
+ * l'ancienne liste qu'un cahier de notes sans aucune période, où l'enseignant
+ * n'aurait nulle part où saisir.
+ */
+async function alignPeriodsWithSchool(
+  workspace: GradingWorkspace,
+): Promise<GradingWorkspace> {
+  try {
+    const school = (await resolveActiveSchoolContext()).school;
+    if (!school?.id || school.id === "local") return workspace;
+    const year = await resolveActiveAcademicYear(school.id);
+    if (!year) return workspace;
+    const periods = await loadSchoolPeriods(school.id, year.id);
+    if (!periods.length) return workspace;
+
+    const carriesData = (periodId: string) =>
+      workspace.assessments.some((item) => item.periodId === periodId) ||
+      workspace.reports.some((item) => item.periodId === periodId);
+
+    const next = adoptSchoolPeriods(workspace.periods, periods, carriesData);
+    return { ...workspace, periods: next };
+  } catch {
+    return workspace;
+  }
+}
+
 export async function loadGradingWorkspace(): Promise<{
   workspace: GradingWorkspace;
   mode: StorageMode;
@@ -149,12 +190,12 @@ export async function loadGradingWorkspace(): Promise<{
     if (error) throw error;
     if (!data)
       return {
-        workspace: local,
+        workspace: await alignPeriodsWithSchool(local),
         mode: "cloud",
         message: "Espace notes prêt à être synchronisé",
       };
-    const remote = normalizeWorkspace(
-      data.payload as Partial<GradingWorkspace>,
+    const remote = await alignPeriodsWithSchool(
+      normalizeWorkspace(data.payload as Partial<GradingWorkspace>),
     );
     writeLocal(STORAGE_KEYS.grading, remote);
     return {
