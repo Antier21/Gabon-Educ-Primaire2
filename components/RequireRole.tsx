@@ -16,17 +16,24 @@ import type { SchoolRole } from "@/lib/platform/types";
  * chaque navigation, sur chaque page. Les données, elles, restent gardées par
  * les politiques du serveur.
  *
- * Mais entre les deux subsiste un espace, et c'est là que se logeait le
- * défaut : un enseignant, un parent, pouvaient ouvrir le journal d'audit ou le
- * centre de pilotage. Ils n'y voyaient rien — les politiques tenaient — mais
- * ils y voyaient « rien » sans explication, ce qui ressemble à une panne. Et un
- * chef d'établissement ouvrant le centre de pilotage de l'éditeur y trouvait sa
- * propre école, présentée dans le vocabulaire commercial de l'éditeur.
+ * Entre les deux subsistait un espace : un enseignant ou un parent pouvait
+ * ouvrir le journal d'audit ou le centre de pilotage. Ils n'y voyaient rien —
+ * les politiques tenaient — mais ils voyaient « rien » sans explication, ce qui
+ * ressemble à une panne.
  *
- * Le piège était le même qu'ailleurs, sous un autre habit : **l'absence de
- * lignes n'est pas un refus**. Le centre de pilotage déduisait le refus d'une
- * erreur de requête ; or une politique qui écarte des lignes ne lève aucune
- * erreur, elle en rend moins. Le refus doit donc être demandé, jamais déduit.
+ * Deux règles gouvernent ce fichier, et chacune vient d'une erreur commise.
+ *
+ * **Le super-administrateur passe partout.** La première version ne comparait
+ * que les rôles tenus dans un établissement — directeur, secrétaire. Or le
+ * super-administrateur n'en tient pas nécessairement : il est au-dessus d'eux.
+ * Il se voyait donc refuser les écrans techniques de sa propre plateforme. Son
+ * cas se tranche avant tout le reste.
+ *
+ * **Un refus doit dire ce qu'il a vu.** Un « Accès réservé » sans motif est
+ * indiscernable d'une panne — c'est la leçon qui revient à chaque étape de ce
+ * projet. Le refus nomme donc l'établissement actif et les rôles réellement
+ * lus, de sorte qu'on sache s'il manque un droit ou simplement un
+ * établissement sélectionné.
  */
 
 type Etat = "verification" | "autorise" | "refuse";
@@ -37,9 +44,9 @@ export function RequireRole({
   what,
   children,
 }: {
-  /** Rôles admis. Ignoré lorsque « superAdminOnly » est vrai. */
+  /** Rôles d'établissement admis. Le super-administrateur passe de toute façon. */
   allow?: SchoolRole[];
-  /** Réservé au super-administrateur de la plateforme. */
+  /** Réservé à l'éditeur de la plateforme. */
   superAdminOnly?: boolean;
   /** Ce que l'écran est, pour l'annoncer dans le refus. */
   what: string;
@@ -48,6 +55,9 @@ export function RequireRole({
   const [etat, setEtat] = useState<Etat>("verification");
   const [monRole, setMonRole] = useState<SchoolRole | null>(null);
   const [raison, setRaison] = useState("");
+  /** Ce que le portier a réellement lu, montré dans le refus. */
+  const [constat, setConstat] = useState("");
+  const [sansEtablissement, setSansEtablissement] = useState(false);
 
   /*
    * La liste des rôles est comparée par son contenu, pas par son identité.
@@ -67,31 +77,48 @@ export function RequireRole({
           return;
         }
 
+        // Le verdict est demandé, jamais déduit d'un tableau vide : une
+        // politique qui écarte des lignes ne lève aucune erreur.
+        const { data: estSuper } = await client.rpc("is_super_admin");
+        const superAdmin = estSuper === true;
+
         if (superAdminOnly) {
-          // On demande le verdict, on ne le déduit pas d'un tableau vide.
-          const { data, error } = await client.rpc("is_super_admin");
-          if (error) {
-            setRaison(`Vérification impossible : ${error.message}`);
-            setEtat("refuse");
-            return;
+          setEtat(superAdmin ? "autorise" : "refuse");
+          if (!superAdmin) {
+            setRaison("Cet écran appartient à l’éditeur de la plateforme.");
+            setConstat("Votre compte ne porte pas le rôle « super_admin ».");
           }
-          setEtat(data === true ? "autorise" : "refuse");
-          if (data !== true) setRaison("Cet écran appartient à l’éditeur de la plateforme.");
+          const idEcole = readLocal<string>(STORAGE_KEYS.activeSchool, "");
+          if (idEcole) setMonRole((await resolveMyRoles(idEcole))?.primary || null);
+          return;
         }
 
-        const schoolId = readLocal<string>(STORAGE_KEYS.activeSchool, "");
-        const contexte = schoolId ? await resolveMyRoles(schoolId) : null;
+        // Le super-administrateur précède les rôles d'établissement : il n'a
+        // pas à en tenir un pour ouvrir un écran technique.
+        if (superAdmin) {
+          setEtat("autorise");
+          return;
+        }
+
+        const idEcole = readLocal<string>(STORAGE_KEYS.activeSchool, "");
+        if (!idEcole) {
+          setSansEtablissement(true);
+          setRaison("Aucun établissement actif n’est sélectionné sur cet appareil.");
+          setConstat("Le portier ne peut pas lire vos rôles sans savoir de quelle école il s’agit.");
+          setEtat("refuse");
+          return;
+        }
+
+        const contexte = await resolveMyRoles(idEcole);
         setMonRole(contexte?.primary || null);
-
-        if (superAdminOnly) return;
-
         const admis = admisCle ? (admisCle.split(",") as SchoolRole[]) : [];
         const autorise = (contexte?.roles || []).some((role) => admis.includes(role));
         setEtat(autorise ? "autorise" : "refuse");
         if (!autorise) {
-          setRaison(
-            contexte
-              ? "Votre rôle dans cet établissement ne donne pas accès à cet écran."
+          setRaison("Votre rôle dans cet établissement ne donne pas accès à cet écran.");
+          setConstat(
+            contexte?.roles.length
+              ? `Rôles lus : ${contexte.roles.join(", ")}. Rôles attendus : ${admis.join(", ")}.`
               : "Aucun rôle actif n’a été trouvé pour votre compte dans cet établissement.",
           );
         }
@@ -113,13 +140,6 @@ export function RequireRole({
   }
 
   if (etat === "refuse") {
-    /*
-     * Un refus qui explique et qui raccompagne.
-     *
-     * Une page blanche laisserait croire à une panne, et un renvoi silencieux
-     * vers un autre écran laisserait croire à un bogue de navigation. On
-     * nomme donc l'écran, la raison, et la porte de sortie.
-     */
     return (
       <main className="center-page">
         <div className="simple-card">
@@ -130,7 +150,12 @@ export function RequireRole({
           <p>
             {what} n’est pas ouvert à votre compte. {raison}
           </p>
-          <Link href={homeForRole(monRole || "teacher")}>Retourner à mon espace</Link>
+          {constat && <p className="demo-note">{constat}</p>}
+          {sansEtablissement ? (
+            <Link href="/gabon-educ/service-abonnements">Choisir un établissement</Link>
+          ) : (
+            <Link href={homeForRole(monRole || "teacher")}>Retourner à mon espace</Link>
+          )}
         </div>
       </main>
     );
