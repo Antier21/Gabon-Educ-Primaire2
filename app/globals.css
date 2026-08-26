@@ -1458,3 +1458,47 @@ textarea:focus {
   .bulletin-print-page { break-after: page; page-break-after: always; }
   .bulletin-print-page:last-child { break-after: auto; page-break-after: auto; }
 }
+
+/* La frise de service, au bas de la page d'accueil.
+ *
+ * Sept carrés d'un centimètre exactement — l'unité est celle qui a été
+ * demandée, et le navigateur la convertit lui-même. Fondus dans le fond noir
+ * de la page, ils se lisent comme un motif ; au survol seulement, chacun dit
+ * où il mène.
+ */
+.service-frieze{
+  position:fixed;right:16px;bottom:14px;z-index:5;
+  display:grid;grid-template-columns:repeat(7,1cm);gap:3px;
+}
+.service-tile{
+  width:1cm;height:1cm;border-radius:3px;
+  background:rgba(244,185,66,.09);
+  border:1px solid rgba(255,255,255,.07);
+  transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+.service-tile:hover,
+.service-tile:focus-visible{
+  background:rgba(244,185,66,.40);
+  border-color:rgba(244,185,66,.65);
+  transform:translateY(-2px);
+  outline:none;
+}
+/* La légende s'ancre au bord droit de la frise : sept légendes de longueurs
+   différentes se chevaucheraient si chacune suivait son propre carré. */
+.service-tile-caption{
+  position:absolute;right:0;bottom:calc(100% + 7px);
+  opacity:0;pointer-events:none;transition:opacity .18s ease;
+  background:rgba(12,20,17,.94);color:#f3f7f5;
+  border:1px solid rgba(244,185,66,.35);border-radius:7px;
+  padding:5px 10px;font-size:11.5px;white-space:nowrap;
+}
+.service-tile:hover .service-tile-caption,
+.service-tile:focus-visible .service-tile-caption{opacity:1}
+
+/* Sur un téléphone, sept centimètres de large ne tiennent pas : la frise se
+   replie en mosaïque de quatre, ce qui reste un motif volontaire. */
+@media (max-width:640px){
+  .service-frieze{grid-template-columns:repeat(4,1cm)}
+}
+/* À l'impression, aucune trace : ces carrés ne concernent pas le papier. */
+@media print{ .service-frieze{display:none} }

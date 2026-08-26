@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Building2, GraduationCap, School } from "lucide-react";
 import { SCHOOL_PROFILE_OPTIONS } from "@/lib/school-profiles";
 import { PRODUCT, PRODUCT_EDITION } from "@/lib/product-edition";
+import { DiscreetAccess } from "@/components/DiscreetAccess";
 
 const allGroups = [
   {
@@ -75,6 +76,12 @@ export default function PortalHome() {
           </div>
         </div>
       </section>
+      {/*
+        Les portes de service, posées comme un motif au bas de la page. Elles
+        ne ferment rien — la connexion et les politiques du serveur s'en
+        chargent — mais elles évitent de retenir sept adresses par cœur.
+      */}
+      <DiscreetAccess />
     </main>
   );
 }
