@@ -38,6 +38,11 @@ import {
   seenKey,
   type SeenMarks,
 } from "@/lib/family/freshness";
+import {
+  loadFamilyLineStatements,
+  type FamilyPeriodStatement,
+} from "@/lib/family/report-lines";
+import { formatAverage, MASTERY_LABELS } from "@/lib/report-model/scale";
 import styles from "./FamilySpaceLive.module.css";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -114,6 +119,14 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [lessons, setLessons] = useState<FamilyLesson[]>([]);
   const [evaluations, setEvaluations] = useState<FamilyEvaluation[]>([]);
   const [statements, setStatements] = useState<FamilyScoreStatement[]>([]);
+  /**
+   * Le relevé sur les lignes du bulletin.
+   *
+   * Il s'ajoute à l'ancien relevé au lieu de le remplacer : couper l'ancien
+   * d'un coup priverait de notes les familles dont l'enseignant n'a pas encore
+   * basculé sur le nouveau modèle.
+   */
+  const [lineStatements, setLineStatements] = useState<FamilyPeriodStatement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   /**
@@ -208,6 +221,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
           lessonList,
           evaluationList,
           statementList,
+          lineList,
         ] = await Promise.all([
           loadReportCards(child.id),
           loadAttendance(child.id),
@@ -215,6 +229,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
           loadClassLessons(child.classId),
           loadClassEvaluations(child.classId),
           loadScoreStatements(child.id),
+          loadFamilyLineStatements(child.id),
         ]);
         setReports(reportList);
         setAttendance(attendanceList);
@@ -222,6 +237,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         setLessons(lessonList);
         setEvaluations(evaluationList);
         setStatements(statementList);
+        setLineStatements(lineList);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Lecture des données impossible.");
       }
@@ -242,7 +258,10 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
    */
   const freshCounts = useMemo(() => {
     const source: Record<TabKey, Array<string | null | undefined>> = {
-      scores: statements.map((item) => item.updatedAt),
+      scores: [
+        ...statements.map((item) => item.updatedAt),
+        ...lineStatements.map((item) => item.updatedAt),
+      ],
       results: reports.map((item) => item.publishedAt),
       lessons: lessons.map((item) => item.updatedAt),
       evaluations: evaluations.map((item) => item.announcedAt),
@@ -258,7 +277,18 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         : countFresh(source[key], seenAtOpen[seenKey(childId, key)]);
     }
     return counts;
-  }, [statements, reports, lessons, evaluations, attendance, messages, childId, seenAtOpen, visited]);
+  }, [
+    statements,
+    lineStatements,
+    reports,
+    lessons,
+    evaluations,
+    attendance,
+    messages,
+    childId,
+    seenAtOpen,
+    visited,
+  ]);
 
   if (loading) return <div className={styles.state}>Chargement de vos informations…</div>;
 
@@ -347,7 +377,60 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
 
       {tab === "scores" && (
         <section className={styles.panel}>
-          {!statements.length ? (
+          {/*
+            Le relevé du nouveau modèle passe en premier : c'est celui que
+            l'établissement remplit désormais. L'ancien reste dessous tant que
+            toutes les classes n'ont pas basculé.
+          */}
+          {lineStatements.map((statement) => (
+            <article key={statement.periodId} className={styles.statement}>
+              <header>
+                <div>
+                  <b>{statement.periodLabel}</b>
+                  <small>
+                    {statement.scoredCount} note(s) · total {statement.obtained} sur{" "}
+                    {statement.maxScore}
+                  </small>
+                </div>
+                {statement.average !== null && (
+                  <span className={styles.average}>{formatAverage(statement.average)}</span>
+                )}
+              </header>
+
+              {statement.domains
+                .filter((domain) =>
+                  domain.skills.some((skill) => skill.lines.some((line) => line.score !== null)),
+                )
+                .map((domain) => (
+                  <div key={domain.label} className={styles.lineDomain}>
+                    <h4>
+                      {domain.label}
+                      <span>
+                        {formatAverage(domain.average)}
+                        {domain.mastery ? ` · ${MASTERY_LABELS[domain.mastery]}` : ""}
+                      </span>
+                    </h4>
+                    <ul>
+                      {domain.skills.flatMap((skill) =>
+                        skill.lines
+                          .filter((line) => line.score !== null)
+                          .map((line) => (
+                            <li key={`${skill.code}-${line.label}`}>
+                              <span>{line.label}</span>
+                              <b>
+                                {formatAverage(line.score)}
+                                <small> /{line.maxScore}</small>
+                              </b>
+                            </li>
+                          )),
+                      )}
+                    </ul>
+                  </div>
+                ))}
+            </article>
+          ))}
+
+          {!statements.length && !lineStatements.length ? (
             <p className={styles.empty}>
               Aucune note enregistrée pour le moment. Le relevé se remplit dès la première évaluation
               corrigée, sans attendre le bulletin.

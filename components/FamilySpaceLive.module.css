@@ -136,3 +136,14 @@
 .contactSubmit{align-self:flex-start;padding:11px 20px;border:0;border-radius:999px;background:#08734f;color:#fff;font:inherit;font-weight:600;cursor:pointer}
 .contactSubmit:disabled{opacity:.6;cursor:progress}
 .contactPending{margin:0;padding:10px 12px;border-radius:10px;background:#fff5e0;color:#7a5300;font-size:14px;line-height:1.5}
+/* Relevé sur les lignes du bulletin : un bloc par domaine, les lignes notées
+   seulement. Une famille cherche les notes obtenues, pas la liste des
+   épreuves à venir. */
+.lineDomain{margin-top:12px}
+.lineDomain h4{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:0 0 6px;font-size:14px;color:#20302a}
+.lineDomain h4 span{font-size:13px;font-weight:600;color:#08734f}
+.lineDomain ul{list-style:none;margin:0;padding:0}
+.lineDomain li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:5px 0;border-top:1px solid #f0f3f2;font-size:14px}
+.lineDomain li span{color:#3d4d47}
+.lineDomain li b{white-space:nowrap;color:#20302a}
+.lineDomain li b small{color:#7c8783;font-weight:600}
