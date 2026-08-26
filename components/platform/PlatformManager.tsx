@@ -29,6 +29,11 @@ import {
 } from "@/lib/platform/calculations";
 import { detectV07Data, migrateV07Classes } from "@/lib/platform/migration";
 import {
+  describeLogoValue,
+  LOGO_MAX_EDGE,
+  readLogoAsDataUri,
+} from "@/lib/school/logo-image";
+import {
   loadPlatformWorkspace,
   savePlatformWorkspace,
   defaultPlatformWorkspace,
@@ -523,6 +528,27 @@ function EstablishmentView({ workspace, persist }: ViewProps) {
   const hasLegacy =
     Object.values(detected).some(Boolean) &&
     !workspace.migrationJournal.some((item) => item.status === "confirmed");
+  /*
+   * Le logo, tenu en état plutôt qu'en champ libre.
+   *
+   * Le bouton doit pouvoir écrire dans le champ, et la vignette doit montrer
+   * ce qui sera enregistré : les deux exigent que la valeur vive ici. Le champ
+   * garde son « name », donc le formulaire l'envoie comme avant — rien ne
+   * change dans l'enregistrement.
+   */
+  const [logoUrl, setLogoUrl] = useState(workspace.school?.logoUrl || "");
+  const [logoError, setLogoError] = useState("");
+  const logoFileRef = useRef<HTMLInputElement>(null);
+
+  async function chooseLogo(file: File | undefined) {
+    if (!file) return;
+    setLogoError("");
+    try {
+      setLogoUrl(await readLogoAsDataUri(file));
+    } catch (caught) {
+      setLogoError(caught instanceof Error ? caught.message : "Image illisible.");
+    }
+  }
   async function configure(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -747,10 +773,77 @@ function EstablishmentView({ workspace, persist }: ViewProps) {
             Chef d’établissement
             <input name="headName" defaultValue={workspace.school?.headName} />
           </label>
-          <label>
-            Logo (URL)
-            <input name="logoUrl" defaultValue={workspace.school?.logoUrl} />
-          </label>
+        </div>
+
+        {/*
+          Le logo de l'établissement.
+
+          Il s'imprime en haut du bulletin, à gauche du nom de l'école. Une
+          adresse web reste acceptée pour ne rien casser, mais l'image chargée
+          depuis l'ordinateur est enregistrée dans la fiche : elle s'imprime
+          sans connexion et survit à la disparition de n'importe quel
+          hébergeur.
+        */}
+        <div className={styles.logoField}>
+          <div className={styles.logoPreview} aria-hidden={!logoUrl}>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="Logo de l’établissement" />
+            ) : (
+              <span>Aucun logo</span>
+            )}
+          </div>
+          <div className={styles.logoControls}>
+            <label>
+              Logo de l’établissement
+              <input
+                name="logoUrl"
+                value={logoUrl}
+                placeholder="Choisissez une image, ou collez une adresse web"
+                onChange={(event) => {
+                  setLogoUrl(event.target.value);
+                  setLogoError("");
+                }}
+              />
+            </label>
+            <input
+              ref={logoFileRef}
+              className={styles.file}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              onChange={(event) => {
+                void chooseLogo(event.target.files?.[0]);
+                // Remis à zéro pour que rechoisir le même fichier après une
+                // erreur déclenche bien un nouvel événement.
+                event.target.value = "";
+              }}
+            />
+            <div className={styles.actions} style={{ justifyContent: "flex-start" }}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => logoFileRef.current?.click()}
+              >
+                Choisir une image
+              </button>
+              {logoUrl && (
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.buttonSecondary}`}
+                  onClick={() => {
+                    setLogoUrl("");
+                    setLogoError("");
+                  }}
+                >
+                  Retirer le logo
+                </button>
+              )}
+            </div>
+            <small className={logoError ? styles.logoError : styles.logoNote}>
+              {logoError ||
+                `${describeLogoValue(logoUrl)} L’image est réduite à ${LOGO_MAX_EDGE} px ; elle n’apparaîtra sur les bulletins qu’après enregistrement.`}
+            </small>
+          </div>
         </div>
         <div className={styles.two}>
           <label>
