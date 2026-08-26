@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { loginPathFor } from "@/lib/auth/login-paths";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -63,68 +64,13 @@ const protectedPrefixes = [
   "/gabon-educ/espace-eleve",
 ];
 
-/**
- * À chaque espace sa page de connexion.
- *
- * La correspondance est cherchée dans l'ordre et la première qui convient
- * l'emporte : les préfixes les plus précis doivent donc précéder les plus
- * généraux — « /notes-bulletins » avant « /notes », faute de quoi le
- * secrétariat se verrait proposer la connexion des enseignants.
- *
- * C'est exactement ce qui arrivait à « Parents et responsables » : la page
- * ne figurait dans aucune ligne, et le repli renvoyait tout le monde vers
- * l'espace enseignants.
+/*
+ * La correspondance entre un écran et sa page de connexion vit désormais dans
+ * « lib/auth/login-paths ». Le bandeau de connexion en a besoin lui aussi pour
+ * proposer la bonne porte : deux copies de cette table auraient fini par
+ * diverger, et l'une des deux aurait renvoyé un directeur vers la connexion
+ * des enseignants.
  */
-const loginByPrefix: Array<[string, string]> = [
-  // Direction et secrétariat
-  ["/gabon-educ/administration", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/secretariat", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/etablissement", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/utilisateurs", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/personnel", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/creer-enseignant", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/eleves", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/parents", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/inscription", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/classes", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/matieres", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/emplois-du-temps", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/annonces", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/communication", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/documents", "/gabon-educ/connexion-administration"],
-  // Avant « /notes » : sans cet ordre, les bulletins de l'administration
-  // renverraient vers la connexion des enseignants.
-  ["/gabon-educ/notes-bulletins", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/modele-bulletin", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/bulletins-publication", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/journal-audit", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/import-export", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/synchronisation", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/diagnostic", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/modules-a-venir", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/abonnement", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ/service-abonnements", "/gabon-educ/connexion-administration"],
-  ["/gabon-educ-service", "/gabon-educ/connexion-administration"],
-  // Vie scolaire
-  ["/gabon-educ/assiduite", "/gabon-educ/connexion-vie-scolaire"],
-  // Familles
-  ["/gabon-educ/espace-parent", "/gabon-educ/connexion-parents"],
-  ["/gabon-educ/espace-eleve", "/gabon-educ/connexion-eleves"],
-  // Espace enseignant — le repli, décrit ici pour mémoire
-  ["/gabon-educ/tableau-de-bord", "/gabon-educ/connexion"],
-  ["/gabon-educ/mes-classes", "/gabon-educ/connexion"],
-  ["/gabon-educ/mes-fiches", "/gabon-educ/connexion"],
-  ["/gabon-educ/notes", "/gabon-educ/connexion"],
-  ["/gabon-educ/saisie-bulletin", "/gabon-educ/connexion"],
-  ["/gabon-educ/impression-bulletins", "/gabon-educ/connexion"],
-  ["/gabon-educ/bulletins", "/gabon-educ/connexion"],
-];
-
-function loginPathFor(pathname: string) {
-  const match = loginByPrefix.find(([prefix]) => pathname.startsWith(prefix));
-  return match ? match[1] : "/gabon-educ/connexion";
-}
-
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (!protectedPrefixes.some(prefix => pathname.startsWith(prefix))) return NextResponse.next();

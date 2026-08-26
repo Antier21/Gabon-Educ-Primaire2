@@ -1502,3 +1502,36 @@ textarea:focus {
 }
 /* À l'impression, aucune trace : ces carrés ne concernent pas le papier. */
 @media print{ .service-frieze{display:none} }
+
+/* Le bandeau de connexion.
+ *
+ * Fixé en haut et au-dessus de tout : les écrans d'administration ont leur
+ * propre barre collante, et un bandeau qui passerait dessous ne serait vu de
+ * personne. Ambre pour une panne de transport — on attend ; rouge pour une
+ * session expirée — on agit.
+ */
+.connection-banner{
+  /* En bas, et non en haut.
+     Les écrans d'administration portent une barre collante à « top:0 » : un
+     bandeau fixé en haut l'aurait recouverte, cachant précisément la
+     navigation dont on a besoin pour aller se reconnecter. Rien, en revanche,
+     ne s'accroche au bas de ces pages. */
+  position:fixed;bottom:0;left:0;right:0;z-index:9999;
+  display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;
+  padding:9px 16px;font-size:13px;line-height:1.45;
+  background:#fff4d6;color:#6d5308;border-top:1px solid #e6cf90;
+  box-shadow:0 -2px 12px rgba(0,0,0,.12);
+}
+.connection-banner svg{width:18px;height:18px;flex:none}
+.connection-banner span{max-width:78ch}
+.connection-banner b{font-weight:800}
+.connection-banner button,
+.connection-banner a{
+  border:1px solid currentColor;border-radius:999px;background:transparent;
+  padding:5px 13px;font:inherit;font-size:12.5px;font-weight:700;color:inherit;cursor:pointer;
+  white-space:nowrap;
+}
+.connection-banner-session{background:#fdecea;color:#8d2417;border-top-color:#e9b4ab}
+/* Le bandeau n'a rien à faire sur le papier : un bulletin imprimé pendant une
+   coupure ne doit pas porter d'avertissement d'écran. */
+@media print{ .connection-banner{display:none} }
