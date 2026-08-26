@@ -42,7 +42,7 @@ export type MessageTemplate = {
 };
 
 /** Par quel canal le parent a réellement été joint. Vide tant qu'il ne l'est pas. */
-export type SentChannel = "whatsapp" | "sms" | "manual" | "";
+export type SentChannel = "whatsapp" | "sms" | "manual" | "group" | "";
 
 export type CampaignRecipient = RecipientDraft & {
   id: string;
@@ -374,6 +374,33 @@ export async function markRecipient(
     .eq("id", recipientId)
     .select("id");
   confirmWrite(result, "la mise à jour de ce destinataire");
+}
+
+/**
+ * Marque d'un coup tous les parents encore en attente.
+ *
+ * Employé pour l'envoi au groupe de la classe : le message part une fois, et
+ * il atteint toutes les familles à la fois. Les laisser « en attente »
+ * ligne par ligne laisserait croire à un travail inachevé, et le secrétariat
+ * les relancerait une seconde fois par WhatsApp.
+ */
+export async function markAllPending(
+  campaignId: string,
+  channel: SentChannel,
+  failureReason = "",
+): Promise<number> {
+  const result = await createClient()
+    .from("message_recipients")
+    .update({
+      status: "sent",
+      failure_reason: failureReason || null,
+      sent_at: new Date().toISOString(),
+      sent_channel: channelToStore("sent", channel),
+    })
+    .eq("campaign_id", campaignId)
+    .eq("status", "pending")
+    .select("id");
+  return confirmWrite(result, "l’enregistrement de l’envoi au groupe de la classe").length;
 }
 
 /** Recalcule l'avancement d'une campagne à partir de l'état réel de ses lignes. */

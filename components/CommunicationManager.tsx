@@ -10,8 +10,10 @@ import {
   Filter,
   MessageSquare,
   Send,
+  ShieldAlert,
   SkipForward,
   Smartphone,
+  Users2,
   Users,
   X,
 } from "lucide-react";
@@ -23,6 +25,7 @@ import {
   listCampaignRecipients,
   listCampaigns,
   listTemplates,
+  markAllPending,
   markRecipient,
   refreshCampaignProgress,
   resolveBodyFor,
@@ -41,6 +44,15 @@ import {
   buildWhatsAppAppLink,
   buildWhatsAppLink,
 } from "@/lib/communication/whatsapp";
+import {
+  buildGroupShareLink,
+  groupBody,
+  groupSendVerdict,
+  loadClassGroups,
+  removeClassGroup,
+  saveClassGroup,
+  type ClassWhatsAppGroup,
+} from "@/lib/communication/groups";
 import styles from "./CommunicationManager.module.css";
 
 const AUDIENCES: Array<{ kind: AudienceKind; label: string; hint: string }> = [
@@ -69,6 +81,16 @@ export function CommunicationManager() {
   const [recipients, setRecipients] = useState<CampaignRecipient[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
+  /**
+   * Les groupes WhatsApp déclarés, et la catégorie du modèle employé.
+   *
+   * La catégorie compte autant que le texte : une convocation rédigée en
+   * toutes lettres ne porte aucune variable, et ne concerne pas moins une
+   * seule famille.
+   */
+  const [classGroups, setClassGroups] = useState<ClassWhatsAppGroup[]>([]);
+  const [category, setCategory] = useState("general");
+  const [groupPanel, setGroupPanel] = useState(false);
 
   const levels = useMemo(
     () => [...new Set(classes.map((item) => item.level).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr")),
@@ -99,6 +121,7 @@ export function CommunicationManager() {
         ]);
         setTemplates(templateList);
         setCampaigns(campaignList);
+        setClassGroups(await loadClassGroups(school.id));
       } catch (error) {
         setNotice({ kind: "error", text: error instanceof Error ? error.message : "Chargement impossible." });
       }
@@ -182,6 +205,64 @@ export function CommunicationManager() {
     setCampaigns(await listCampaigns(schoolId));
   }
 
+  /**
+   * L'envoi au groupe de la classe.
+   *
+   * WhatsApp n'ouvre pas ses conversations à une page web : le logiciel
+   * compose, l'humain dépose. Le message part donc dans le presse-papiers
+   * **et** WhatsApp s'ouvre — si le sélecteur de conversation n'apparaît pas
+   * sur ce poste, le surveillant colle lui-même dans le groupe. Rien n'est
+   * perdu dans un cas comme dans l'autre.
+   */
+  async function sendToGroup() {
+    const group = classGroups.find((item) => item.classId === classId);
+    if (!group || !campaignId) return;
+    const verdict = groupSendVerdict({ body, audienceKind: audience, category });
+    if (!verdict.allowed) {
+      setNotice({ kind: "error", text: verdict.reason });
+      return;
+    }
+    const message = groupBody(body, {
+      className: selectedClass?.name || "",
+      schoolName,
+    });
+    // La copie et l'ouverture partent avant tout « await » : un navigateur ne
+    // laisse ouvrir un onglet que dans le geste de l'utilisateur.
+    const copied = navigator.clipboard?.writeText(message);
+    window.open(buildGroupShareLink(message), "_blank", "noopener");
+    setBusy(true);
+    try {
+      await copied?.catch(() => undefined);
+      const count = await markAllPending(campaignId, "group");
+      await refreshCampaignProgress(campaignId);
+      setRecipients(await listCampaignRecipients(campaignId));
+      setCampaigns(await listCampaigns(schoolId));
+      setNotice({
+        kind: "success",
+        text: `Message copié et WhatsApp ouvert. Déposez-le dans « ${group.groupName} » : ${count} famille(s) sont comptées comme informées.`,
+      });
+    } catch (error) {
+      setNotice({ kind: "error", text: error instanceof Error ? error.message : "Enregistrement impossible." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveGroup(classIdentifier: string, name: string, link: string) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      if (!name.trim()) await removeClassGroup(classIdentifier);
+      else await saveClassGroup(schoolId, classIdentifier, name, link);
+      setClassGroups(await loadClassGroups(schoolId));
+      setNotice({ kind: "success", text: name.trim() ? "Groupe enregistré." : "Groupe retiré." });
+    } catch (error) {
+      setNotice({ kind: "error", text: error instanceof Error ? error.message : "Enregistrement impossible." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function changeStatus(recipient: CampaignRecipient, status: "pending" | "skipped") {
     await markRecipient(recipient.id, status, status === "skipped" ? "Ignoré par le secrétariat." : "");
     await refreshCampaignProgress(campaignId);
@@ -216,6 +297,9 @@ export function CommunicationManager() {
    */
   const handled = recipients.filter((item) => item.status !== "pending");
   const current = pending[0];
+  /** Le groupe de la classe visée, et le droit d'y écrire ce message-ci. */
+  const classGroup = classGroups.find((item) => item.classId === classId);
+  const verdict = groupSendVerdict({ body, audienceKind: audience, category });
   const preview = drafts[0] ? resolveBodyFor(body, drafts[0], schoolName) : "";
 
   return (
@@ -375,6 +459,7 @@ export function CommunicationManager() {
                 onClick={() => {
                   setTitle(template.name);
                   setBody(template.body);
+                  setCategory(template.category || "general");
                 }}
               >
                 {template.name}
@@ -447,6 +532,54 @@ export function CommunicationManager() {
               Chaque bouton ouvre WhatsApp avec le message déjà écrit. Il ne vous reste qu’à appuyer sur
               envoyer, puis à revenir ici — la ligne passe automatiquement en « envoyé ».
             </p>
+
+            {/*
+              L'envoi au groupe de la classe.
+
+              C'est la pratique réelle des établissements : un groupe par
+              classe, tenu par les surveillants. Le logiciel ne s'y substitue
+              pas — il compose le message et le dépose dans le presse-papiers.
+              Vingt classes font vingt gestes, au lieu de mille deux cents.
+            */}
+            {audience === "class" && classGroup && verdict.allowed && pending.length > 0 && (
+              <div className={styles.groupSend}>
+                <div>
+                  <b>
+                    <Users2 /> Envoyer au groupe « {classGroup.groupName} »
+                  </b>
+                  <small>
+                    Un seul geste pour les {pending.length} famille(s) restantes. Le message est copié
+                    et WhatsApp s’ouvre : choisissez le groupe, collez, envoyez.
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className={styles.primary}
+                  disabled={busy}
+                  onClick={() => void sendToGroup()}
+                >
+                  <Users2 /> Message au groupe
+                </button>
+              </div>
+            )}
+
+            {/*
+              Le refus, expliqué.
+
+              Un groupe classe est une place publique : soixante parents y
+              lisent tout. Un bulletin, un impayé ou une absence n'y ont pas
+              leur place — et c'est précisément ce qui arrive quand on envoie
+              vite, depuis un téléphone. Ici, le logiciel dit non et donne sa
+              raison.
+            */}
+            {audience === "class" && classGroup && !verdict.allowed && pending.length > 0 && (
+              <div className={styles.groupBlocked}>
+                <b>
+                  <ShieldAlert /> Ce message ne partira pas dans le groupe de la classe
+                </b>
+                <small>{verdict.reason}</small>
+              </div>
+            )}
 
             {/*
               L'envoi enchaîné.
@@ -535,7 +668,9 @@ export function CommunicationManager() {
                           ? " · SMS"
                           : recipient.sentChannel === "whatsapp"
                             ? " · WhatsApp"
-                            : ""}
+                            : recipient.sentChannel === "group"
+                              ? " · Groupe classe"
+                              : ""}
                       </span>
                     )}
                     {recipient.status === "pending" && (
@@ -601,6 +736,69 @@ export function CommunicationManager() {
             )}
           </section>
         )}
+
+        {/*
+          Le registre des groupes.
+
+          Déclaré une fois par classe, en début d'année. Le nom doit être celui
+          qui apparaît dans WhatsApp — c'est lui que le surveillant cherchera
+          dans sa liste de conversations. Le lien d'invitation ne sert pas à
+          envoyer : il sert à faire entrer un parent arrivé en cours d'année.
+        */}
+        <section className={styles.card}>
+          <h2>
+            <Users2 /> Groupes WhatsApp des classes
+            <button
+              type="button"
+              className={styles.ghost}
+              style={{ marginLeft: "auto" }}
+              onClick={() => setGroupPanel((open) => !open)}
+            >
+              {groupPanel ? "Replier" : `Gérer (${classGroups.length}/${classes.length})`}
+            </button>
+          </h2>
+          <p className={styles.muted}>
+            Déclarez ici le groupe de chaque classe pour pouvoir y déposer un message en un geste.
+            Laissez le nom vide pour retirer un groupe.
+          </p>
+          {groupPanel && (
+            <ul className={styles.groupList}>
+              {classes.map((item) => {
+                const existing = classGroups.find((entry) => entry.classId === item.id);
+                return (
+                  <li key={item.id}>
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const data = new FormData(event.currentTarget);
+                        void saveGroup(
+                          item.id,
+                          String(data.get("groupName") || ""),
+                          String(data.get("inviteLink") || ""),
+                        );
+                      }}
+                    >
+                      <b>{item.name}</b>
+                      <input
+                        name="groupName"
+                        defaultValue={existing?.groupName || ""}
+                        placeholder="Nom du groupe dans WhatsApp"
+                      />
+                      <input
+                        name="inviteLink"
+                        defaultValue={existing?.inviteLink || ""}
+                        placeholder="Lien d’invitation (facultatif)"
+                      />
+                      <button type="submit" className={styles.ghost} disabled={busy}>
+                        Enregistrer
+                      </button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
 
         <section className={styles.card}>
           <h2>
