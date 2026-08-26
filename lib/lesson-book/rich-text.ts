@@ -22,26 +22,72 @@
 
 /** Les balises que l'éditeur de l'application sait produire, et rien d'autre. */
 const ALLOWED_TAGS = new Set([
-  "p", "br", "strong", "b", "em", "i", "u", "s",
+  "p", "br", "hr", "strong", "b", "em", "i", "u", "s",
   "ul", "ol", "li", "h3", "h4", "a", "span", "blockquote",
+  // Le navigateur crée des « div » pour séparer les lignes d'une zone
+  // éditable : les refuser ferait fondre les paragraphes en un seul bloc.
+  "div",
+  // Exposant et indice : « 1er », « m² », « H₂O ». Un enseignant de sciences
+  // comme de français en a besoin, et rien ne les remplace.
+  "sup", "sub",
 ]);
 
 /** Balises dont le contenu entier doit disparaître, pas seulement la balise. */
 const DROP_WITH_CONTENT = ["script", "style", "iframe", "object", "embed", "svg", "math"];
 
 /** Balises sans fermeture. */
-const VOID_TAGS = new Set(["br"]);
+const VOID_TAGS = new Set(["br", "hr"]);
 
 const ALLOWED_ATTRIBUTES: Record<string, Set<string>> = {
   a: new Set(["href", "title"]),
   span: new Set(["style"]),
+  // L'alignement se pose sur le bloc, pas sur le texte : c'est ainsi que le
+  // navigateur l'écrit, et c'est la seule façon de centrer un titre.
+  p: new Set(["style"]),
+  h3: new Set(["style"]),
+  h4: new Set(["style"]),
+  li: new Set(["style"]),
+  blockquote: new Set(["style"]),
+  div: new Set(["style"]),
 };
 
 /** Protocoles admis dans un lien. « javascript: » et « data: » en sont exclus. */
 const SAFE_PROTOCOL = /^(https?:|mailto:|tel:)/i;
 
-/** Seule déclaration de style acceptée : une couleur de texte. */
-const SAFE_STYLE = /^\s*color\s*:\s*(#[0-9a-f]{3,8}|rgb\([\d\s,.%]+\)|[a-z]+)\s*;?\s*$/i;
+/**
+ * Les seules déclarations de style admises, propriété par propriété.
+ *
+ * On ne valide pas la chaîne entière d'un coup : « color:red;position:fixed »
+ * passerait ou échouerait en bloc, alors qu'il faut garder la première et
+ * jeter la seconde. Chaque déclaration est donc examinée seule, et seules
+ * celles qui figurent ici survivent.
+ *
+ * Ce qui reste dehors est aussi important que ce qui entre : ni « position »,
+ * ni « background » (qui accepte une image, donc une adresse), ni « content »,
+ * ni « transform ». Une mise en forme de cahier de textes n'en a pas besoin,
+ * et chacune ouvrirait un moyen de recouvrir la page.
+ */
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\)|[a-z]+)$/i;
+const SAFE_DECLARATIONS: Record<string, RegExp> = {
+  color: SAFE_COLOR,
+  // « background-color » et non « background » : le second accepte une image.
+  "background-color": SAFE_COLOR,
+  "text-align": /^(left|right|center|justify)$/i,
+};
+
+function safeStyle(value: string): string {
+  const gardees: string[] = [];
+  for (const declaration of value.split(";")) {
+    const separateur = declaration.indexOf(":");
+    if (separateur < 0) continue;
+    const propriete = declaration.slice(0, separateur).trim().toLowerCase();
+    const contenu = declaration.slice(separateur + 1).trim();
+    const motif = SAFE_DECLARATIONS[propriete];
+    if (!motif || !motif.test(contenu)) continue;
+    gardees.push(`${propriete}:${contenu}`);
+  }
+  return gardees.join(";");
+}
 
 function escapeAttribute(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -73,8 +119,9 @@ function readAttributes(brut: string, tag: string): string {
       continue;
     }
     if (nom === "style") {
-      if (!SAFE_STYLE.test(valeur)) continue;
-      sortie.push(`style="${escapeAttribute(valeur)}"`);
+      const propre = safeStyle(valeur);
+      if (!propre) continue;
+      sortie.push(`style="${escapeAttribute(propre)}"`);
       continue;
     }
     sortie.push(`${nom}="${escapeAttribute(valeur)}"`);
@@ -147,8 +194,8 @@ export function sanitizeRichText(input: string): string {
  */
 export function richTextToPlain(input: string): string {
   return sanitizeRichText(input)
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/(p|li|h3|h4|blockquote)>/gi, " ")
+    .replace(/<(br|hr)\s*\/?>/gi, " ")
+    .replace(/<\/(p|div|li|h3|h4|blockquote)>/gi, " ")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")

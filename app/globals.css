@@ -1543,10 +1543,18 @@ textarea:focus {
 .rte-toolbar button:hover{background:#eaf4ef;border-color:#cfe2da;color:#08734f}
 .rte-toolbar button svg{width:16px;height:16px}
 .rte-sep{width:1px;height:20px;background:#dbe6e1;margin:0 4px}
-.rte-colors{display:inline-flex;align-items:center;gap:4px;padding:0 4px}
-.rte-colors svg{width:15px;height:15px;color:#7c8783}
-.rte-color{width:16px!important;height:16px!important;border-radius:50%!important;border:1px solid rgba(0,0,0,.18)!important;padding:0;cursor:pointer}
+/* Les palettes qui s'ouvrent sous leur bouton : couleur, surlignage,
+   caractères spéciaux. Une seule à la fois — deux ouvertes se recouvriraient. */
+.rte-pop{position:relative;display:inline-flex}
+.rte-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:12;display:flex;flex-wrap:wrap;gap:5px;
+  padding:8px;background:#fff;border:1px solid #cfe2da;border-radius:10px;
+  box-shadow:0 10px 26px rgba(12,50,35,.16)}
+.rte-color{width:18px!important;height:18px!important;border-radius:50%!important;
+  border:1px solid rgba(0,0,0,.20)!important;padding:0;cursor:pointer}
 .rte-color:hover{transform:scale(1.15)}
+/* Six caractères par ligne : la grille reste compacte et se lit d'un coup. */
+.rte-chars{width:236px}
+.rte-chars button{width:32px!important;height:30px!important;font-size:15px;line-height:1}
 .rte-zone{min-height:190px;max-height:46vh;overflow:auto;padding:13px 15px;font-size:14px;line-height:1.65;color:#1f2e28;outline:none}
 .rte-zone:focus{box-shadow:inset 0 0 0 2px #cfe7dc}
 /* Le texte d'invite disparaît dès la première frappe : « :empty » ne suffit

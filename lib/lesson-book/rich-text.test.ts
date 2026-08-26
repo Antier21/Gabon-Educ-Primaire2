@@ -130,3 +130,45 @@ describe("richTextExcerpt", () => {
     expect(extrait).not.toContain("noti…");
   });
 });
+
+describe("sanitizeRichText — la barre étendue", () => {
+  it("garde l’alignement d’un bloc", () => {
+    expect(sanitizeRichText('<p style="text-align:center">Titre</p>')).toBe(
+      '<p style="text-align:center">Titre</p>',
+    );
+  });
+
+  it("garde le surlignage et la couleur ensemble", () => {
+    expect(
+      sanitizeRichText('<span style="color:#111;background-color:#fde68a">clé</span>'),
+    ).toBe('<span style="color:#111;background-color:#fde68a">clé</span>');
+  });
+
+  it("garde exposant, indice et trait horizontal", () => {
+    expect(sanitizeRichText("<p>m<sup>2</sup> et H<sub>2</sub>O</p><hr>")).toBe(
+      "<p>m<sup>2</sup> et H<sub>2</sub>O</p><hr>",
+    );
+  });
+
+  it("trie déclaration par déclaration au lieu de tout accepter ou tout rejeter", () => {
+    // C'est le cœur de la règle : « color » survit, « position » disparaît,
+    // dans la même chaîne de style.
+    expect(
+      sanitizeRichText('<p style="color:red;position:fixed;top:0">Texte</p>'),
+    ).toBe('<p style="color:red">Texte</p>');
+  });
+
+  it("refuse « background » qui accepterait une image", () => {
+    // « background-color » est permis, « background » ne l'est pas : le second
+    // accepte une adresse, donc un moyen de charger autre chose.
+    expect(sanitizeRichText('<p style="background:url(https://x)">T</p>')).toBe("<p>T</p>");
+  });
+
+  it("refuse un alignement inventé", () => {
+    expect(sanitizeRichText('<p style="text-align:expression(1)">T</p>')).toBe("<p>T</p>");
+  });
+
+  it("retire un style vidé de toute déclaration admise", () => {
+    expect(sanitizeRichText('<p style="z-index:9;opacity:0">T</p>')).toBe("<p>T</p>");
+  });
+});
