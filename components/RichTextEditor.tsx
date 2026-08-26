@@ -98,6 +98,29 @@ const CARACTERES = [
   "°", "×", "÷", "≤", "≥", "≠",
 ];
 
+/**
+ * Un bouton d'outil.
+ *
+ * Déclaré au-dehors, et c'est nécessaire : défini à l'intérieur du composant,
+ * React voyait un type de composant différent à chaque rendu et démontait puis
+ * remontait les vingt boutons de la barre à chaque frappe de l'enseignant.
+ */
+function Outil({
+  icone: Icone,
+  titre,
+  action,
+}: {
+  icone: typeof Bold;
+  titre: string;
+  action: () => void;
+}) {
+  return (
+    <button type="button" onClick={action} title={titre} aria-label={titre}>
+      <Icone />
+    </button>
+  );
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -159,23 +182,6 @@ export function RichTextEditor({
       return;
     }
     commande("createLink", url);
-  }
-
-  /** Un bouton d'outil, pour ne pas répéter dix fois la même déclaration. */
-  function Outil({
-    icone: Icone,
-    titre,
-    action,
-  }: {
-    icone: typeof Bold;
-    titre: string;
-    action: () => void;
-  }) {
-    return (
-      <button type="button" onClick={action} title={titre} aria-label={titre}>
-        <Icone />
-      </button>
-    );
   }
 
   return (
@@ -297,8 +303,8 @@ export function RichTextEditor({
             type="button"
             className="rte-attach"
             onClick={onAttach}
-            title="Joindre une fiche pédagogique"
-            aria-label="Joindre une fiche pédagogique"
+            title="Joindre un fichier (PDF, image, Word…)"
+            aria-label="Joindre un fichier"
           >
             <Paperclip />
             {attachCount > 0 && <span>{attachCount}</span>}

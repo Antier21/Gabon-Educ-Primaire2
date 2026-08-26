@@ -719,13 +719,32 @@ export function LessonBookManager() {
             La fiche de préparation, second type de pièce jointe : elle vit
             déjà en base, on la désigne au lieu de la téléverser.
           */}
-          <button
-            type="button"
-            className={styles.linkPlan}
-            onClick={() => setChoixFiche((ouvert) => !ouvert)}
-          >
-            {choixFiche ? "Fermer" : "Joindre plutôt une fiche de préparation"}
-          </button>
+          {/*
+            Deux chemins vers la même chose.
+
+            Le trombone de la barre est là où la main le cherche, mais il est
+            petit et se confond avec vingt autres icônes. Ce bouton nommé dit
+            ce qu'il fait — et si l'un des deux venait à ne pas répondre, il
+            reste l'autre. Une fonction qui n'a qu'une porte n'en a aucune le
+            jour où elle se bloque.
+          */}
+          <div className={styles.attachActions}>
+            <button
+              type="button"
+              className={styles.ghost}
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Paperclip /> Joindre un fichier
+            </button>
+            <button
+              type="button"
+              className={styles.linkPlan}
+              onClick={() => setChoixFiche((ouvert) => !ouvert)}
+            >
+              {choixFiche ? "Fermer" : "ou joindre une fiche de préparation"}
+            </button>
+          </div>
 
           {choixFiche && (
             <div className={styles.plans}>
