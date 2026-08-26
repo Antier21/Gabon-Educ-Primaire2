@@ -91,6 +91,13 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
    * saisit et imprime, il ne décide pas de la remise aux familles.
    */
   const [mayPublish, setMayPublish] = useState(false);
+  /**
+   * Les rôles réellement lus, pour pouvoir expliquer une absence de bouton.
+   *
+   * Masquer sans rien dire a déjà coûté deux échanges : la direction cherchait
+   * un bouton que l'écran avait décidé de cacher.
+   */
+  const [myRoles, setMyRoles] = useState<string[]>([]);
   const [publications, setPublications] = useState<ReportPublication[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -111,6 +118,7 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
         // Le secrétariat est écarté : il assiste la direction, il ne décide
         // pas de la remise des bulletins aux familles.
         const roles = await resolveMyRoles(school.id);
+        setMyRoles(roles?.roles ? [...roles.roles] : []);
         setMayPublish(
           space === "admin" &&
             Boolean(
@@ -351,6 +359,20 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
 
         {error && <p className={styles.error}><TriangleAlert /> {error}</p>}
         {message && !error && <p className={styles.ok}>{message}</p>}
+        {/*
+          Quand le bouton manque, l'écran dit pourquoi. Un rôle absent, un
+          établissement actif qui n'est pas celui de l'appartenance, une
+          adhésion inactive : trois causes invisibles, qui se ressemblent
+          toutes à l'écran si l'on se contente de masquer.
+        */}
+        {isAdmin && ready && !mayPublish && (
+          <p className={styles.draftTag}>
+            Publication réservée à la direction. Ce compte porte{" "}
+            {myRoles.length ? `le rôle « ${myRoles.join(" », « ")} »` : "aucun rôle actif"} dans
+            l’établissement {schoolName || "actif"}. Il faut « school_admin », « headmaster » ou
+            « academic_director », avec une appartenance active dans cet établissement.
+          </p>
+        )}
         {ready && (
           <p className={published ? styles.publishedTag : styles.draftTag}>
             {published
