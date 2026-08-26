@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
-  BookOpen, BriefcaseBusiness, CalendarDays, ChevronDown, ClipboardCheck, ExternalLink,
+  BookOpen, BriefcaseBusiness, CalendarDays, CalendarRange, ChevronDown, ClipboardCheck, ExternalLink,
   GraduationCap, HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
   PenLine, Printer, School, ShieldCheck, UserRound, Users, X, PhoneCall} from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
@@ -88,6 +88,11 @@ const adminGroups: AdminGroup[] = [
       { label: "Modèle de bulletin", href: "/gabon-educ/modele-bulletin" },
       { label: "Bulletins et publication", href: "/gabon-educ/bulletins-publication" },
       { label: "Cahier de textes", href: "/gabon-educ/cahier-de-textes" },
+      {
+        label: "Progression annuelle",
+        href: "/gabon-educ/cahier-de-textes/progression",
+        external: true,
+      },
       { label: "Fiches de préparation", href: "/gabon-educ/mes-fiches" },
     ],
   },
@@ -199,7 +204,21 @@ export function AdminMegaNav({ onLogout, role }: { onLogout: () => void; role?: 
                 <ChevronDown className="admin-nav-chevron" />
               </button>
               <div className="admin-nav-dropdown" role="menu">
-                {group.items.map(item => <Link key={`${group.label}-${item.label}`} href={item.href} role="menuitem" onClick={() => { setOpenGroup(null); setMobileOpen(false); }}>{item.label}</Link>)}
+                {group.items.map(item => {
+                  const fermer = () => { setOpenGroup(null); setMobileOpen(false); };
+                  // « external » ouvre un onglet à part. Le menu simple le
+                  // faisait déjà ; ici l'attribut était lu puis ignoré, et la
+                  // même entrée se comportait différemment selon l'espace.
+                  if (item.external) {
+                    return (
+                      <a key={`${group.label}-${item.label}`} href={item.href} role="menuitem"
+                        target="_blank" rel="noopener noreferrer" onClick={fermer}>
+                        {item.label}<ExternalLink />
+                      </a>
+                    );
+                  }
+                  return <Link key={`${group.label}-${item.label}`} href={item.href} role="menuitem" onClick={fermer}>{item.label}</Link>;
+                })}
               </div>
             </div>
           );
@@ -235,6 +254,18 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
     // écrite avant le cours. Les confondre sous un même libellé conduisait
     // à publier des brouillons aux familles.
     { label: "Cahier de textes", href: "/gabon-educ/cahier-de-textes", icon: NotebookPen },
+    /*
+     * La progression annuelle est un sous-menu du cahier de textes, et elle
+     * s'ouvre dans un onglet à part : on la consulte EN ÉCRIVANT la séance du
+     * jour — « où en étais-je du programme ? » — et remplacer la page de
+     * saisie par le tableau ferait perdre le brouillon en cours.
+     */
+    {
+      label: "Progression annuelle",
+      href: "/gabon-educ/cahier-de-textes/progression",
+      icon: CalendarRange,
+      external: true,
+    },
     { label: "Fiches de préparation", href: "/gabon-educ/mes-fiches", icon: BookOpen },
     { label: "Notes", href: "/gabon-educ/notes", icon: ClipboardCheck },
     { label: "Saisie du bulletin", href: "/gabon-educ/saisie-bulletin", icon: PenLine },

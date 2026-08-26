@@ -1587,3 +1587,48 @@ textarea:focus {
 .rte-read h3{font-size:14px;margin:11px 0 5px;color:#08734f}
 .rte-read ul,.rte-read ol{margin:0 0 7px;padding-left:20px}
 .rte-read a{color:#08734f;text-decoration:underline}
+
+/* ------------------------------------------------------------------
+   Impression de la progression annuelle.
+
+   Ces règles vivent ici et non dans le module du composant : un module CSS
+   n'accepte pas de sélecteur portant sur « body », et c'est le corps de page
+   qui reçoit la classe le temps du tirage. Même mécanique que le bulletin et
+   la fiche d'inscription.
+
+   Le format : paysage, et par une page NOMMÉE. Un « @page » anonyme ne se
+   laisse pas conditionner par une classe — en poser un second ici ferait
+   basculer aussi le bulletin, qui s'imprime en portrait. Une page nommée ne
+   s'applique qu'à l'élément qui la réclame. Cinq colonnes dont deux pleines de
+   texte ne tiennent pas en portrait : on y obtenait trois séances par feuille.
+   Un navigateur qui ignorerait les pages nommées retombe en portrait, ce qui
+   reste lisible.
+   ------------------------------------------------------------------ */
+@media print{
+  @page progression-paysage{ size:A4 landscape; margin:12mm; }
+  body.printing-progression .progression-sheet{ page:progression-paysage }
+  body.printing-progression{min-height:0!important;height:auto!important;margin:0!important;background:#fff!important}
+  body.printing-progression .progression-page{min-height:0!important;padding:0!important;background:#fff!important}
+  /* Tout ce qui n'est pas la feuille disparaît : la barre du haut, le choix de
+     la classe, les compteurs, l'avertissement des séances non remises. Ce sont
+     des commandes d'écran ; sur papier elles ne commandent rien. */
+  body.printing-progression .progression-page > :not(.progression-sheet){display:none!important}
+  body.printing-progression .progression-sheet{
+    display:block!important;max-width:none!important;margin:0!important;padding:0!important;background:#fff}
+  /* Une ligne de séance ne doit pas être coupée en deux par un saut de page :
+     le contenu resterait sur une feuille et le travail à effectuer sur la
+     suivante. Le titre de période, lui, ne doit pas rester seul en bas. */
+  body.printing-progression .progression-sheet tr{break-inside:avoid;page-break-inside:avoid}
+  body.printing-progression .progression-sheet h2{break-after:avoid;page-break-after:avoid}
+  body.printing-progression .progression-sheet thead{display:table-header-group}
+  body.printing-progression .progression-sheet table{font-size:8.5pt}
+  /* Sur papier, l'aération de l'écran devient de la place perdue : chaque
+     millimètre repris aux marges intérieures est une séance de plus par
+     feuille. Les sélecteurs d'élément suffisent ici ; tout ce qui vise une
+     classe du composant vit dans son module, où les noms sont réécrits. */
+  body.printing-progression .progression-sheet th,
+  body.printing-progression .progression-sheet td{padding:4px 6px}
+  /* Les fonds pâles des en-têtes et des lignes alternées doivent sortir tels
+     quels : sans cela, un tableau de cent lignes perd ses repères. */
+  body.printing-progression .progression-sheet{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}

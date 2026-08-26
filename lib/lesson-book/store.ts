@@ -347,15 +347,19 @@ export type Homework = {
   durationMinutes: number | null;
 };
 
-export async function loadHomework(entryId: string): Promise<Homework[]> {
-  if (!entryId) return [];
-  const { data, error } = await createClient()
-    .from("lesson_book_homework")
-    .select("id,description_html,due_date,submission_mode,duration_minutes,position")
-    .eq("entry_id", entryId)
-    .order("position");
-  if (error) throw new Error(describe(error));
-  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+/** Les colonnes d'un travail, dans l'ordre où on les relit partout. */
+export const HOMEWORK_COLUMNS =
+  "id,entry_id,description_html,due_date,submission_mode,duration_minutes,position";
+
+/**
+ * Une ligne de la base rendue à sa forme d'écran.
+ *
+ * Exportée parce que la progression annuelle relit les devoirs de cent
+ * cinquante séances en une seule requête : elle a besoin de la même conversion
+ * sans pouvoir passer par « loadHomework », qui n'en lit qu'une.
+ */
+export function homeworkFromRow(row: Record<string, unknown>): Homework {
+  return {
     id: String(row.id),
     description: richTextToLines(String(row.description_html || "")),
     dueDate: String(row.due_date || ""),
@@ -364,7 +368,18 @@ export async function loadHomework(entryId: string): Promise<Homework[]> {
       row.duration_minutes === null || row.duration_minutes === undefined
         ? null
         : Number(row.duration_minutes),
-  }));
+  };
+}
+
+export async function loadHomework(entryId: string): Promise<Homework[]> {
+  if (!entryId) return [];
+  const { data, error } = await createClient()
+    .from("lesson_book_homework")
+    .select(HOMEWORK_COLUMNS)
+    .eq("entry_id", entryId)
+    .order("position");
+  if (error) throw new Error(describe(error));
+  return ((data || []) as unknown as Array<Record<string, unknown>>).map(homeworkFromRow);
 }
 
 /**

@@ -1,0 +1,130 @@
+/* La progression annuelle.
+ *
+ * Même jaune de papier que le cahier de la semaine : les deux écrans sont le
+ * même document, vu de près puis de loin. La feuille, elle, reste franchement
+ * blanche — c'est elle qui s'imprime. */
+.page{min-height:100vh;background:#fbf7e9}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  min-height:76px;padding:11px 26px;background:#fffdf6;border-bottom:1px solid #ece3c8;
+  position:sticky;top:0;z-index:20}
+.topLeft{display:flex;align-items:center;gap:13px}
+.topLeft>div{display:flex;flex-direction:column}
+.topLeft b{font-size:14.5px;color:#20302a}
+.topLeft small{color:var(--muted);font-size:12px}
+.topActions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+
+.primary{display:inline-flex;align-items:center;gap:7px;padding:10px 17px;border:0;border-radius:999px;
+  background:#08734f;color:#fff;font:inherit;font-weight:600;font-size:13.5px;cursor:pointer}
+.primary:disabled{opacity:.5;cursor:not-allowed}
+.ghost{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border:1px solid #d8e3de;
+  border-radius:999px;background:#fff;color:#3d4d47;font:inherit;font-size:13px;cursor:pointer}
+.ghost:hover{border-color:#08734f;color:#08734f}
+.primary svg,.ghost svg{width:15px;height:15px}
+
+.error{margin:14px 26px 0;padding:12px 16px;border-radius:11px;background:#fdecea;color:#96271b;
+  font-size:14px;display:flex;align-items:center;gap:8px}
+.error svg{width:18px;height:18px;flex:none}
+.warn{display:flex;align-items:flex-start;gap:8px;margin:12px 26px 0;padding:11px 15px;border-radius:11px;
+  background:#fff6e4;color:#7a5300;font-size:13px;line-height:1.55;max-width:1360px}
+.warn svg{width:17px;height:17px;flex:none;margin-top:1px}
+
+/* Le choix de la classe et les totaux : ce qui commande la feuille, au-dessus
+   d'elle, et qui ne s'imprime pas. */
+.filters{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  max-width:1360px;margin:16px auto 0;padding:0 26px}
+.filters label{display:grid;gap:6px;font-size:11.5px;font-weight:800;color:#4a5a54}
+.filters select{padding:10px 12px;border:1px solid #cedbd5;border-radius:9px;font:inherit;
+  font-size:13.5px;font-weight:400;background:#fff;min-width:260px}
+.filters select:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f}
+
+.counters{display:flex;gap:9px;flex-wrap:wrap}
+.counters span{display:flex;flex-direction:column;padding:8px 14px;border-radius:11px;background:#fffdf6;
+  border:1px solid #ece3c8;font-size:11px;color:#7c7250;min-width:96px}
+.counters b{font-size:17px;color:#20302a;line-height:1.2}
+
+/* La feuille : c'est elle, et elle seule, qui part à l'imprimante. */
+.sheet{max-width:1360px;margin:16px auto;padding:24px 26px 60px}
+.sheetHead{display:flex;align-items:flex-start;gap:16px;padding-bottom:14px;margin-bottom:18px;
+  border-bottom:2px solid #20302a}
+.logo{width:64px;height:64px;object-fit:contain;flex:none}
+.sheetTitles{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sheetTitles small{font-size:11px;color:#5a6a64}
+.sheetTitles>b{font-size:13.5px;color:#20302a;margin-top:3px}
+.sheetTitles h1{margin:7px 0 3px;font-size:19px;color:#08734f}
+.sheetTitles p{margin:0;font-size:13px;color:#3d4d47}
+
+.hint{margin:0;padding:40px 10px;color:var(--muted);font-size:13.5px;line-height:1.6;text-align:center;
+  background:#fff;border:1px solid #eae2ca;border-radius:15px}
+
+.period{margin-bottom:26px}
+.period h2{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  margin:0 0 8px;padding:8px 12px;border-radius:9px;background:#eef7f2;font-size:14px;color:#08734f}
+.period h2 small{font-weight:400;font-size:11.5px;color:#5b6b65}
+
+.table{width:100%;border-collapse:collapse;background:#fff;font-size:12.5px}
+.table th,.table td{border:1px solid #d8e3de;padding:8px 10px;vertical-align:top;text-align:left}
+.table th{background:#f4f8f6;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#5b6b65}
+.table tbody tr:nth-child(even) td{background:#fcfdfc}
+
+.colNum{width:34px;text-align:center;color:#8b968f;font-variant-numeric:tabular-nums}
+.colDate{width:96px}
+.colDate b{display:block;font-size:12px;color:#20302a}
+.colDate small{color:#7c8783;font-size:10.5px;font-variant-numeric:tabular-nums}
+.colWork{width:31%}
+.colState{width:74px;text-align:center}
+
+.title{display:block;font-size:13px;color:#20302a;margin-bottom:3px}
+/* Le contenu garde sa mise en forme, mais pas ses marges : dans une cellule,
+   les paragraphes d'un éditeur creuseraient des trous entre chaque ligne. */
+.content{line-height:1.5;color:#33433d}
+.content :global(p),.content :global(ul),.content :global(ol),
+.content :global(h3),.content :global(h4){margin:0 0 4px}
+.content :global(ul),.content :global(ol){padding-left:18px}
+.content :global(hr){border:0;border-top:1px solid #dde8e3;margin:6px 0}
+.content :global(a){color:#08734f;text-decoration:underline}
+
+.tags{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:5px}
+.tags em{font-style:normal;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;
+  padding:2px 6px;border-radius:999px;background:#eef4f1;color:#5b6b65}
+.tags i{font-style:normal;font-size:10.5px;color:#7c8783}
+.pieces{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:#08734f}
+.pieces svg{width:11px;height:11px}
+
+.work{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.work li{display:flex;flex-direction:column;gap:1px;padding-left:9px;border-left:2px solid #cfe2da}
+.work span{white-space:pre-line;line-height:1.45;color:#33433d}
+.work small{font-size:10.5px;color:#7c8783}
+.none{color:#c3ccc8}
+
+.done,.draft{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.04em;padding:3px 7px;border-radius:999px}
+.done{background:#e7f5ee;color:#08734f}
+.draft{background:#fff3d9;color:#8b690e}
+
+@media (max-width:900px){
+  .filters{flex-direction:column;align-items:stretch}
+  .filters select{min-width:0;width:100%}
+  .sheet{padding:16px 12px 50px}
+  /* Le tableau ne se replie pas : il défile dans sa propre boîte plutôt que de
+     pousser la page entière vers la droite. */
+  .table{display:block;overflow-x:auto;white-space:normal;min-width:0}
+}
+
+/* L'impression.
+ *
+ * L'isolation — masquer tout ce qui n'est pas la feuille — vit dans la feuille
+ * globale : un module CSS n'accepte pas de sélecteur portant sur « body ». Ce
+ * qui reste ici vise des classes du composant, dont les noms sont réécrits à la
+ * compilation, et ne pouvait donc PAS vivre là-bas. */
+@media print{
+  :global(body.printing-progression) .sheetHead{margin-bottom:10px;padding-bottom:8px}
+  :global(body.printing-progression) .logo{width:46px;height:46px}
+  :global(body.printing-progression) .sheetTitles h1{font-size:14pt;margin:4px 0 2px}
+  :global(body.printing-progression) .sheetTitles p{font-size:9.5pt}
+  :global(body.printing-progression) .period{margin-bottom:14px}
+  :global(body.printing-progression) .period h2{padding:5px 9px;font-size:11pt}
+  /* Le tableau retrouve sa forme de tableau : en dessous de 900 px il défile
+     dans une boîte, ce qui sur papier couperait les colonnes de droite. */
+  :global(body.printing-progression) .table{display:table;overflow:visible}
+}

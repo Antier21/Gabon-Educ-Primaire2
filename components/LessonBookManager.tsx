@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Eye,
   EyeOff,
   NotebookPen,
@@ -491,6 +493,22 @@ export function LessonBookManager() {
           >
             Cette semaine
           </button>
+          {/*
+            La progression annuelle, sous-menu du cahier, dans un onglet à
+            part. On la consulte EN ÉCRIVANT la séance du jour — « où en
+            étais-je du programme ? » — et remplacer cette page par le tableau
+            ferait perdre le brouillon en cours.
+          */}
+          <a
+            className={styles.progression}
+            href="/gabon-educ/cahier-de-textes/progression"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Ouvrir la progression annuelle dans un nouvel onglet"
+          >
+            <CalendarRange /> Progression annuelle
+            <ExternalLink />
+          </a>
         </div>
       </header>
 
