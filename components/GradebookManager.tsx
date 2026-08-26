@@ -36,6 +36,7 @@ import {
 import { publishReportCard } from "@/lib/grading/publish";
 import { syncScoreStatements } from "@/lib/grading/statements";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { loadReportModel } from "@/lib/report-model/store";
 import { resolveMyRoles } from "@/lib/roles/current-role";
 import type { SchoolRole } from "@/lib/platform/types";
 import {
@@ -168,6 +169,30 @@ function synchronizeEvaluationsWithGradebook(
 export function GradebookManager({ module = "combined" }: { module?: GradebookModule }) {
   const subscriptionAccess = useSubscriptionAccess();
   const [tab, setTab] = useState<Tab>(module === "bulletins" ? "reports" : module === "notes" ? "scores" : "settings");
+  /**
+   * L'établissement a-t-il composé son modèle de bulletin ?
+   *
+   * Si oui, le bulletin officiel est celui du modèle gabonais, et il vit dans
+   * son propre écran — avec son calcul, son impression et sa publication.
+   * Continuer à afficher ici l'ancien document ferait coexister deux bulletins
+   * différents pour le même élève, et personne ne saurait lequel fait foi.
+   */
+  const [hasReportModel, setHasReportModel] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const school = (await resolveActiveSchoolContext()).school;
+        if (!school?.id || school.id === "local") return;
+        const model = await loadReportModel(school.id);
+        setHasReportModel(model.length > 0);
+      } catch {
+        // Lecture impossible : on garde l'ancien écran plutôt que de priver
+        // l'établissement de tout bulletin.
+        setHasReportModel(false);
+      }
+    })();
+  }, []);
   const [workspace, setWorkspace] =
     useState<GradingWorkspace>(defaultWorkspace);
   const [ready, setReady] = useState(false);
@@ -1064,7 +1089,33 @@ export function GradebookManager({ module = "combined" }: { module?: GradebookMo
             selectedWeek={selectedWeek}
           />
         )}
-        {(module === "bulletins" || tab === "reports") && (
+        {/*
+          Le bulletin officiel a son écran. On y renvoie plutôt que de le
+          recopier ici : deux écrans montrant le même document finissent
+          toujours par diverger, et c'est le document remis aux familles.
+        */}
+        {(module === "bulletins" || tab === "reports") && hasReportModel && (
+          <section className={styles.card}>
+            <h2>Le bulletin de votre établissement</h2>
+            <p className={styles.muted}>
+              Votre établissement a composé son modèle de bulletin — domaines, compétences,
+              lignes de notes et barèmes. Le bulletin officiel se calcule à partir de ces
+              lignes, et se consulte, s’imprime et se publie depuis son propre écran.
+            </p>
+            <p className={styles.muted}>
+              L’ancien bulletin, calculé sur les matières libres du cahier de notes, n’est plus
+              affiché ici : deux documents différents pour le même élève ne peuvent pas faire
+              foi ensemble.
+            </p>
+            <div className={styles.miniActions}>
+              <Link className={styles.moduleActive} href="/gabon-educ/bulletins-publication">
+                Ouvrir Bulletins et publication
+              </Link>
+              <Link href="/gabon-educ/modele-bulletin">Modifier le modèle</Link>
+            </div>
+          </section>
+        )}
+        {(module === "bulletins" || tab === "reports") && !hasReportModel && (
           <section className={`${styles.card} gradebook-print-root`}>
             <div className={`${styles.noPrint} ${styles.inlineTitle}`}>
               <div>
