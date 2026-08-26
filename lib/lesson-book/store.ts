@@ -121,6 +121,57 @@ export async function loadTeacherSlots(teacherId: string): Promise<TeacherSlot[]
   }));
 }
 
+/** Une classe et une matière confiées à l'enseignant, sans horaire. */
+export type TeacherAssignment = {
+  classId: string;
+  className: string;
+  subjectId: string;
+  subjectLabel: string;
+};
+
+/**
+ * Ce que l'enseignant enseigne, indépendamment de tout emploi du temps.
+ *
+ * C'est la source qui permet de tenir le cahier de textes dans un
+ * établissement qui n'a pas encore saisi ses horaires — c'est-à-dire, presque
+ * toujours, en début d'année, au moment précis où l'on en a besoin. Les
+ * affectations, elles, sont posées dès la rentrée : sans elles, l'enseignant
+ * n'aurait pas de classe du tout.
+ */
+export async function loadTeacherAssignments(teacherId: string): Promise<TeacherAssignment[]> {
+  if (!teacherId) return [];
+  const { data, error } = await createClient()
+    .from("school_teaching_assignments")
+    .select("class_group_id,school_subject_id,class_groups(name),school_subjects(label)")
+    .eq("teacher_id", teacherId)
+    .eq("is_active", true);
+  if (error) throw new Error(describe(error));
+
+  type Row = {
+    class_group_id: string;
+    school_subject_id: string;
+    class_groups?: { name?: string } | null;
+    school_subjects?: { label?: string } | null;
+  };
+
+  const vues = new Set<string>();
+  const sortie: TeacherAssignment[] = [];
+  for (const row of (data || []) as unknown as Row[]) {
+    const cle = `${row.class_group_id}|${row.school_subject_id}`;
+    if (vues.has(cle)) continue;
+    vues.add(cle);
+    sortie.push({
+      classId: String(row.class_group_id || ""),
+      className: String(row.class_groups?.name || "Classe"),
+      subjectId: String(row.school_subject_id || ""),
+      subjectLabel: String(row.school_subjects?.label || "Matière"),
+    });
+  }
+  return sortie.sort((a, b) =>
+    `${a.className}${a.subjectLabel}`.localeCompare(`${b.className}${b.subjectLabel}`, "fr"),
+  );
+}
+
 function toEntry(row: Record<string, unknown>): LessonBookEntry {
   return {
     id: String(row.id || ""),

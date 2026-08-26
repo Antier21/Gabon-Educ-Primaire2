@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpenCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Save, TriangleAlert } from "lucide-react";
+import { BookOpenCheck, CalendarPlus, ChevronLeft, ChevronRight, Eye, EyeOff, Save, TriangleAlert } from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { BackToSpace } from "@/components/BackToSpace";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -10,11 +10,13 @@ import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { isRichTextEmpty } from "@/lib/lesson-book/rich-text";
 import {
   LESSON_CATEGORIES,
+  loadTeacherAssignments,
   loadTeacherSlots,
   loadWeekEntries,
   saveEntry,
   setEntryPublished,
   type LessonBookEntry,
+  type TeacherAssignment,
   type TeacherSlot,
 } from "@/lib/lesson-book/store";
 import {
@@ -78,6 +80,18 @@ export function LessonBookManager() {
   const [academicYearId, setAcademicYearId] = useState("");
   const [teacherId, setTeacherId] = useState("");
   const [slots, setSlots] = useState<TeacherSlot[]>([]);
+  /**
+   * Les classes et matières confiées à l'enseignant.
+   *
+   * L'emploi du temps est un raccourci, pas une condition. Un établissement
+   * qui ne l'a pas encore saisi — c'est-à-dire presque tous, en début d'année,
+   * au moment précis où l'on tient son cahier — doit pouvoir consigner ses
+   * séances malgré tout. La première version rendait l'écran inutilisable dans
+   * ce cas, ce qui revenait à livrer une fonction que personne ne pouvait
+   * ouvrir.
+   */
+  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+  const [libre, setLibre] = useState(false);
   const [entries, setEntries] = useState<LessonBookEntry[]>([]);
   const [monday, setMonday] = useState<Date>(() => weekStart(new Date()));
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -102,7 +116,12 @@ export function LessonBookManager() {
         const contexte = await resolveActiveSchoolContext();
         setSchoolId(contexte.school.id);
         setAcademicYearId(contexte.school.activeAcademicYearId || "");
-        setSlots(await loadTeacherSlots(identifiant));
+        const [creneaux, affectations] = await Promise.all([
+          loadTeacherSlots(identifiant),
+          loadTeacherAssignments(identifiant),
+        ]);
+        setSlots(creneaux);
+        setAssignments(affectations);
         await rafraichir(identifiant, monday);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Chargement impossible.");
@@ -158,6 +177,43 @@ export function LessonBookManager() {
           }
         : BROUILLON_VIDE,
     );
+    setMessage("");
+    setError("");
+  }
+
+  /**
+   * Ouvre une séance sans passer par l'emploi du temps.
+   *
+   * Même chemin d'enregistrement que par la grille : seule la provenance des
+   * quatre informations change — c'est l'enseignant qui les donne au lieu du
+   * créneau. La séance produite est identique, et se rattachera d'elle-même à
+   * la grille le jour où l'emploi du temps sera saisi.
+   */
+  function ouvrirSaisieLibre(affectation: TeacherAssignment, date: Date, debut: string, fin: string) {
+    const existante = entryFor(date, affectation.classId, affectation.subjectId);
+    setSelection({
+      classId: affectation.classId,
+      className: affectation.className,
+      subjectId: affectation.subjectId,
+      subjectLabel: affectation.subjectLabel,
+      date,
+      startsAt: debut,
+      endsAt: fin,
+    });
+    setBrouillon(
+      existante
+        ? {
+            id: existante.id,
+            title: existante.title,
+            contentHtml: existante.contentHtml,
+            programElements: existante.programElements,
+            category: existante.category,
+            themes: existante.themes.join(", "),
+            isPublished: existante.isPublished,
+          }
+        : BROUILLON_VIDE,
+    );
+    setLibre(false);
     setMessage("");
     setError("");
   }
@@ -236,6 +292,9 @@ export function LessonBookManager() {
           <button type="button" className={styles.today} onClick={() => setMonday(weekStart(new Date()))}>
             Cette semaine
           </button>
+          <button type="button" className={styles.today} onClick={() => setLibre(true)}>
+            <CalendarPlus /> Hors emploi du temps
+          </button>
         </div>
       </header>
 
@@ -250,13 +309,60 @@ export function LessonBookManager() {
         {/* La semaine : un jour par colonne, les créneaux de l'enseignant dedans. */}
         <div className={styles.grid}>
           {loading ? (
-            <p className={styles.hint}>Chargement de votre emploi du temps…</p>
+            <p className={styles.hint}>Chargement de votre semaine…</p>
           ) : !slots.length ? (
-            <p className={styles.hint}>
-              Aucun créneau ne vous est affecté dans l’emploi du temps. Demandez à
-              l’administration de le saisir : le cahier de textes s’appuie dessus pour savoir
-              quand vous enseignez, et à qui.
-            </p>
+            /*
+              Sans emploi du temps, la grille n'a rien à montrer — mais le
+              cahier de textes, lui, reste à tenir. On propose donc la saisie
+              par classe, et l'on affiche les séances déjà consignées cette
+              semaine.
+            */
+            <div className={styles.noSlots}>
+              <p>
+                Votre emploi du temps n’est pas encore saisi. Vous pouvez tenir votre cahier de
+                textes sans attendre : choisissez la classe, la date et l’horaire vous-même.
+              </p>
+              <button type="button" className={styles.primary} onClick={() => setLibre(true)}>
+                <CalendarPlus /> Consigner une séance
+              </button>
+              {entries.length > 0 && (
+                <ul className={styles.freeList}>
+                  {entries.map((entree) => {
+                    const affectation = assignments.find(
+                      (item) =>
+                        item.classId === entree.classId && item.subjectId === entree.subjectId,
+                    );
+                    return (
+                      <li key={entree.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            affectation &&
+                            ouvrirSaisieLibre(
+                              affectation,
+                              fromISODate(entree.sessionDate),
+                              entree.startsAt,
+                              entree.endsAt,
+                            )
+                          }
+                        >
+                          <b>{formatDayLong(fromISODate(entree.sessionDate))}</b>
+                          <small>
+                            {affectation
+                              ? `${affectation.className} · ${affectation.subjectLabel}`
+                              : "Séance"}
+                            {entree.startsAt ? ` · ${entree.startsAt}` : ""}
+                          </small>
+                          <span className={styles.badge}>
+                            {entree.isPublished ? "remis" : "brouillon"}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           ) : (
             jours.map((jour) => {
               const duJour = slots
@@ -304,6 +410,92 @@ export function LessonBookManager() {
             })
           )}
         </div>
+
+        {/*
+          La saisie hors emploi du temps.
+
+          Utile même quand la grille existe : un remplacement, un rattrapage,
+          une séance ajoutée ne figurent dans aucun créneau, et l'enseignant
+          doit pouvoir les consigner comme les autres.
+        */}
+        {libre && (
+          <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Consigner une séance">
+            <form
+              className={styles.dialog}
+              onSubmit={(event) => {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                const cle = String(data.get("affectation") || "");
+                const affectation = assignments.find(
+                  (item) => `${item.classId}|${item.subjectId}` === cle,
+                );
+                const date = String(data.get("date") || "");
+                if (!affectation || !date) {
+                  setError("Choisissez une classe et une date.");
+                  return;
+                }
+                ouvrirSaisieLibre(
+                  affectation,
+                  fromISODate(date),
+                  String(data.get("debut") || ""),
+                  String(data.get("fin") || ""),
+                );
+              }}
+            >
+              <h2>Consigner une séance</h2>
+              {!assignments.length ? (
+                <p className={styles.hint}>
+                  Aucune classe ne vous est encore affectée. C’est l’administration qui pose les
+                  affectations, dans « Matières et affectations » : sans elles, l’application ne
+                  sait pas quelles classes sont les vôtres.
+                </p>
+              ) : (
+                <>
+                  <label>
+                    Classe et matière
+                    <select name="affectation" defaultValue="">
+                      <option value="" disabled>
+                        Choisir…
+                      </option>
+                      {assignments.map((item) => (
+                        <option
+                          key={`${item.classId}|${item.subjectId}`}
+                          value={`${item.classId}|${item.subjectId}`}
+                        >
+                          {item.className} · {item.subjectLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className={styles.row}>
+                    <label>
+                      Date
+                      <input type="date" name="date" defaultValue={toISODate(jours[0])} required />
+                    </label>
+                    <label>
+                      Début
+                      <input type="time" name="debut" defaultValue="08:00" />
+                    </label>
+                    <label>
+                      Fin
+                      <input type="time" name="fin" defaultValue="09:00" />
+                    </label>
+                  </div>
+                </>
+              )}
+              <div className={styles.actions}>
+                {assignments.length > 0 && (
+                  <button type="submit" className={styles.primary}>
+                    Ouvrir la séance
+                  </button>
+                )}
+                <button type="button" className={styles.ghost} onClick={() => setLibre(false)}>
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* La séance choisie. */}
         <div className={styles.form}>
