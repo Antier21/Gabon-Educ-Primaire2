@@ -10,6 +10,7 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 export type ReportPublication = {
   classId: string;
@@ -97,10 +98,19 @@ export async function publishReports(
  * suffit : aucune note n'est touchée, seul l'affichage du document change.
  */
 export async function unpublishReports(classId: string, periodId: string): Promise<void> {
-  const { error } = await createClient()
+  /*
+   * C'est ici que le silence coûterait le plus cher.
+   *
+   * Une direction qui retire un bulletin publié par erreur, voit « c'est
+   * fait », et laisse le document visible aux familles : la panne serait
+   * invisible des deux côtés jusqu'à ce qu'un parent en parle. La ligne
+   * supprimée est donc redemandée, et son absence vaut refus.
+   */
+  const result = await createClient()
     .from("report_publications")
     .delete()
     .eq("class_group_id", classId)
-    .eq("period_id", periodId);
-  if (error) throw new Error(describe(error));
+    .eq("period_id", periodId)
+    .select("id");
+  confirmWrite(result, "le retrait de cette publication");
 }

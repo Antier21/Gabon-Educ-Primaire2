@@ -9,6 +9,7 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 export type GuardianContactRequest = {
   id: string;
@@ -100,13 +101,19 @@ export async function closeContactRequest(
 ): Promise<void> {
   const client = createClient();
   const { data: auth } = await client.auth.getUser();
-  const { error } = await client
+  const result = await client
     .from("guardian_contact_requests")
     .update({
       status: decision,
       reviewed_by: auth.user?.id || null,
       reviewed_at: new Date().toISOString(),
     })
-    .eq("id", id);
-  if (error) throw new Error(describe(error));
+    .eq("id", id)
+    .select("id");
+  confirmWrite(
+    result,
+    decision === "applied"
+      ? "la validation de cette demande de coordonnées"
+      : "le refus de cette demande de coordonnées",
+  );
 }

@@ -11,6 +11,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { OFFICIAL_REPORT_MODEL } from "./official-model";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 export type ModelLine = {
   id: string;
@@ -177,11 +178,12 @@ export async function seedOfficialModel(schoolId: string): Promise<ModelDomain[]
 export async function saveLine(
   line: { id: string; label: string; maxScore: number },
 ): Promise<void> {
-  const { error } = await createClient()
+  const result = await createClient()
     .from("report_model_lines")
     .update({ label: line.label, max_score: line.maxScore })
-    .eq("id", line.id);
-  if (error) throw new Error(describe(error));
+    .eq("id", line.id)
+    .select("id");
+  confirmWrite(result, "la modification de cette ligne du bulletin");
 }
 
 export async function addLine(
@@ -202,8 +204,12 @@ export async function addLine(
 }
 
 export async function removeLine(id: string): Promise<void> {
-  const { error } = await createClient().from("report_model_lines").delete().eq("id", id);
-  if (error) throw new Error(describe(error));
+  const result = await createClient()
+    .from("report_model_lines")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  confirmWrite(result, "la suppression de cette ligne du bulletin");
 }
 
 export async function addDomain(
@@ -241,6 +247,10 @@ export async function addSkill(
  * confirmation en nommant le domaine.
  */
 export async function removeDomain(id: string): Promise<void> {
-  const { error } = await createClient().from("report_model_domains").delete().eq("id", id);
-  if (error) throw new Error(describe(error));
+  const result = await createClient()
+    .from("report_model_domains")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  confirmWrite(result, "la suppression de ce domaine du bulletin");
 }

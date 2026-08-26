@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { mergeMessage, isPhoneUsable, type MessageVariables } from "./whatsapp";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 /**
  * Écritures directes vers Supabase, sans file d'attente.
@@ -291,7 +292,20 @@ export async function createCampaign(input: {
     // La campagne sans destinataires n'a aucun sens : on ne laisse pas de trace
     // partielle qui laisserait croire à un envoi en cours.
     await client.from("message_campaigns").delete().eq("id", campaignId);
-    throw new Error(describe(inserted.error));
+    // Si le nettoyage échoue lui aussi, la campagne reste en base sans
+    // destinataires : on le dit dans le même message plutôt que de le taire,
+    // sans masquer l'erreur d'origine qui reste la cause.
+    const leftover = await client
+      .from("message_campaigns")
+      .select("id")
+      .eq("id", campaignId);
+    const orpheline = !leftover.error && (leftover.data || []).length > 0;
+    throw new Error(
+      describe(inserted.error) +
+        (orpheline
+          ? " — la campagne vide n’a pas pu être retirée du serveur ; signalez-la à la direction."
+          : ""),
+    );
   }
   return campaignId;
 }
@@ -327,15 +341,16 @@ export async function markRecipient(
   status: "sent" | "failed" | "pending" | "skipped",
   failureReason = "",
 ): Promise<void> {
-  const { error } = await createClient()
+  const result = await createClient()
     .from("message_recipients")
     .update({
       status,
       failure_reason: failureReason || null,
       sent_at: status === "sent" ? new Date().toISOString() : null,
     })
-    .eq("id", recipientId);
-  if (error) throw new Error(describe(error));
+    .eq("id", recipientId)
+    .select("id");
+  confirmWrite(result, "la mise à jour de ce destinataire");
 }
 
 /** Recalcule l'avancement d'une campagne à partir de l'état réel de ses lignes. */
@@ -349,11 +364,12 @@ export async function refreshCampaignProgress(campaignId: string): Promise<void>
   const statuses = (data || []).map((row) => String(row.status));
   const sent = statuses.filter((value) => value === "sent").length;
   const remaining = statuses.filter((value) => value === "pending").length;
-  const { error: updateError } = await client
+  const progress = await client
     .from("message_campaigns")
     .update({ sent_count: sent, status: remaining ? "sending" : "sent" })
-    .eq("id", campaignId);
-  if (updateError) throw new Error(describe(updateError));
+    .eq("id", campaignId)
+    .select("id");
+  confirmWrite(progress, "la mise à jour de l’avancement de cette campagne");
 }
 
 export async function listCampaigns(schoolId: string): Promise<Campaign[]> {

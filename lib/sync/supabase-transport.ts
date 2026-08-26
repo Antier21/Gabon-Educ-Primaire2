@@ -14,6 +14,7 @@ import type {
   SyncOperation,
   SyncTransport,
 } from "./types";
+import { confirmDeletedByReadBack } from "@/lib/supabase/confirm-write";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 const uuidPattern =
@@ -383,6 +384,19 @@ async function executeTableMutation(
       .eq(mutation.key, mutation.entityId);
     if (error)
       throw new Error(subscriptionFriendlyMessage(error));
+    /*
+     * La table n'est connue qu'à l'exécution : impossible de garantir que
+     * celui qui peut supprimer une ligne peut aussi la relire, donc impossible
+     * de compter les lignes supprimées sans risquer une fausse alerte.
+     *
+     * On relit après coup. Une ligne encore présente prouve que la suppression
+     * n'a pas eu lieu — et l'opération repart en file au lieu d'être classée
+     * comme faite. Une relecture vide ou refusée ne prouve rien : on se tait.
+     */
+    await confirmDeletedByReadBack(
+      () => client.from(mutation.table).select(mutation.key).eq(mutation.key, mutation.entityId),
+      `la suppression dans « ${mutation.table} »`,
+    );
     return null;
   }
   const { data, error } = await client

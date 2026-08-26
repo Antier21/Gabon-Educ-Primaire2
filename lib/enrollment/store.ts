@@ -246,11 +246,20 @@ export async function deleteEnrollmentForm(
   if (!uuidPattern.test(record.schoolId)) return { syncError: "" };
 
   const client = createClient();
-  const { error } = await client
+  const { data: removed, error } = await client
     .from("student_enrollment_forms")
     .delete()
     .eq("id", record.id)
-    .eq("school_id", record.schoolId);
+    .eq("school_id", record.schoolId)
+    .select("id");
+  // Zéro ligne supprimée sans erreur : le serveur a refusé en silence.
+  if (!error && !(removed || []).length) {
+    return {
+      syncError:
+        "Fiche retirée de cet écran, mais le serveur a refusé de la supprimer : " +
+        "votre compte n’a pas ce droit. Elle réapparaîtra au prochain chargement.",
+    };
+  }
   if (error) {
     console.error(
       "[Gabon Éduc+] Suppression de fiche refusée :",

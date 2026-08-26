@@ -13,6 +13,7 @@ import type { SyncState } from "@/lib/lesson-store";
 import { enqueueBusinessOperation } from "@/lib/sync/business-operation";
 import { updateOperationStatus } from "@/lib/sync/sync-manager";
 import { assertSubscriptionWriteAllowed } from "@/lib/subscriptions/write-guard";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 export type EvaluationType =
   | "Interrogation"
@@ -242,10 +243,23 @@ export async function deleteEvaluation(id: string) {
   );
   if (status.mode === "cloud") {
     try {
-      await withTimeout(
-        createClient().from("teacher_evaluations").delete().eq("id", id),
+      /*
+       * Le « catch » vide avalait aussi bien la panne réseau que le refus de
+       * droit, puis marquait l'opération « synchronisée ». L'évaluation
+       * restait en ligne, et la file de synchronisation croyait avoir fini.
+       *
+       * On redemande donc la ligne supprimée. Si rien n'a été touché,
+       * l'opération reste en attente et sera retentée : c'est exactement à
+       * cela que sert la file.
+       */
+      const result = await withTimeout(
+        createClient().from("teacher_evaluations").delete().eq("id", id).select("id"),
       );
+      confirmWrite(result, "la suppression de cette évaluation");
       if (queued) updateOperationStatus(queued.id, "synced");
-    } catch {}
+    } catch {
+      // L'opération reste en file : elle repartira à la prochaine
+      // synchronisation, au lieu d'être classée comme faite.
+    }
   }
 }

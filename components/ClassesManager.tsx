@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { validateClass, validateStudent } from "@/lib/classes/validation";
 import { Brand } from "./Brand";
 import styles from "./ClassesManager.module.css";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 type Grade = { id: string; code: string; name: string };
 type Student = { id: string; first_name: string; last_name: string; email: string | null };
@@ -85,11 +86,20 @@ export function ClassesManager() {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Votre session a expiré. Reconnectez-vous.");
-        const query = editing
-          ? supabase.from("class_groups").update({ name: values.name, grade_level_id: values.gradeLevelId, room: values.room || null }).eq("id", editing.id)
-          : supabase.from("class_groups").insert({ name: values.name, grade_level_id: values.gradeLevelId, room: values.room || null, owner_teacher_id: user.id });
-        const { error } = await query;
-        if (error) throw error;
+        if (editing) {
+          // Une modification refusée par une politique ne lève rien : elle
+          // touche zéro ligne et le serveur répond « tout va bien ». On
+          // redemande donc la ligne modifiée.
+          const result = await supabase.from("class_groups")
+            .update({ name: values.name, grade_level_id: values.gradeLevelId, room: values.room || null })
+            .eq("id", editing.id)
+            .select("id");
+          confirmWrite(result, "la modification de cette classe");
+        } else {
+          // Un « insert » refusé lève bien une erreur : rien à vérifier ici.
+          const { error } = await supabase.from("class_groups").insert({ name: values.name, grade_level_id: values.gradeLevelId, room: values.room || null, owner_teacher_id: user.id });
+          if (error) throw error;
+        }
         await load();
       }
       setClassModal(false); setEditing(null);
@@ -122,8 +132,15 @@ export function ClassesManager() {
     if (!cloudMode) {
       const next = classes.filter(entry => entry.id !== item.id); writeLocal(next); setClasses(next);
     } else {
-      const { error } = await createClient().from("class_groups").delete().eq("id", item.id);
-      if (error) { setNotice({ type: "error", text: error.message }); return; }
+      try {
+        confirmWrite(
+          await createClient().from("class_groups").delete().eq("id", item.id).select("id"),
+          `la suppression de la classe « ${item.name} »`,
+        );
+      } catch (error) {
+        setNotice({ type: "error", text: error instanceof Error ? error.message : "Suppression impossible." });
+        return;
+      }
       await load();
     }
     setNotice({ type: "success", text: "Classe supprimée." });
@@ -135,8 +152,15 @@ export function ClassesManager() {
       const next = classes.map(item => ({ ...item, class_students: item.class_students.filter(entry => entry.id !== student.id) }));
       writeLocal(next); setClasses(next); return;
     }
-    const { error } = await createClient().from("class_students").delete().eq("id", student.id);
-    if (error) setNotice({ type: "error", text: error.message }); else await load();
+    try {
+      confirmWrite(
+        await createClient().from("class_students").delete().eq("id", student.id).select("id"),
+        `le retrait de ${student.first_name} ${student.last_name}`,
+      );
+      await load();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Retrait impossible." });
+    }
   }
 
   const studentCount = classes.reduce((sum, item) => sum + item.class_students.length, 0);

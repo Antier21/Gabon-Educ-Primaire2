@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { readCachedActiveSchool } from "@/lib/active-school";
 import type { GradingPeriod, ReportSnapshot, SchoolSettings } from "./types";
+import { confirmDeletedByReadBack } from "@/lib/supabase/confirm-write";
 
 /**
  * Publication d'un bulletin vers les tables de l'établissement.
@@ -166,6 +167,12 @@ export async function publishReportCard(
       .delete()
       .eq("report_card_id", reportId);
     if (removal.error) throw removal.error;
+    // Un bulletin encore sans matières en supprime zéro : c'est normal. Seule
+    // la relecture peut distinguer ce cas d'un refus silencieux.
+    await confirmDeletedByReadBack(
+      () => client.from("report_card_subjects").select("id").eq("report_card_id", reportId),
+      "le remplacement des matières de ce bulletin",
+    );
 
     const rows = snapshot.subjects
       .filter((subject) => subject.subject && subject.coefficient > 0)

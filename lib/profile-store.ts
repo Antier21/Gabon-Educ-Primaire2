@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { readLocal, resolveStorageStatus, STORAGE_KEYS, withTimeout, writeLocal, type StorageMode } from "@/lib/storage-mode";
 import { PRODUCT } from "@/lib/product-edition";
 import { getDefaultLevelsForSchoolType, getDefaultSubjectsForSchoolType } from "@/lib/school-profiles";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 export type TeacherProfile = {
   firstName: string; lastName: string; email: string; phone: string; city: string;
@@ -42,8 +43,11 @@ export async function saveProfile(profile: TeacherProfile): Promise<{ profile: T
   writeLocal(STORAGE_KEYS.profile, normalized);
   const status = await resolveStorageStatus();
   if (status.mode !== "cloud" || !status.user) return { profile: normalized, mode: status.mode };
-  const { error } = await withTimeout(createClient().from("profiles").update({ first_name: normalized.firstName, last_name: normalized.lastName, display_name: `${normalized.firstName} ${normalized.lastName}`, phone: normalized.phone || null, city: normalized.city || null, school_name: normalized.schoolName || null, main_subject: normalized.mainSubject || null, main_grade: normalized.mainGrade || null }).eq("id", status.user.id));
-  if (error) throw error;
+  // « .select("id") » rend l'échec visible : une ligne écartée par une
+  // politique n'est pas refusée, elle est invisible, et le serveur répond
+  // « tout va bien » sur zéro ligne modifiée.
+  const result = await withTimeout(createClient().from("profiles").update({ first_name: normalized.firstName, last_name: normalized.lastName, display_name: `${normalized.firstName} ${normalized.lastName}`, phone: normalized.phone || null, city: normalized.city || null, school_name: normalized.schoolName || null, main_subject: normalized.mainSubject || null, main_grade: normalized.mainGrade || null }).eq("id", status.user.id).select("id"));
+  confirmWrite(result, "l’enregistrement de votre profil");
   return { profile: normalized, mode: "cloud" };
 }
 

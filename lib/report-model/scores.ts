@@ -8,6 +8,7 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { confirmDeletedByReadBack } from "@/lib/supabase/confirm-write";
 
 /** Clé de la grille : « élève:ligne ». */
 export function cellKey(studentId: string, lineId: string) {
@@ -92,6 +93,15 @@ export async function saveScore(args: {
 }): Promise<void> {
   const client = createClient();
   if (args.score === null) {
+    /*
+     * Ici, « zéro ligne supprimée » est un cas normal : effacer une case déjà
+     * vide ne touche rien. Compter les lignes produirait donc une fausse
+     * alerte à chaque case vide — et une fausse alerte est pire qu'un silence,
+     * car on cesse de croire les messages.
+     *
+     * On relit donc après coup. Si la note est toujours là, la suppression a
+     * été refusée, et c'est certain.
+     */
     const { error } = await client
       .from("report_line_scores")
       .delete()
@@ -99,6 +109,16 @@ export async function saveScore(args: {
       .eq("period_id", args.periodId)
       .eq("line_id", args.lineId);
     if (error) throw new Error(describe(error));
+    await confirmDeletedByReadBack(
+      () =>
+        client
+          .from("report_line_scores")
+          .select("student_id")
+          .eq("student_id", args.studentId)
+          .eq("period_id", args.periodId)
+          .eq("line_id", args.lineId),
+      "l’effacement de cette note",
+    );
     return;
   }
   const { data: auth } = await client.auth.getUser();

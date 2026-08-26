@@ -6,6 +6,7 @@ import { loadPlatformWorkspace } from "@/lib/platform/store";
 import { AdminMegaNav } from "@/components/SpaceNavigation";
 import { useRouter } from "next/navigation";
 import { buildSchoolStaffPayload, formValues, personnelErrorMessage } from "@/lib/personnel-record";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 type StaffRow = {
   id:string; employee_number:string; first_name:string; last_name:string; staff_category:string;
@@ -57,8 +58,10 @@ export function PersonnelManager(){
     if(!confirm(`Supprimer définitivement le dossier de ${row.first_name} ${row.last_name} ?`))return;
     setSaving(true);
     try{
-      const {error}=await client.from("school_staff").delete().eq("id",row.id).eq("school_id",schoolId);
-      if(error)throw error;
+      confirmWrite(
+        await client.from("school_staff").delete().eq("id",row.id).eq("school_id",schoolId).select("id"),
+        `la suppression du dossier de ${row.first_name} ${row.last_name}`,
+      );
       await reload(schoolId);
       setMessage("Dossier supprimé.");
     }catch(error){
@@ -76,10 +79,12 @@ export function PersonnelManager(){
     const phone=prompt("Téléphone",row.phone||""); if(phone===null)return;
     setMessage(""); setSaving(true);
     try{
-      const {error}=await client.from("school_staff")
-        .update({first_name:firstName.trim(),last_name:lastName.trim(),job_title:jobTitle.trim()||"Personnel",phone:phone.trim(),updated_at:new Date().toISOString()})
-        .eq("id",row.id).eq("school_id",schoolId);
-      if(error)throw error;
+      confirmWrite(
+        await client.from("school_staff")
+          .update({first_name:firstName.trim(),last_name:lastName.trim(),job_title:jobTitle.trim()||"Personnel",phone:phone.trim(),updated_at:new Date().toISOString()})
+          .eq("id",row.id).eq("school_id",schoolId).select("id"),
+        "la correction de ce dossier",
+      );
       await reload(schoolId);
       setMessage("Dossier corrigé.");
     }catch(error){

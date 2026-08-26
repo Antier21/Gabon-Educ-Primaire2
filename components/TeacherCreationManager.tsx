@@ -10,6 +10,7 @@ import type { PlatformWorkspace, SchoolSubject, TeachingAssignment } from "@/lib
 import type { SyncOperationMetadata } from "@/lib/sync/types";
 import styles from "./TeacherCreationManager.module.css";
 import { PRODUCT } from "@/lib/product-edition";
+import { confirmWrite } from "@/lib/supabase/confirm-write";
 
 type Staff = {
   id: string;
@@ -106,14 +107,27 @@ export function TeacherCreationManager() {
         setMsg(payload.error || "Création du profil enseignant impossible.");
         return;
       }
-      const { error: updateError } = await client
-        .from("school_staff")
-        .update({ pedagogical_user_id: payload.id })
-        .eq("id", staffId)
-        .eq("school_id", schoolId);
-      if (updateError) {
+      /*
+       * Le compte vient d'être créé côté serveur. Si ce rattachement échoue en
+       * silence, l'enseignant a un accès qui n'est relié à aucun dossier —
+       * l'écran affirmerait le contraire.
+       */
+      try {
+        confirmWrite(
+          await client
+            .from("school_staff")
+            .update({ pedagogical_user_id: payload.id })
+            .eq("id", staffId)
+            .eq("school_id", schoolId)
+            .select("id"),
+          "le rattachement du compte au dossier du personnel",
+        );
+      } catch (caught) {
         setMsgKind("error");
-        setMsg(updateError.message);
+        setMsg(
+          (caught instanceof Error ? caught.message : "Rattachement impossible.") +
+            " Le compte a bien été créé : reprenez le rattachement depuis la fiche du personnel.",
+        );
         return;
       }
       setMsgKind("success");
