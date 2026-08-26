@@ -305,3 +305,80 @@ export async function deleteEntry(id: string): Promise<void> {
     .select("id");
   confirmWrite(result, "la suppression de cette séance");
 }
+
+/* ===================================================================
+ * Les fiches rattachées à une séance.
+ *
+ * C'est la « pièce jointe » du cahier de textes, et elle ne téléverse rien :
+ * la fiche pédagogique existe déjà en base. La rattacher, c'est la désigner.
+ * L'établissement n'a donc besoin d'aucun espace de stockage, et la famille
+ * ouvre la fiche telle que l'enseignant l'a écrite.
+ * =================================================================== */
+
+export type TeacherPlan = {
+  id: string;
+  title: string;
+  status: string;
+  weekNumber: number | null;
+};
+
+/** Les fiches de l'enseignant, les plus récentes d'abord. */
+export async function loadTeacherPlans(teacherId: string): Promise<TeacherPlan[]> {
+  if (!teacherId) return [];
+  const { data, error } = await createClient()
+    .from("lesson_plans")
+    .select("id,title,status,week_number,updated_at")
+    .eq("teacher_id", teacherId)
+    .order("updated_at", { ascending: false })
+    .limit(60);
+  if (error) throw new Error(describe(error));
+  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    title: String(row.title || "Fiche sans titre"),
+    status: String(row.status || "draft"),
+    weekNumber:
+      row.week_number === null || row.week_number === undefined
+        ? null
+        : Number(row.week_number),
+  }));
+}
+
+export type Attachment = { planId: string; title: string };
+
+export async function loadAttachments(entryId: string): Promise<Attachment[]> {
+  if (!entryId) return [];
+  const { data, error } = await createClient()
+    .from("lesson_book_attachments")
+    .select("lesson_plan_id,lesson_plans(title)")
+    .eq("entry_id", entryId);
+  if (error) throw new Error(describe(error));
+  type Row = { lesson_plan_id: string; lesson_plans?: { title?: string } | null };
+  return ((data || []) as unknown as Row[]).map((row) => ({
+    planId: String(row.lesson_plan_id || ""),
+    title: String(row.lesson_plans?.title || "Fiche"),
+  }));
+}
+
+export async function attachPlan(entryId: string, planId: string): Promise<void> {
+  // La table ne porte pas de « school_id » : elle tient l'établissement de la
+  // séance à laquelle elle se rattache, et le dupliquer aurait ouvert la
+  // possibilité de deux valeurs contradictoires.
+  const { error } = await createClient()
+    .from("lesson_book_attachments")
+    .insert({ entry_id: entryId, lesson_plan_id: planId });
+  // Rattacher deux fois la même fiche n'est pas une faute : la contrainte
+  // d'unicité l'empêche, et l'utilisateur n'a pas à en être averti.
+  if (error && !String(error.message || "").includes("duplicate")) {
+    throw new Error(describe(error));
+  }
+}
+
+export async function detachPlan(entryId: string, planId: string): Promise<void> {
+  const result = await createClient()
+    .from("lesson_book_attachments")
+    .delete()
+    .eq("entry_id", entryId)
+    .eq("lesson_plan_id", planId)
+    .select("id");
+  confirmWrite(result, "le retrait de cette fiche");
+}

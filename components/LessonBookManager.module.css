@@ -1,6 +1,12 @@
-.page{min-height:100vh;background:#f4f7f5}
+/* Le fond de page en jaune atténué.
+ *
+ * Un jaune de papier, pas un jaune vif : les cartes blanches doivent rester
+ * franchement blanches par-dessus, et le texte gris garder son contraste. Un
+ * ton plus saturé fatiguerait sur une page où l'on écrit longtemps. */
+.page{min-height:100vh;background:#fbf7e9}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
-  height:auto;min-height:76px;padding:11px 26px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  height:auto;min-height:76px;padding:11px 26px;background:#fffdf6;border-bottom:1px solid #ece3c8;
+  position:sticky;top:0;z-index:20}
 .topLeft{display:flex;align-items:center;gap:13px}
 .topLeft>div{display:flex;flex-direction:column}
 .topLeft small{color:var(--muted);font-size:12px}
@@ -30,7 +36,7 @@
    donneraient des cases de 50 px où aucun nom de classe ne tiendrait. */
 .grid{display:flex;flex-direction:column;gap:9px;position:sticky;top:96px;
   max-height:calc(100vh - 120px);overflow:auto;
-  background:#fff;border:1px solid var(--line);border-radius:15px;padding:12px 11px}
+  background:#fff;border:1px solid #eae2ca;border-radius:15px;padding:12px 11px}
 .day{display:flex;flex-direction:column;gap:5px;min-width:0}
 .day h2{margin:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#7c8783;
   padding-bottom:3px;border-bottom:1px solid #eef3f1;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -62,7 +68,8 @@
 .badge{position:absolute;top:7px;right:7px;font-size:8px;font-weight:800;text-transform:uppercase;
   letter-spacing:.04em;padding:2px 5px;border-radius:999px;background:#eef4f1;color:#5b6b65}
 
-.form{background:#fff;border:1px solid var(--line);border-radius:15px;padding:19px 21px;display:grid;gap:14px}
+.form{background:#fff;border:1px solid #eae2ca;border-radius:15px;padding:19px 21px;display:grid;gap:14px;
+  box-shadow:0 8px 26px rgba(120,100,30,.05)}
 .formHead{display:flex;align-items:flex-start;gap:11px;padding-bottom:13px;border-bottom:1px solid #eef3f1}
 .formHead svg{width:22px;height:22px;color:#08734f;flex:none;margin-top:2px}
 .formHead b{display:block;font-size:14.5px;color:#20302a}
@@ -121,3 +128,27 @@
   .identity{grid-template-columns:1fr 1fr}
   .identity .wide{grid-column:1/-1}
 }
+
+/* Le choix de la fiche à joindre : les fiches déjà écrites, rien à téléverser. */
+.plans{border:1px solid #e2ede8;border-radius:11px;padding:12px 13px;background:#f8fbf9;display:grid;gap:8px}
+.plans>b{font-size:12px;color:#20302a}
+.plans>small{color:var(--muted);font-size:12.5px;line-height:1.55}
+.plans ul{list-style:none;margin:0;padding:0;display:grid;gap:5px;max-height:180px;overflow:auto}
+.plans button{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #dde8e3;
+  border-radius:9px;background:#fff;font:inherit;font-size:13px;color:#25352f;cursor:pointer;text-align:left}
+.plans button:hover:not(:disabled){border-color:#08734f;color:#08734f}
+.plans button:disabled{opacity:.5;cursor:default}
+.plans button svg{width:14px;height:14px;flex:none;color:#7c8783}
+.plans button span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plans em{font-style:normal;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  padding:2px 6px;border-radius:999px;background:#fff3d9;color:#8b690e}
+
+/* Les fiches jointes, sous l'éditeur. */
+.attached{display:flex;flex-wrap:wrap;gap:7px}
+.attached>span{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;border-radius:999px;
+  background:#eef7f2;border:1px solid #cfe2da;color:#20302a;font-size:12.5px}
+.attached>span>svg{width:13px;height:13px;color:#08734f}
+.attached button{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border:0;border-radius:50%;background:transparent;color:#6b7d76;cursor:pointer}
+.attached button:hover{background:#dceee5;color:#08734f}
+.attached button svg{width:12px;height:12px}

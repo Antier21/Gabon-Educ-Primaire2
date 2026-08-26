@@ -18,6 +18,7 @@ import {
   Minus,
   Omega,
   Palette,
+  Paperclip,
   Outdent,
   Redo2,
   Subscript,
@@ -49,17 +50,35 @@ import { sanitizeRichText } from "@/lib/lesson-book/rich-text";
  * une mise en forme qui disparaîtra ensuite.
  */
 
+/**
+ * Douze couleurs, rangées par famille.
+ *
+ * Assez pour distinguer une consigne d'une correction et d'un rappel, sans
+ * ouvrir un sélecteur libre : un cahier de textes reste lu par des familles,
+ * et une couleur trop claire sur fond blanc y deviendrait illisible. Toutes
+ * celles-ci gardent un contraste suffisant sur le papier comme à l'écran.
+ */
 const COULEURS = [
   { valeur: "#111111", nom: "Noir" },
+  { valeur: "#4b5563", nom: "Gris" },
   { valeur: "#08734f", nom: "Vert" },
-  { valeur: "#9a3412", nom: "Rouge" },
+  { valeur: "#047857", nom: "Vert foncé" },
+  { valeur: "#0f766e", nom: "Sarcelle" },
   { valeur: "#1d4ed8", nom: "Bleu" },
+  { valeur: "#1e3a8a", nom: "Bleu nuit" },
+  { valeur: "#6d28d9", nom: "Violet" },
+  { valeur: "#b91c1c", nom: "Rouge" },
+  { valeur: "#9a3412", nom: "Brique" },
+  { valeur: "#a16207", nom: "Ocre" },
+  { valeur: "#831843", nom: "Grenat" },
 ];
 
 const SURLIGNAGES = [
   { valeur: "#fde68a", nom: "Jaune" },
   { valeur: "#bbf7d0", nom: "Vert clair" },
   { valeur: "#bfdbfe", nom: "Bleu clair" },
+  { valeur: "#fecaca", nom: "Rouge clair" },
+  { valeur: "#e9d5ff", nom: "Violet clair" },
   { valeur: "transparent", nom: "Aucun" },
 ];
 
@@ -84,11 +103,21 @@ export function RichTextEditor({
   onChange,
   placeholder = "Contenu de la séance…",
   ariaLabel = "Contenu de la séance",
+  onAttach,
+  attachCount = 0,
 }: {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
   ariaLabel?: string;
+  /**
+   * Le trombone. L'éditeur ne sait pas ce qu'est une pièce jointe — il se
+   * contente d'offrir le bouton là où la main le cherche, et de prévenir le
+   * parent. Sans cette fonction, le bouton ne s'affiche pas.
+   */
+  onAttach?: () => void;
+  /** Le nombre de pièces jointes, affiché sur le trombone. */
+  attachCount?: number;
 }) {
   const zone = useRef<HTMLDivElement>(null);
   /** La dernière valeur émise, pour ne pas réécrire la zone sous le curseur. */
@@ -190,7 +219,7 @@ export function RichTextEditor({
             <Palette />
           </button>
           {palette === "couleur" && (
-            <span className="rte-panel">
+            <span className="rte-panel rte-swatches">
               {COULEURS.map((couleur) => (
                 <button
                   key={couleur.valeur}
@@ -216,7 +245,7 @@ export function RichTextEditor({
             <Highlighter />
           </button>
           {palette === "surlignage" && (
-            <span className="rte-panel">
+            <span className="rte-panel rte-swatches">
               {SURLIGNAGES.map((teinte) => (
                 <button
                   key={teinte.valeur}
@@ -263,6 +292,18 @@ export function RichTextEditor({
         </span>
 
         <span className="rte-sep" aria-hidden="true" />
+        {onAttach && (
+          <button
+            type="button"
+            className="rte-attach"
+            onClick={onAttach}
+            title="Joindre une fiche pédagogique"
+            aria-label="Joindre une fiche pédagogique"
+          >
+            <Paperclip />
+            {attachCount > 0 && <span>{attachCount}</span>}
+          </button>
+        )}
         <Outil icone={Link2} titre="Insérer un lien" action={poserLien} />
         <Outil
           icone={Minus}

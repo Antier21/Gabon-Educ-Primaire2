@@ -7,8 +7,10 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Paperclip,
   Save,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { BackToSpace } from "@/components/BackToSpace";
@@ -18,12 +20,18 @@ import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { isRichTextEmpty } from "@/lib/lesson-book/rich-text";
 import {
   LESSON_CATEGORIES,
+  attachPlan,
+  detachPlan,
+  loadAttachments,
   loadTeacherAssignments,
+  loadTeacherPlans,
   loadTeacherSlots,
   loadWeekEntries,
   saveEntry,
   setEntryPublished,
+  type Attachment,
   type LessonBookEntry,
+  type TeacherPlan,
   type TeacherAssignment,
   type TeacherSlot,
 } from "@/lib/lesson-book/store";
@@ -121,6 +129,16 @@ export function LessonBookManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  /**
+   * Les pièces jointes : des fiches pédagogiques désignées, jamais téléversées.
+   *
+   * La fiche existe déjà en base ; la rattacher, c'est la nommer. L'école n'a
+   * donc besoin d'aucun espace de stockage, et la famille ouvre la fiche telle
+   * que l'enseignant l'a écrite.
+   */
+  const [plans, setPlans] = useState<TeacherPlan[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [choixFiche, setChoixFiche] = useState(false);
 
   const jours = useMemo(() => weekDays(monday), [monday]);
 
@@ -143,6 +161,7 @@ export function LessonBookManager() {
         ]);
         setSlots(creneaux);
         setAssignments(affectations);
+        setPlans(await loadTeacherPlans(identifiant));
         // La première classe est proposée d'office : l'enseignant qui n'en a
         // qu'une — le cas du primaire — n'a alors rien à choisir du tout.
         if (affectations[0]) {
@@ -187,13 +206,82 @@ export function LessonBookManager() {
    */
   const ouvrir = useCallback(
     (suivante: Seance) => {
+      const existante = entryFor(suivante.date, suivante.classId, suivante.subjectId);
       setSeance(suivante);
-      setBrouillon(brouillonDe(entryFor(suivante.date, suivante.classId, suivante.subjectId)));
+      setBrouillon(brouillonDe(existante));
+      setChoixFiche(false);
       setMessage("");
       setError("");
+      // Les pièces jointes suivent la séance affichée, jamais l'inverse.
+      setAttachments([]);
+      if (existante?.id) void loadAttachments(existante.id).then(setAttachments).catch(() => undefined);
     },
     [entryFor],
   );
+
+  /**
+   * Rattache une fiche à la séance.
+   *
+   * Une pièce jointe se rattache à une séance qui existe : si la séance n'a pas
+   * encore été enregistrée, on l'enregistre d'abord, sans le demander. Exiger
+   * « enregistrez puis joignez » ferait perdre le geste à tous ceux qui
+   * cliquent sur le trombone en premier — c'est-à-dire à peu près tout le
+   * monde.
+   */
+  async function joindre(planId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      let id = brouillon.id;
+      if (!id) {
+        id = await enregistrerSeance();
+        setBrouillon((b) => ({ ...b, id }));
+      }
+      await attachPlan(id, planId);
+      setAttachments(await loadAttachments(id));
+      setChoixFiche(false);
+      setMessage("Fiche jointe à la séance.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Rattachement impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function retirerFiche(planId: string) {
+    if (!brouillon.id) return;
+    setBusy(true);
+    try {
+      await detachPlan(brouillon.id, planId);
+      setAttachments(await loadAttachments(brouillon.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Retrait impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** L'écriture nue, partagée par l'enregistrement et le rattachement. */
+  async function enregistrerSeance(): Promise<string> {
+    if (!seance.classId) throw new Error("Choisissez d’abord la classe et la matière.");
+    return saveEntry({
+      id: brouillon.id,
+      schoolId,
+      academicYearId,
+      classId: seance.classId,
+      subjectId: seance.subjectId,
+      teacherId,
+      timetableSlotId: seance.slotId,
+      sessionDate: seance.date,
+      startsAt: seance.startsAt,
+      endsAt: seance.endsAt,
+      title: brouillon.title,
+      contentHtml: brouillon.contentHtml,
+      programElements: brouillon.programElements,
+      category: brouillon.category,
+      themes: brouillon.themes.split(",").map((theme) => theme.trim()).filter(Boolean),
+    });
+  }
 
   async function enregistrer(publier?: boolean) {
     if (!seance.classId) {
@@ -208,23 +296,7 @@ export function LessonBookManager() {
     setError("");
     setMessage("");
     try {
-      const id = await saveEntry({
-        id: brouillon.id,
-        schoolId,
-        academicYearId,
-        classId: seance.classId,
-        subjectId: seance.subjectId,
-        teacherId,
-        timetableSlotId: seance.slotId,
-        sessionDate: seance.date,
-        startsAt: seance.startsAt,
-        endsAt: seance.endsAt,
-        title: brouillon.title,
-        contentHtml: brouillon.contentHtml,
-        programElements: brouillon.programElements,
-        category: brouillon.category,
-        themes: brouillon.themes.split(",").map((theme) => theme.trim()).filter(Boolean),
-      });
+      const id = await enregistrerSeance();
       if (publier !== undefined) await setEntryPublished(id, publier);
       setBrouillon((actuel) => ({
         ...actuel,
@@ -518,8 +590,62 @@ export function LessonBookManager() {
             <RichTextEditor
               value={brouillon.contentHtml}
               onChange={(html) => setBrouillon((b) => ({ ...b, contentHtml: html }))}
+              onAttach={() => setChoixFiche((ouvert) => !ouvert)}
+              attachCount={attachments.length}
             />
           </label>
+
+          {/*
+            Le choix de la fiche à joindre. Aucun téléversement : les fiches
+            sont celles que l'enseignant a déjà écrites dans l'application.
+          */}
+          {choixFiche && (
+            <div className={styles.plans}>
+              <b>Joindre une fiche de préparation</b>
+              {!plans.length ? (
+                <small>
+                  Vous n’avez encore aucune fiche. Écrivez-en une dans « Fiches de préparation »,
+                  elle sera proposée ici.
+                </small>
+              ) : (
+                <ul>
+                  {plans.map((fiche) => (
+                    <li key={fiche.id}>
+                      <button
+                        type="button"
+                        disabled={busy || attachments.some((item) => item.planId === fiche.id)}
+                        onClick={() => void joindre(fiche.id)}
+                      >
+                        <Paperclip />
+                        <span>{fiche.title}</span>
+                        {fiche.status !== "published" && <em>brouillon</em>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {attachments.length > 0 && (
+            <div className={styles.attached}>
+              {attachments.map((piece) => (
+                <span key={piece.planId}>
+                  <Paperclip />
+                  {piece.title}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void retirerFiche(piece.planId)}
+                    aria-label={`Retirer ${piece.title}`}
+                    title="Retirer cette fiche"
+                  >
+                    <X />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className={styles.row}>
             <label>

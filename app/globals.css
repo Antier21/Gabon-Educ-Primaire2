@@ -1552,11 +1552,25 @@ textarea:focus {
 .rte-color{width:18px!important;height:18px!important;border-radius:50%!important;
   border:1px solid rgba(0,0,0,.20)!important;padding:0;cursor:pointer}
 .rte-color:hover{transform:scale(1.15)}
+/* Largeur posée, jamais calculée.
+   Laissée libre, une boîte absolument positionnée se réduit à la place que
+   son voisinage lui laisse — et les douze pastilles s'empilaient en colonne
+   au lieu de former deux rangées de six. */
+.rte-swatches{width:158px}
 /* Six caractères par ligne : la grille reste compacte et se lit d'un coup. */
-.rte-chars{width:236px}
+.rte-chars{width:236px;max-width:none}
 .rte-chars button{width:32px!important;height:30px!important;font-size:15px;line-height:1}
 .rte-zone{min-height:190px;max-height:46vh;overflow:auto;padding:13px 15px;font-size:14px;line-height:1.65;color:#1f2e28;outline:none}
 .rte-zone:focus{box-shadow:inset 0 0 0 2px #cfe7dc}
+/* Le trombone, avec le compte de ses pièces jointes. */
+.rte-attach{position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border:1px solid transparent;border-radius:7px;background:transparent;
+  color:#3d4d47;cursor:pointer}
+.rte-attach:hover{background:#eaf4ef;border-color:#cfe2da;color:#08734f}
+.rte-attach svg{width:16px;height:16px}
+.rte-attach span{position:absolute;top:1px;right:0;min-width:14px;height:14px;padding:0 3px;
+  border-radius:999px;background:#08734f;color:#fff;font-size:9px;font-weight:800;line-height:14px;
+  text-align:center}
 /* Le texte d'invite disparaît dès la première frappe : « :empty » ne suffit
    pas, le navigateur laisse un <br> dans une zone vidée à la main. */
 .rte-zone:empty:before{content:attr(data-placeholder);color:#95a29c}
