@@ -79,9 +79,20 @@ export async function resolveMyRoles(
 ): Promise<RoleContext | null> {
   if (!schoolId) return null;
   const client = createClient();
-  const { data: auth } = await client.auth.getSession();
-  const userId = auth.session?.user.id || "";
-  if (!userId) return null;
+  /*
+   * « getUser » plutôt que « getSession ».
+   *
+   * getSession se contente de relire le jeton stocké, sans vérifier qu'il est
+   * encore valide. Un jeton expiré passait donc pour une session valide, la
+   * requête partait, et Supabase répondait 401 — que l'appelant traduisait en
+   * « aucun rôle », c'est-à-dire en refus de droit. Un directeur s'est ainsi vu
+   * refuser la publication de ses bulletins parce que sa session avait expiré.
+   *
+   * getUser interroge le serveur et renouvelle le jeton au besoin.
+   */
+  const { data: auth, error: authError } = await client.auth.getUser();
+  const userId = auth.user?.id || "";
+  if (authError || !userId) return null;
 
   const { data, error } = await client
     .from("school_memberships")

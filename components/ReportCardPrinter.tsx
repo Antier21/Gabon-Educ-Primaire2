@@ -7,6 +7,7 @@ import { Bell, Building2, Printer, Send, TriangleAlert, Undo2 } from "lucide-rea
 import { signOut } from "@/lib/profile-store";
 import { AdminMegaNav, SimpleSpaceNav } from "@/components/SpaceNavigation";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { createClient } from "@/lib/supabase/client";
 import { listClasses, type ClassRecord } from "@/lib/class-store";
 import { PRODUCT } from "@/lib/product-edition";
 import { loadReportModel, type ModelDomain } from "@/lib/report-model/store";
@@ -98,12 +99,25 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
    * un bouton que l'écran avait décidé de cacher.
    */
   const [myRoles, setMyRoles] = useState<string[]>([]);
+  /**
+   * Session perdue.
+   *
+   * Distinct de « aucun rôle » : l'écran affichait des classes et des élèves
+   * venus des copies locales pendant que le serveur refusait toutes les
+   * requêtes, et concluait à un défaut de droit. Une session expirée et un
+   * rôle manquant demandent deux gestes opposés — se reconnecter, ou changer
+   * de compte — et les confondre envoie l'utilisateur dans la mauvaise
+   * direction.
+   */
+  const [sessionLost, setSessionLost] = useState(false);
   const [publications, setPublications] = useState<ReportPublication[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
+        const { data: auth, error: authError } = await createClient().auth.getUser();
+        setSessionLost(Boolean(authError) || !auth.user);
         const context = await resolveActiveSchoolContext();
         const school = context.school;
         setSchoolId(school.id);
@@ -365,7 +379,14 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
           adhésion inactive : trois causes invisibles, qui se ressemblent
           toutes à l'écran si l'on se contente de masquer.
         */}
-        {isAdmin && ready && !mayPublish && (
+        {sessionLost && (
+          <p className={styles.error}>
+            <TriangleAlert /> Votre session a expiré. Les informations affichées viennent de
+            la copie locale et peuvent être périmées ; aucune publication n’est possible.
+            Déconnectez-vous et reconnectez-vous.
+          </p>
+        )}
+        {isAdmin && ready && !mayPublish && !sessionLost && (
           <p className={styles.draftTag}>
             Publication réservée à la direction. Ce compte porte{" "}
             {myRoles.length ? `le rôle « ${myRoles.join(" », « ")} »` : "aucun rôle actif"} dans
