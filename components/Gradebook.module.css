@@ -862,3 +862,7 @@
   .contextSelectors { grid-template-columns: 1fr; }
   .assessmentEditor .two { grid-template-columns: 1fr; }
 }
+
+/* Matière rappelée sous l'intitulé d'une colonne, quand le relevé réunit
+   toutes les matières : sans elle, deux « Devoir 1 » ne se distinguent plus. */
+.columnSubject{display:block;margin-top:2px;font-style:normal;font-size:10px;font-weight:600;letter-spacing:.02em;opacity:.72}

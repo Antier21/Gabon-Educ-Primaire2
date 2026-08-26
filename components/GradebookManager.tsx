@@ -1706,9 +1706,19 @@ function ScoresTab(p: ScoresProps) {
           .map((item) => item.subject),
         ...(currentClass ? getDefaultSubjectsForLevel(currentClass.level) : SUBJECTS),
       ]).filter(Boolean)));
-  const selectedSubject = subjectOptions.includes(subjectFilter)
-    ? subjectFilter
-    : subjectOptions[0] || "";
+  /**
+   * Matière du filtre, ou toutes.
+   *
+   * Le filtre se rabattait sur la première matière de la liste quand rien
+   * n'était choisi. Le relevé n'affichait donc qu'une matière sur cinq, en
+   * silence, alors que le texte sous le titre promet « chaque évaluation créée
+   * ajoute une colonne ». Un enseignant a cru ses notes perdues et les a
+   * ressaisies — d'où des relevés écrits en double.
+   *
+   * La valeur vide signifie désormais « toutes les matières », et c'est le
+   * défaut : le relevé de la période montre la période entière.
+   */
+  const selectedSubject = subjectOptions.includes(subjectFilter) ? subjectFilter : "";
   const allPeriodAssessments = p.workspace.assessments
     .filter((item) => item.classId === p.classId && item.periodId === p.periodId && item.active)
     .sort((a, b) => `${a.date}${a.title}`.localeCompare(`${b.date}${b.title}`, "fr"));
@@ -1788,9 +1798,16 @@ function ScoresTab(p: ScoresProps) {
               onChange={(e) => {
                 const nextSubject = e.target.value;
                 setSubjectFilter(nextSubject);
-                p.setAssessmentId(allPeriodAssessments.find((item) => item.subject === nextSubject)?.id || "");
+                p.setAssessmentId(
+                  nextSubject
+                    ? allPeriodAssessments.find((item) => item.subject === nextSubject)?.id || ""
+                    : "",
+                );
               }}
             >
+              <option value="">
+                {preschool ? "Tous les domaines" : "Toutes les matières"}
+              </option>
               {subjectOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
@@ -1820,8 +1837,16 @@ function ScoresTab(p: ScoresProps) {
               {preschool ? "Chaque observation renseigne un niveau de maîtrise, sans note numérique." : "La liste des élèves vient automatiquement de la classe. Chaque évaluation créée ajoute une colonne au tableau."}
             </p>
           </div>
+          {/*
+            Le compteur dit sur quoi il porte. Afficher « 1 évaluation » alors
+            que la période en compte cinq a fait croire à un enseignant que ses
+            notes n'avaient pas été enregistrées.
+          */}
           <span className={styles.pill}>
             {periodAssessments.length} évaluation{periodAssessments.length > 1 ? "s" : ""}
+            {selectedSubject && allPeriodAssessments.length !== periodAssessments.length
+              ? ` sur ${allPeriodAssessments.length} dans la période`
+              : ""}
           </span>
         </div>
         {!currentClass || !p.classId ? (
@@ -1848,6 +1873,14 @@ function ScoresTab(p: ScoresProps) {
                         title="Sélectionner cette évaluation pour la saisie détaillée"
                       >
                         {assessment.title || assessment.category || "Évaluation"}
+                        {/*
+                          Sans la matière, deux colonnes intitulées « Devoir 1 »
+                          ne se distinguent plus une fois toutes les matières
+                          réunies dans le même tableau.
+                        */}
+                        {!selectedSubject && assessment.subject && (
+                          <em className={styles.columnSubject}>{assessment.subject}</em>
+                        )}
                       </button>
                     </th>
                   ))}
@@ -2095,7 +2128,7 @@ function ScoresTab(p: ScoresProps) {
               <div className={styles.two}>
                 <label>
                   {preschool ? "Domaine d’apprentissage" : "Matière"}
-                  <select name="subject" defaultValue={selectedSubject}>
+                  <select name="subject" defaultValue={selectedSubject || subjectOptions[0] || ""}>
                     {subjectOptions.map((item) => <option key={item}>{item}</option>)}
                   </select>
                 </label>

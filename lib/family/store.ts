@@ -430,8 +430,21 @@ export async function loadScoreStatements(studentId: string): Promise<FamilyScor
       });
       continue;
     }
-    existing.subjects.push(...subjects);
-    existing.assessmentCount += Number(row.assessment_count || 0);
+    /*
+     * Réunir plusieurs lignes est légitime : chaque enseignant écrit le relevé
+     * des matières qu'il enseigne. Les additionner à l'aveugle ne l'est pas.
+     *
+     * Une même matière est arrivée en double dans un relevé réel — deux lignes
+     * portant chacune trois matières, affichées comme six —, et la famille a lu
+     * « Anglais » deux fois avec la même évaluation. Les lignes étant triées de
+     * la plus récente à la plus ancienne, la première rencontrée fait foi.
+     */
+    const seen = new Set(existing.subjects.map((item) => item.subject));
+    for (const subject of subjects) {
+      if (seen.has(subject.subject)) continue;
+      seen.add(subject.subject);
+      existing.subjects.push(subject);
+    }
     // Une moyenne générale calculée sur une partie des matières n'a pas de
     // sens une fois plusieurs enseignants réunis : on préfère ne rien
     // afficher plutôt qu'un chiffre trompeur.
@@ -441,6 +454,13 @@ export async function loadScoreStatements(studentId: string): Promise<FamilyScor
   return [...byPeriod.values()]
     .map((statement) => ({
       ...statement,
+      // Le nombre de notes se recompte sur les matières réellement conservées.
+      // L'additionner ligne par ligne annonçait « 6 note(s) » là où l'élève
+      // n'en avait que trois.
+      assessmentCount: statement.subjects.reduce(
+        (total, subject) => total + (subject.assessments?.length || 0),
+        0,
+      ),
       subjects: statement.subjects.sort((a, b) => a.subject.localeCompare(b.subject, "fr")),
     }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
