@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, CalendarRange, Eye, LayoutList, Lock, LockOpen, Plus, TriangleAlert, Trash2 } from "lucide-react";
+import { Building2, CalendarRange, Eye, LayoutList, Lock, LockOpen, Plus, Stamp, TriangleAlert, Trash2 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
 import { AdminMegaNav } from "@/components/SpaceNavigation";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
@@ -23,6 +23,14 @@ import {
   type SchoolPeriodRow,
 } from "@/lib/report-model/periods-store";
 import { OFFICIAL_REPORT_MODEL, modelMaxScore } from "@/lib/report-model/official-model";
+import {
+  DEFAULT_HEADER_SETTINGS,
+  headerFromSettings,
+  loadHeaderSettings,
+  saveHeaderSettings,
+  suggestHeaderSettings,
+  type HeaderSettings,
+} from "@/lib/report-model/header";
 import {
   addDomain,
   addLine,
@@ -74,6 +82,18 @@ export function ReportModelManager() {
   });
   const [academicYear, setAcademicYear] = useState<{ id: string; label: string } | null>(null);
   const [schoolPeriods, setSchoolPeriods] = useState<SchoolPeriodRow[]>([]);
+  /**
+   * L'en-tête, tel qu'il s'imprimera en haut de chaque bulletin.
+   *
+   * Ces lignes étaient écrites dans le code, recopiées du bulletin qui a servi
+   * de modèle. Elles nommaient l'académie de l'Estuaire et la circonscription
+   * de Libreville-Est : toute autre école du pays aurait imprimé une tutelle
+   * qui n'est pas la sienne sur un document officiel.
+   */
+  const [headerSettings, setHeaderSettings] = useState<HeaderSettings>(DEFAULT_HEADER_SETTINGS);
+  const [schoolLogoUrl, setSchoolLogoUrl] = useState("");
+  /** La suggestion tirée de la fiche de l'école, gardée pour le bouton de remplissage. */
+  const [headerSuggestion, setHeaderSuggestion] = useState<HeaderSettings>(DEFAULT_HEADER_SETTINGS);
 
   const refresh = useCallback(async (id: string) => {
     setDomains(await loadReportModel(id));
@@ -88,8 +108,27 @@ export function ReportModelManager() {
         setSchoolProfile(
           formatSchoolProfile(context.school.schoolType, context.school.schoolSector),
         );
+        setSchoolLogoUrl(context.school.logoUrl || "");
         await refresh(context.school.id);
         setPeriodSettings(await loadPeriodSettings(context.school.id));
+
+        /*
+         * L'en-tête est prérempli, pas imposé.
+         *
+         * Quand l'établissement n'a encore rien composé, on propose dans le
+         * formulaire l'académie et la circonscription déduites de sa fiche —
+         * mais rien n'est écrit tant qu'il n'a pas enregistré. Une école dont
+         * la circonscription ne porte pas le nom de la ville corrige avant
+         * d'enregistrer, et sa correction ne sera plus jamais recouverte.
+         */
+        const suggestion = suggestHeaderSettings(context.school);
+        setHeaderSuggestion(suggestion);
+        const saved = await loadHeaderSettings(context.school.id);
+        setHeaderSettings(
+          !saved.authority2 && !saved.authority3
+            ? { ...saved, authority2: suggestion.authority2, authority3: suggestion.authority3 }
+            : saved,
+        );
         const year = await resolveActiveAcademicYear(context.school.id);
         setAcademicYear(year);
         if (year) setSchoolPeriods(await loadSchoolPeriods(context.school.id, year.id));
@@ -324,6 +363,122 @@ export function ReportModelManager() {
         </section>
       )}
 
+      {!loading && (
+        <section className={styles.panel}>
+          <div className={styles.domainHead}>
+            <h2><Stamp /> En-tête du bulletin</h2>
+          </div>
+          <p>
+            Ces lignes s’impriment en haut de chaque bulletin : votre tutelle au centre,
+            l’identité de l’établissement à gauche. Elles appartiennent à votre école — une
+            académie ou une circonscription qui ne serait pas la vôtre ferait un document
+            officiel faux. Le nom et le logo sont repris de votre fiche d’établissement.
+          </p>
+
+          <div className={styles.headerForm}>
+            <label>
+              <span>Ligne de tutelle 1</span>
+              <input
+                value={headerSettings.authority1}
+                onChange={(event) =>
+                  setHeaderSettings((current) => ({ ...current, authority1: event.target.value }))
+                }
+                placeholder="Ministère de l’Éducation Nationale"
+              />
+            </label>
+            <label>
+              <span>Ligne de tutelle 2</span>
+              <input
+                value={headerSettings.authority2}
+                onChange={(event) =>
+                  setHeaderSettings((current) => ({ ...current, authority2: event.target.value }))
+                }
+                placeholder="Direction d’Académie Provinciale de…"
+              />
+            </label>
+            <label>
+              <span>Ligne de tutelle 3</span>
+              <input
+                value={headerSettings.authority3}
+                onChange={(event) =>
+                  setHeaderSettings((current) => ({ ...current, authority3: event.target.value }))
+                }
+                placeholder="Circonscription Scolaire…"
+              />
+            </label>
+            <label>
+              <span>Sous-titre 1 de l’établissement</span>
+              <input
+                value={headerSettings.subtitle1}
+                onChange={(event) =>
+                  setHeaderSettings((current) => ({ ...current, subtitle1: event.target.value }))
+                }
+                placeholder="Établissement privé laïc"
+              />
+            </label>
+            <label>
+              <span>Sous-titre 2 de l’établissement</span>
+              <input
+                value={headerSettings.subtitle2}
+                onChange={(event) =>
+                  setHeaderSettings((current) => ({ ...current, subtitle2: event.target.value }))
+                }
+                placeholder="Enseignement pré-primaire &amp; primaire"
+              />
+            </label>
+          </div>
+
+          <label className={styles.logoChoice}>
+            <input
+              type="checkbox"
+              checked={headerSettings.showLogo}
+              onChange={(event) =>
+                setHeaderSettings((current) => ({ ...current, showLogo: event.target.checked }))
+              }
+            />
+            <span>
+              Imprimer le logo de l’établissement
+              {schoolLogoUrl
+                ? ""
+                : " — aucun logo n’est encore chargé dans la fiche de l’établissement"}
+            </span>
+          </label>
+
+          <div className={styles.inlineForm}>
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={busy || !schoolId}
+              onClick={() =>
+                void run(
+                  () => saveHeaderSettings(schoolId, headerSettings),
+                  "En-tête enregistré. Tous les bulletins de l’établissement le porteront.",
+                )
+              }
+            >
+              Enregistrer l’en-tête
+            </button>
+            {(headerSuggestion.authority2 || headerSuggestion.authority3) && (
+              <button
+                type="button"
+                className={styles.ghost}
+                disabled={busy}
+                onClick={() =>
+                  setHeaderSettings((current) => ({
+                    ...current,
+                    authority1: headerSuggestion.authority1,
+                    authority2: headerSuggestion.authority2,
+                    authority3: headerSuggestion.authority3,
+                  }))
+                }
+              >
+                Reprendre la tutelle de ma fiche
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {!loading && domains.length > 0 && (
         <section className={styles.panel}>
           <div className={styles.domainHead}>
@@ -343,7 +498,14 @@ export function ReportModelManager() {
           </p>
           {showPreview && (
             <div className={styles.previewFrame}>
-              <ReportCardPreview domains={domains} schoolName={schoolName} />
+              <ReportCardPreview
+                domains={domains}
+                schoolName={schoolName}
+                header={headerFromSettings(headerSettings, {
+                  name: schoolName,
+                  logoUrl: schoolLogoUrl,
+                })}
+              />
             </div>
           )}
         </section>

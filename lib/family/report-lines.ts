@@ -15,6 +15,11 @@
 import { createClient } from "@/lib/supabase/client";
 import { loadReportModel, type ModelDomain } from "@/lib/report-model/store";
 import { periodSortRank } from "@/lib/report-model/periods";
+import {
+  DEFAULT_HEADER,
+  loadReportHeader,
+  type ReportHeader,
+} from "@/lib/report-model/header";
 import { masteryLevel, totalsOf, type MasteryLevel } from "@/lib/report-model/scale";
 
 export type FamilyLineRow = {
@@ -179,12 +184,20 @@ export async function loadFamilyLineStatements(
   const schoolId = String(rows[0].school_id || "");
   const periodIds = Array.from(new Set(rows.map((row) => String(row.period_id))));
 
-  const [domains, periodResult] = await Promise.all([
+  /*
+   * L'en-tête vient de l'établissement, comme pour le personnel.
+   *
+   * La famille lit le même document que celui qui sera imprimé : même tutelle,
+   * même logo. Un bulletin qui porterait un en-tête différent à l'écran et sur
+   * le papier ferait douter du bon document.
+   */
+  const [domains, periodResult, header] = await Promise.all([
     loadReportModel(schoolId),
     client
       .from("school_periods")
       .select("id,label,period_kind,sequence_number")
       .in("id", periodIds),
+    loadReportHeader(schoolId),
   ]);
   if (periodResult.error) throw new Error(describe(periodResult.error));
 
@@ -230,8 +243,8 @@ export type FamilyBulletin = {
 export async function loadFamilyBulletins(
   studentId: string,
   classId: string,
-): Promise<{ domains: ModelDomain[]; bulletins: FamilyBulletin[] }> {
-  if (!studentId || !classId) return { domains: [], bulletins: [] };
+): Promise<{ domains: ModelDomain[]; bulletins: FamilyBulletin[]; header: ReportHeader }> {
+  if (!studentId || !classId) return { domains: [], bulletins: [], header: DEFAULT_HEADER };
   const client = createClient();
 
   const publication = await client
@@ -246,7 +259,7 @@ export async function loadFamilyBulletins(
     ]),
   );
   const publishedIds = new Set(publishedAtByPeriod.keys());
-  if (!publishedIds.size) return { domains: [], bulletins: [] };
+  if (!publishedIds.size) return { domains: [], bulletins: [], header: DEFAULT_HEADER };
 
   const scoreResult = await client
     .from("report_line_scores")
@@ -256,17 +269,25 @@ export async function loadFamilyBulletins(
   const rows = ((scoreResult.data || []) as Array<Record<string, unknown>>).filter((row) =>
     publishedIds.has(String(row.period_id)),
   );
-  if (!rows.length) return { domains: [], bulletins: [] };
+  if (!rows.length) return { domains: [], bulletins: [], header: DEFAULT_HEADER };
 
   const schoolId = String(rows[0].school_id || "");
   const periodIds = Array.from(new Set(rows.map((row) => String(row.period_id))));
 
-  const [domains, periodResult] = await Promise.all([
+  /*
+   * L'en-tête vient de l'établissement, comme pour le personnel.
+   *
+   * La famille lit le même document que celui qui sera imprimé : même tutelle,
+   * même logo. Un bulletin qui porterait un en-tête différent à l'écran et sur
+   * le papier ferait douter du bon document.
+   */
+  const [domains, periodResult, header] = await Promise.all([
     loadReportModel(schoolId),
     client
       .from("school_periods")
       .select("id,label,period_kind,sequence_number")
       .in("id", periodIds),
+    loadReportHeader(schoolId),
   ]);
   if (periodResult.error) throw new Error(describe(periodResult.error));
 
@@ -301,5 +322,5 @@ export async function loadFamilyBulletins(
     };
   });
 
-  return { domains, bulletins };
+  return { domains, bulletins, header };
 }

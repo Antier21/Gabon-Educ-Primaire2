@@ -31,8 +31,13 @@
 
 .head{display:grid;grid-template-columns:1.05fr 1.2fr .95fr;gap:5mm;align-items:start;margin-bottom:2.5mm}
 .identityBlock{display:flex;flex-direction:column;line-height:1.15}
+.identityTop{display:flex;align-items:center;gap:2mm;min-width:0}
 .identityBlock b{font-size:11pt;text-transform:uppercase}
 .identityBlock small{font-size:7pt;font-style:italic}
+/* Hauteur bornée, et jamais en pixels : un logo de 2000 px de haut pousserait
+   le tableau au-delà de la feuille et le bulletin sortirait sur deux pages.
+   « object-fit » garde les proportions du blason quel qu'il soit. */
+.logo{width:14mm;height:14mm;object-fit:contain;flex:none}
 .ministry{display:flex;flex-direction:column;align-items:center;text-align:center;font-size:8pt;line-height:1.25}
 
 .legend{border-collapse:collapse;font-size:6.5pt;width:100%}

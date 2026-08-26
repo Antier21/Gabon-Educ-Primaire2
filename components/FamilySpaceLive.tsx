@@ -45,6 +45,7 @@ import {
   type FamilyPeriodStatement,
 } from "@/lib/family/report-lines";
 import { ReportCardPreview } from "@/components/ReportCardPreview";
+import { DEFAULT_HEADER, type ReportHeader } from "@/lib/report-model/header";
 import type { ModelDomain } from "@/lib/report-model/store";
 import { formatAverage, MASTERY_LABELS } from "@/lib/report-model/scale";
 import styles from "./FamilySpaceLive.module.css";
@@ -141,6 +142,8 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
    */
   const [bulletins, setBulletins] = useState<FamilyBulletin[]>([]);
   const [bulletinModel, setBulletinModel] = useState<ModelDomain[]>([]);
+  /** L'en-tête de l'établissement : la famille lit le bulletin tel qu'il s'imprime. */
+  const [bulletinHeader, setBulletinHeader] = useState<ReportHeader>(DEFAULT_HEADER);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   /**
@@ -256,6 +259,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         setLineStatements(lineList);
         setBulletins(bulletinResult.bulletins);
         setBulletinModel(bulletinResult.domains);
+        setBulletinHeader(bulletinResult.header);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Lecture des données impossible.");
       }
@@ -527,6 +531,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
               <ReportCardPreview
                 domains={bulletinModel}
                 schoolName=""
+                header={bulletinHeader}
                 periodLabel={bulletin.periodLabel.toLocaleUpperCase("fr")}
                 scores={bulletin.scores}
                 pupil={{

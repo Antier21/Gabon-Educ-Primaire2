@@ -27,6 +27,7 @@ import {
   unpublishReports,
   type ReportPublication,
 } from "@/lib/report-model/publication";
+import { DEFAULT_HEADER, loadReportHeader, type ReportHeader } from "@/lib/report-model/header";
 import { ReportCardPreview } from "./ReportCardPreview";
 import styles from "./ReportCardPrinter.module.css";
 
@@ -78,6 +79,8 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [periods, setPeriods] = useState<SchoolPeriodRow[]>([]);
   const [domains, setDomains] = useState<ModelDomain[]>([]);
+  /** L'en-tête composé par la direction, identique sur toute la pile imprimée. */
+  const [header, setHeader] = useState<ReportHeader>(DEFAULT_HEADER);
   const [classId, setClassId] = useState("");
   const [periodId, setPeriodId] = useState("");
   const [pupils, setPupils] = useState<ClassPupil[]>([]);
@@ -122,13 +125,15 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
         const school = context.school;
         setSchoolId(school.id);
         setSchoolName(school.name);
-        const [classResult, model, year] = await Promise.all([
+        const [classResult, model, year, headerResult] = await Promise.all([
           listClasses({ schoolId: school.id, schoolType: school.schoolType }),
           loadReportModel(school.id),
           resolveActiveAcademicYear(school.id),
+          loadReportHeader(school.id),
         ]);
         setClasses(classResult.items);
         setDomains(model);
+        setHeader(headerResult);
         // Le secrétariat est écarté : il assiste la direction, il ne décide
         // pas de la remise des bulletins aux familles.
         const roles = await resolveMyRoles(school.id);
@@ -451,6 +456,7 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
             <ReportCardPreview
               domains={domains}
               schoolName={schoolName}
+              header={header}
               periodLabel={(period?.label || "").toLocaleUpperCase("fr")}
               academicYear={yearLabel}
               scores={scoresOf(current.id)}
@@ -472,6 +478,7 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
               <ReportCardPreview
                 domains={domains}
                 schoolName={schoolName}
+                header={header}
                 periodLabel={(period?.label || "").toLocaleUpperCase("fr")}
                 academicYear={yearLabel}
                 scores={scoresOf(pupil.id)}

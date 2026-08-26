@@ -49,3 +49,10 @@
 .lockOpen{background:#e7f5ee;color:#08734f}
 .lockClosed{background:#fff5e0;color:#7a5300}
 .perTerm b{font-size:13px;font-weight:600;color:#5d6a65}
+.headerForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 14px;margin-bottom:12px}
+.headerForm label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.headerForm span{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#7c8783}
+.headerForm input{padding:8px 10px;border:1px solid #dde5e2;border-radius:8px;font:inherit;font-size:14px;background:#fbfdfc;min-width:0}
+.headerForm input:focus{outline:2px solid #08734f;outline-offset:1px;border-color:#08734f;background:#fff}
+.logoChoice{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-size:14px;color:#3d4d47}
+.logoChoice input{accent-color:#08734f;width:17px;height:17px}

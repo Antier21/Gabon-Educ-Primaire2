@@ -9,6 +9,7 @@ import {
   type ScoredLine,
 } from "@/lib/report-model/scale";
 import type { ModelDomain } from "@/lib/report-model/store";
+import { DEFAULT_HEADER, type ReportHeader } from "@/lib/report-model/header";
 import styles from "./ReportCardPreview.module.css";
 
 /**
@@ -62,6 +63,7 @@ export function ReportCardPreview({
   academicYear = "2025 - 2026",
   scores = {},
   pupil = {},
+  header,
 }: {
   domains: ModelDomain[];
   schoolName: string;
@@ -69,7 +71,17 @@ export function ReportCardPreview({
   academicYear?: string;
   scores?: PreviewScores;
   pupil?: PreviewPupil;
+  /**
+   * L'en-tête de l'établissement. Absent, la feuille se contente du nom de
+   * l'école et de la ligne du ministère : un bulletin doit pouvoir sortir même
+   * si la direction n'a pas encore composé son en-tête.
+   */
+  header?: ReportHeader;
 }) {
+  const head = header || DEFAULT_HEADER;
+  const displayName = head.schoolName || schoolName || "Nom de l’établissement";
+  const subtitles = [head.subtitle1, head.subtitle2].filter(Boolean);
+  const authorities = [head.authority1, head.authority2, head.authority3].filter(Boolean);
   const allLines: ScoredLine[] = [];
   for (const domain of domains)
     for (const skill of domain.skills)
@@ -80,15 +92,30 @@ export function ReportCardPreview({
   return (
     <article className={styles.sheet} aria-label="Aperçu du bulletin">
       <header className={styles.head}>
+        {/*
+          Identité de l'école à gauche, tutelle au centre : c'est la
+          disposition du bulletin officiel, et les deux blocs viennent
+          désormais des réglages de l'établissement. Le logo, quand il existe,
+          se place devant le nom sans pousser le reste — sa hauteur est bornée,
+          faute de quoi une image lourde décalerait la feuille sur une seconde
+          page à l'impression.
+        */}
         <div className={styles.identityBlock}>
-          <b>{schoolName || "Nom de l’établissement"}</b>
-          <small>Établissement privé laïc</small>
-          <small>Enseignement pré-primaire &amp; primaire</small>
+          <div className={styles.identityTop}>
+            {head.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className={styles.logo} src={head.logoUrl} alt="" />
+            ) : null}
+            <b>{displayName}</b>
+          </div>
+          {subtitles.map((line) => (
+            <small key={line}>{line}</small>
+          ))}
         </div>
         <div className={styles.ministry}>
-          <span>Ministère de l’Éducation Nationale</span>
-          <span>Direction d’Académie Provinciale de l’Estuaire</span>
-          <span>Circonscription Scolaire Libreville-Est</span>
+          {authorities.map((line) => (
+            <span key={line}>{line}</span>
+          ))}
         </div>
         {/*
           La légende est imprimée sur le bulletin lui-même, en haut à droite :
