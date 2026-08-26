@@ -539,6 +539,8 @@ function EstablishmentView({ workspace, persist }: ViewProps) {
   const [logoUrl, setLogoUrl] = useState(workspace.school?.logoUrl || "");
   const [logoError, setLogoError] = useState("");
   const logoFileRef = useRef<HTMLInputElement>(null);
+  /** L'échec d'enregistrement côté serveur, dit à l'écran et non à la console. */
+  const [syncError, setSyncError] = useState("");
 
   async function chooseLogo(file: File | undefined) {
     if (!file) return;
@@ -641,7 +643,19 @@ function EstablishmentView({ workspace, persist }: ViewProps) {
       "Établissement et structure scolaire enregistrés.",
     );
     if (saved && schoolId && schoolId !== "local") {
-      const { error } = await createClient()
+      /*
+       * « .select("id") » n'est pas décoratif : c'est lui qui rend l'échec
+       * visible.
+       *
+       * Une ligne écartée par une politique RLS n'est pas refusée, elle est
+       * invisible. Sans « select », PostgREST répond « 204 No Content » sur
+       * zéro ligne modifiée exactement comme sur une réussite : aucune erreur,
+       * aucun avertissement. La fiche de l'établissement est ainsi restée
+       * figée pendant des jours pendant que l'écran affichait « enregistré » à
+       * chaque fois. En redemandant les lignes touchées, un tableau vide
+       * devient une preuve d'échec.
+       */
+      const { data: touched, error } = await createClient()
         .from("schools")
         .update({
           name: field(data, "name"),
@@ -656,9 +670,20 @@ function EstablishmentView({ workspace, persist }: ViewProps) {
           logo_url: field(data, "logoUrl"),
           updated_at: created,
         })
-        .eq("id", schoolId);
+        .eq("id", schoolId)
+        .select("id");
       if (error) {
-        console.warn(`Configuration enregistrée localement, mais la fiche établissement n’a pas été synchronisée : ${error.message}`);
+        setSyncError(
+          `Configuration gardée sur cet appareil, mais la fiche de l’établissement n’a pas été enregistrée sur le serveur : ${error.message}`,
+        );
+      } else if (!touched?.length) {
+        setSyncError(
+          "Configuration gardée sur cet appareil, mais le serveur a refusé de modifier la fiche de l’établissement : " +
+            "votre compte n’a pas le droit de la modifier. Le logo et les coordonnées n’apparaîtront pas sur les bulletins " +
+            "tant que ce droit n’est pas accordé.",
+        );
+      } else {
+        setSyncError("");
       }
     }
   }
@@ -686,6 +711,14 @@ function EstablishmentView({ workspace, persist }: ViewProps) {
         Modèle configurable de bulletin scolaire — à adapter aux exigences de
         l’établissement et aux textes officiels applicables.
       </div>
+      {/*
+        L'échec d'enregistrement se dit ici, en clair.
+        Il partait auparavant dans la console du navigateur, où personne ne
+        regarde : la fiche paraissait enregistrée alors qu'elle ne l'était pas.
+      */}
+      {syncError && (
+        <div className={`${styles.warning} ${styles.dangerNotice}`}>{syncError}</div>
+      )}
       {hasLegacy && (
         <div className={styles.card}>
           <h2>Données v0.7.0 détectées</h2>
