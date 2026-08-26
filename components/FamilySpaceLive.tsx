@@ -5,7 +5,6 @@ import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks
 import {
   loadAttendance,
   loadClassEvaluations,
-  loadClassLessons,
   loadMessages,
   loadReportCards,
   loadScoreStatements,
@@ -17,7 +16,6 @@ import {
   type FamilyChild,
   type FamilyEvaluation,
   type FamilyIdentity,
-  type FamilyLesson,
   type FamilyMessage,
   type ContactRequestState,
   type FamilyScoreStatement,
@@ -45,6 +43,9 @@ import {
   type FamilyPeriodStatement,
 } from "@/lib/family/report-lines";
 import { ReportCardPreview } from "@/components/ReportCardPreview";
+import { FamilyLessonBook } from "@/components/FamilyLessonBook";
+import { loadFamilyLessonUpdates } from "@/lib/family/lesson-book";
+import { toISODate } from "@/lib/lesson-book/week";
 import { DEFAULT_HEADER, type ReportHeader } from "@/lib/report-model/header";
 import type { ModelDomain } from "@/lib/report-model/store";
 import { formatAverage, MASTERY_LABELS } from "@/lib/report-model/scale";
@@ -121,7 +122,14 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
   const [messages, setMessages] = useState<FamilyMessage[]>([]);
-  const [lessons, setLessons] = useState<FamilyLesson[]>([]);
+  /**
+   * Les dates de dernière modification des séances remises.
+   *
+   * Seulement des dates : elles n'alimentent que la pastille « nouveau » de
+   * l'onglet. Le contenu du cahier, lui, est chargé par l'onglet lui-même,
+   * quand on l'ouvre — et pas avant.
+   */
+  const [lessonUpdates, setLessonUpdates] = useState<string[]>([]);
   const [evaluations, setEvaluations] = useState<FamilyEvaluation[]>([]);
   const [statements, setStatements] = useState<FamilyScoreStatement[]>([]);
   /**
@@ -244,7 +252,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
           loadReportCards(child.id),
           loadAttendance(child.id),
           loadTimetable(child.classId),
-          loadClassLessons(child.classId),
+          loadFamilyLessonUpdates(child.classId, toISODate(new Date())),
           loadClassEvaluations(child.classId),
           loadScoreStatements(child.id),
           loadFamilyLineStatements(child.id),
@@ -253,7 +261,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         setReports(reportList);
         setAttendance(attendanceList);
         setTimetable(timetableList);
-        setLessons(lessonList);
+        setLessonUpdates(lessonList);
         setEvaluations(evaluationList);
         setStatements(statementList);
         setLineStatements(lineList);
@@ -288,7 +296,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         ...reports.map((item) => item.publishedAt),
         ...bulletins.map((item) => item.publishedAt),
       ],
-      lessons: lessons.map((item) => item.updatedAt),
+      lessons: lessonUpdates,
       evaluations: evaluations.map((item) => item.announcedAt),
       attendance: attendance.map((item) => item.recordedAt),
       timetable: [],
@@ -307,7 +315,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
     lineStatements,
     bulletins,
     reports,
-    lessons,
+    lessonUpdates,
     evaluations,
     attendance,
     messages,
@@ -585,35 +593,22 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         </section>
       )}
 
+      {/*
+        Le cahier de textes.
+
+        Cet onglet montrait jusqu'ici « lesson_plans » — les FICHES DE
+        PRÉPARATION, écrites avant le cours pour l'usage propre de
+        l'enseignant — sous le titre « Cahiers de texte ». Ce n'était pas le
+        bon document : le cahier de textes s'écrit APRÈS la séance, dit ce qui
+        a eu lieu, et ne parvient à la famille qu'une fois remis. La migration
+        091 avait séparé les deux tables ; l'écran était resté du mauvais côté.
+      */}
       {tab === "lessons" && (
         <section className={styles.panel}>
-          {!lessons.length ? (
-            <p className={styles.empty}>
-              Aucune séance publiée pour cette classe. Les enseignants publient leurs fiches lorsqu’ils
-              souhaitent les rendre visibles aux familles.
-            </p>
-          ) : (
-            <ul className={styles.lessonList}>
-              {lessons.map((lesson) => (
-                <li key={lesson.id} className={styles.lessonItem}>
-                  <div className={styles.lessonHead}>
-                    <b>{lesson.title}</b>
-                    <small>
-                      {[lesson.subject, lesson.weekNumber ? `Semaine ${lesson.weekNumber}` : ""]
-                        .filter(Boolean)
-                        .join(" · ") || "Matière non précisée"}
-                    </small>
-                  </div>
-                  {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
-                  {lesson.homework && (
-                    <p className={styles.homework}>
-                      <b>Travail à faire :</b> {lesson.homework}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* L'enfant est déjà choisi quand cet onglet s'affiche ; « ?? "" »
+              n'existe que pour ne pas dépendre de cet ordre — le composant rend
+              alors un message plutôt que de rompre. */}
+          <FamilyLessonBook classId={child?.classId ?? ""} />
         </section>
       )}
 

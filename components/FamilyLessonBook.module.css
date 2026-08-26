@@ -1,0 +1,105 @@
+/* Le cahier de textes côté famille.
+ *
+ * L'écran est lu sur téléphone plus souvent que sur ordinateur : c'est le soir,
+ * debout dans la cuisine, qu'on demande « qu'est-ce que tu as à faire ». Rien
+ * n'y suppose donc une largeur, et tout se replie en une colonne. */
+.wrap{display:grid;gap:14px}
+
+/* Les deux questions, et le choix entre elles. */
+.switch{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #e6edea;padding-bottom:10px}
+.switch button{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border:1px solid #dce7e2;
+  border-radius:999px;background:#fff;color:#3d4d47;font:inherit;font-size:13px;cursor:pointer}
+.switch button:hover{border-color:#08734f;color:#08734f}
+.switch button svg{width:15px;height:15px}
+.switch .on{background:#08734f;border-color:#08734f;color:#fff}
+.switch .on:hover{color:#fff}
+/* Le compte du travail en attente, sur l'onglet lui-même : c'est le chiffre
+   qu'on vient chercher, et le lire devrait dispenser d'ouvrir. */
+.switch button>span{min-width:19px;height:19px;padding:0 6px;border-radius:999px;background:#eef4f1;
+  color:#3d4d47;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.switch .on>span{background:rgba(255,255,255,.22);color:#fff}
+
+.empty{margin:0;color:#65766f;font-size:14px;line-height:1.6}
+.error{display:flex;align-items:center;gap:8px;margin:0;padding:11px 14px;border-radius:11px;
+  background:#fdecea;color:#96271b;font-size:13.5px}
+.error svg{width:17px;height:17px;flex:none}
+
+/* ---- Le travail à faire, par échéance ---- */
+.bucket{display:grid;gap:8px}
+.bucket h3{display:flex;align-items:center;gap:8px;margin:0;font-size:13.5px;color:#08734f}
+.bucket h3 small{margin-left:auto;font-weight:400;font-size:11.5px;color:#7c8783}
+.bucket h3 svg{width:15px;height:15px}
+/* L'échéance dépassée se signale sans accuser : la plateforme ne sait pas si le
+   travail a été fait, seulement qu'il était dû.
+   Le sélecteur reprend « .bucket h3 », faute de quoi il perdrait contre lui :
+   une classe seule pèse moins qu'une classe suivie d'un élément, et le titre
+   restait vert. */
+.bucket h3.lateHead{color:#8a6a10}
+
+.works{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.works li{border:1px solid #e6edea;border-left:3px solid #08734f;border-radius:0 12px 12px 0;
+  padding:11px 14px;background:#fff}
+.works b{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+  color:#08734f;margin-bottom:4px}
+/* La consigne garde ses retours à la ligne : l'enseignant qui écrit trois
+   devoirs l'un sous l'autre veut trois lignes, pas un paragraphe. */
+.works p{margin:0;font-size:14px;line-height:1.55;color:#24332e;white-space:pre-line}
+.works small{display:block;margin-top:5px;font-size:11.5px;color:#7c8783}
+.lateHead+.works li{border-left-color:#d9a521;background:#fffdf6}
+
+/* ---- La semaine ---- */
+.weekNav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.weekNav>span{font-size:13px;font-weight:700;color:#20302a;min-width:190px;text-align:center}
+.weekNav button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+  border:1px solid #dce7e2;border-radius:9px;background:#fff;color:#3d4d47;cursor:pointer}
+.weekNav button:hover{border-color:#08734f;color:#08734f}
+.weekNav svg{width:16px;height:16px}
+.thisWeek{width:auto!important;padding:0 12px!important;font:inherit;font-size:12.5px;font-weight:600}
+
+.day{display:grid;gap:8px}
+.day h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#7c8783;
+  padding-bottom:4px;border-bottom:1px solid #eef3f1}
+
+.session{border:1px solid #e6edea;border-radius:14px;padding:14px 16px;background:#fff}
+.session>header{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
+.session>header b{font-size:13px;color:#08734f}
+.session>header small{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#7c8783;
+  font-variant-numeric:tabular-nums}
+.session>header small svg{width:12px;height:12px}
+.session>header em{font-style:normal;font-size:9.5px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.03em;padding:2px 7px;border-radius:999px;background:#eef4f1;color:#5b6b65}
+.session h4{margin:0 0 5px;font-size:15px;color:#20302a}
+
+.content{font-size:14px;line-height:1.6;color:#33433d}
+.content :global(p),.content :global(ul),.content :global(ol),
+.content :global(h3),.content :global(h4){margin:0 0 7px}
+.content :global(p:last-child){margin-bottom:0}
+.content :global(ul),.content :global(ol){padding-left:20px}
+.content :global(hr){border:0;border-top:1px solid #e6edea;margin:9px 0}
+.content :global(a){color:#08734f;text-decoration:underline}
+
+/* Le travail donné pendant la séance : la même couleur que l'ancien encadré de
+   devoirs, pour que la famille retrouve le repère qu'elle connaît. */
+.sessionWork{margin-top:10px;padding:10px 13px;background:#fff8e6;border-left:3px solid #d9a521;
+  border-radius:0 9px 9px 0}
+.sessionWork>b{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#8a6a10}
+.sessionWork ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+.sessionWork span{display:block;font-size:13.5px;line-height:1.5;color:#4a3c14;white-space:pre-line}
+.sessionWork small{font-size:11.5px;color:#8a7440}
+
+.files{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.files button,.plan{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+  border:1px solid #cfe2da;background:#f4faf7;color:#20302a;font:inherit;font-size:12.5px}
+.files button{cursor:pointer}
+.files button:hover{border-color:#08734f;color:#08734f;background:#eaf5f0}
+.files svg,.plan svg{width:13px;height:13px;flex:none;color:#08734f}
+.files span,.plan>span{max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.files i,.plan i{font-style:normal;font-size:10.5px;color:#7c8783}
+/* La fiche jointe n'est pas cliquable : elle vit en base, pas dans un fichier.
+   Le curseur ne doit donc pas promettre une ouverture. */
+.plan{background:#fff;border-style:dashed;cursor:default}
+
+@media (max-width:560px){
+  .weekNav>span{min-width:0;flex:1}
+  .files span,.plan>span{max-width:18ch}
+}

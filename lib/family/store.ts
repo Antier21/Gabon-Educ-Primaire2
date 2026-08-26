@@ -66,17 +66,6 @@ export type FamilyMessage = {
   receivedAt: string;
 };
 
-/** Une séance du cahier de texte, telle qu'elle est présentée à la famille. */
-export type FamilyLesson = {
-  id: string;
-  title: string;
-  subject: string;
-  weekNumber: number | null;
-  summary: string;
-  homework: string;
-  updatedAt: string;
-};
-
 /**
  * Relevé de notes : ce que la famille voit en continu, dès la première
  * évaluation. À ne pas confondre avec le bulletin, qui n'apparaît qu'une fois
@@ -294,45 +283,20 @@ export async function resolveFamilyIdentity(
   };
 }
 
-/**
- * Cahier de texte de la classe : séances publiées et travail à faire.
+/*
+ * Ici se trouvait « loadClassLessons », qui lisait « lesson_plans ».
  *
- * Les brouillons sont écartés par la politique de la migration 073, pas ici —
- * un filtre côté navigateur ne protégerait rien.
+ * C'était la mauvaise table : « lesson_plans » contient les FICHES DE
+ * PRÉPARATION, écrites avant le cours pour l'usage propre de l'enseignant,
+ * tandis que l'onglet s'intitulait « Cahiers de texte ». La lecture vit
+ * désormais dans « lib/family/lesson-book.ts » et interroge
+ * « lesson_book_entries », que la migration 091 avait créée précisément pour
+ * séparer les deux.
+ *
+ * La fonction est retirée plutôt que laissée inutilisée : conservée, elle
+ * aurait tôt ou tard été rebranchée par quelqu'un cherchant « lessons » dans
+ * ce fichier, et la confusion serait revenue.
  */
-export async function loadClassLessons(classId: string): Promise<FamilyLesson[]> {
-  if (!classId) return [];
-  const { data, error } = await createClient()
-    .from("lesson_plans")
-    .select("id,title,week_number,lesson_summary,homework,updated_at,subjects(name)")
-    .eq("class_group_id", classId)
-    .order("updated_at", { ascending: false })
-    .limit(40);
-  if (error) throw new Error(describe(error));
-
-  type LessonRow = {
-    id: string;
-    title?: string;
-    week_number?: number | null;
-    lesson_summary?: string;
-    homework?: string;
-    updated_at?: string;
-    subjects?: { name?: string } | Array<{ name?: string }> | null;
-  };
-
-  return ((data || []) as unknown as LessonRow[]).map((row) => {
-    const subject = Array.isArray(row.subjects) ? row.subjects[0] : row.subjects;
-    return {
-      id: String(row.id),
-      title: String(row.title || "Séance sans titre"),
-      subject: String(subject?.name || ""),
-      weekNumber: row.week_number ?? null,
-      summary: String(row.lesson_summary || ""),
-      homework: String(row.homework || ""),
-      updatedAt: String(row.updated_at || ""),
-    };
-  });
-}
 
 /**
  * Évaluations publiées de la classe.
