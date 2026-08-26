@@ -20,27 +20,39 @@
 
 /* La semaine à gauche, la séance à droite : c'est le geste réel de
    l'enseignant, qui consigne « le cours de mercredi » et non « une séance ». */
-.shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:18px;padding:18px 26px 60px;
+/* L'emploi du temps est un repère, pas le sujet de l'écran : il tient dans une
+   colonne étroite à gauche, et toute la place restante va à l'éditeur. C'est là
+   que l'enseignant passe son temps. */
+.shell{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;padding:18px 26px 60px;
   max-width:1560px;margin:auto;align-items:start}
 
-.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;
-  background:#fff;border:1px solid var(--line);border-radius:15px;padding:13px}
-.day{display:flex;flex-direction:column;gap:6px;min-width:0}
-.day h2{margin:0 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#7c8783;text-align:center}
-.free{text-align:center;color:#c3ccc8;font-size:13px;padding:8px 0}
+/* Les jours empilés, et non six colonnes : dans 330 px, six colonnes
+   donneraient des cases de 50 px où aucun nom de classe ne tiendrait. */
+.grid{display:flex;flex-direction:column;gap:9px;position:sticky;top:96px;
+  max-height:calc(100vh - 120px);overflow:auto;
+  background:#fff;border:1px solid var(--line);border-radius:15px;padding:12px 11px}
+.day{display:flex;flex-direction:column;gap:5px;min-width:0}
+.day h2{margin:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#7c8783;
+  padding-bottom:3px;border-bottom:1px solid #eef3f1}
+.free{color:#c3ccc8;font-size:12px;padding:2px 0 4px}
 
-.slot{display:flex;flex-direction:column;gap:2px;padding:8px 7px;border:1px solid #dde8e3;border-radius:10px;
-  background:#fbfdfc;cursor:pointer;text-align:left;font:inherit;min-width:0;position:relative}
+/* Une ligne par cours : l'heure, la classe, la matière — lisibles d'un coup
+   d'œil dans une colonne étroite. */
+.slot{display:grid;grid-template-columns:auto 1fr;gap:1px 9px;padding:7px 9px;border:1px solid #dde8e3;
+  border-radius:9px;background:#fbfdfc;cursor:pointer;text-align:left;font:inherit;min-width:0;position:relative}
 .slot:hover{border-color:#08734f}
-.slot b{font-size:12.5px;color:#20302a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.slot small{font-size:10.5px;color:#65766f}
-.slot em{font-size:10.5px;font-style:normal;color:#08734f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot b{grid-column:2;font-size:12.5px;color:#20302a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding-right:52px}
+.slot small{grid-row:1/3;grid-column:1;align-self:center;font-size:10.5px;color:#65766f;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.slot em{grid-column:2;font-size:10.5px;font-style:normal;color:#08734f;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .slotActive{border-color:#08734f;background:#eaf5f0;box-shadow:0 0 0 2px #cfe7dc}
 /* Trois états lisibles d'un coup d'œil, ce que l'enseignant vient vérifier en
    fin de semaine : rien de consigné, consigné, remis aux familles. */
 .slotDraft{border-left:3px solid #e0a52b}
 .slotDone{border-left:3px solid #08734f}
-.badge{position:absolute;top:6px;right:6px;font-size:8.5px;font-weight:800;text-transform:uppercase;
+.badge{position:absolute;top:7px;right:7px;font-size:8px;font-weight:800;text-transform:uppercase;
   letter-spacing:.04em;padding:2px 5px;border-radius:999px;background:#eef4f1;color:#5b6b65}
 
 .form{background:#fff;border:1px solid var(--line);border-radius:15px;padding:19px 21px;display:grid;gap:14px}
@@ -95,10 +107,9 @@
 
 @media (max-width:1150px){
   .shell{grid-template-columns:1fr}
-  .grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .grid{position:static;max-height:none}
 }
 @media (max-width:640px){
-  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .row{grid-template-columns:1fr}
   .weekNav>span{min-width:0}
 }

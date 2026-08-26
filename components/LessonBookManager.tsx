@@ -386,10 +386,11 @@ export function LessonBookManager() {
                           consignee ? (consignee.isPublished ? styles.slotDone : styles.slotDraft) : ""
                         }`}
                       >
+                        {/* L'heure de début suffit dans une colonne étroite ;
+                            l'horaire complet reste affiché en tête du
+                            formulaire, une fois la séance choisie. */}
+                        <small>{slot.startsAt}</small>
                         <b>{slot.className}</b>
-                        <small>
-                          {slot.startsAt}–{slot.endsAt}
-                        </small>
                         <em>{slot.subjectLabel}</em>
                         {/*
                           Trois états lisibles d'un coup d'œil : rien de
