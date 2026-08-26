@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpenCheck, CalendarPlus, ChevronLeft, ChevronRight, Eye, EyeOff, Save, TriangleAlert } from "lucide-react";
+import { BookOpenCheck, CalendarPlus, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Save, TriangleAlert } from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { BackToSpace } from "@/components/BackToSpace";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -92,6 +92,8 @@ export function LessonBookManager() {
    */
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [libre, setLibre] = useState(false);
+  /** Le jour pré-rempli quand la saisie libre s'ouvre depuis un « + ». */
+  const [libreDate, setLibreDate] = useState("");
   const [entries, setEntries] = useState<LessonBookEntry[]>([]);
   const [monday, setMonday] = useState<Date>(() => weekStart(new Date()));
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -292,7 +294,14 @@ export function LessonBookManager() {
           <button type="button" className={styles.today} onClick={() => setMonday(weekStart(new Date()))}>
             Cette semaine
           </button>
-          <button type="button" className={styles.today} onClick={() => setLibre(true)}>
+          <button
+            type="button"
+            className={styles.today}
+            onClick={() => {
+              setLibreDate("");
+              setLibre(true);
+            }}
+          >
             <CalendarPlus /> Hors emploi du temps
           </button>
         </div>
@@ -306,77 +315,65 @@ export function LessonBookManager() {
       {message && <p className={styles.ok}>{message}</p>}
 
       <section className={styles.shell}>
-        {/* La semaine : un jour par colonne, les créneaux de l'enseignant dedans. */}
+        {/*
+          La semaine, toujours.
+
+          La version précédente remplaçait la colonne par une explication quand
+          l'emploi du temps n'était pas saisi : l'écran devenait une page vide
+          avec un texte au milieu. Or la semaine existe indépendamment de
+          l'emploi du temps — six jours, du lundi au samedi. C'est elle le
+          squelette ; les créneaux ne sont qu'un remplissage, et les séances
+          consignées hors emploi du temps se rangent aux mêmes jours.
+
+          Chaque jour porte donc son « + » : sans horaires saisis, l'enseignant
+          clique sur le jour et consigne sa séance. Avec eux, il clique sur le
+          cours.
+        */}
         <div className={styles.grid}>
           {loading ? (
             <p className={styles.hint}>Chargement de votre semaine…</p>
-          ) : !slots.length ? (
-            /*
-              Sans emploi du temps, la grille n'a rien à montrer — mais le
-              cahier de textes, lui, reste à tenir. On propose donc la saisie
-              par classe, et l'on affiche les séances déjà consignées cette
-              semaine.
-            */
-            <div className={styles.noSlots}>
-              <p>
-                Votre emploi du temps n’est pas encore saisi. Vous pouvez tenir votre cahier de
-                textes sans attendre : choisissez la classe, la date et l’horaire vous-même.
-              </p>
-              <button type="button" className={styles.primary} onClick={() => setLibre(true)}>
-                <CalendarPlus /> Consigner une séance
-              </button>
-              {entries.length > 0 && (
-                <ul className={styles.freeList}>
-                  {entries.map((entree) => {
-                    const affectation = assignments.find(
-                      (item) =>
-                        item.classId === entree.classId && item.subjectId === entree.subjectId,
-                    );
-                    return (
-                      <li key={entree.id}>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            affectation &&
-                            ouvrirSaisieLibre(
-                              affectation,
-                              fromISODate(entree.sessionDate),
-                              entree.startsAt,
-                              entree.endsAt,
-                            )
-                          }
-                        >
-                          <b>{formatDayLong(fromISODate(entree.sessionDate))}</b>
-                          <small>
-                            {affectation
-                              ? `${affectation.className} · ${affectation.subjectLabel}`
-                              : "Séance"}
-                            {entree.startsAt ? ` · ${entree.startsAt}` : ""}
-                          </small>
-                          <span className={styles.badge}>
-                            {entree.isPublished ? "remis" : "brouillon"}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
           ) : (
             jours.map((jour) => {
+              const iso = toISODate(jour);
               const duJour = slots
                 .filter((slot) => slot.weekday === weekdayOf(jour))
                 .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+              // Les séances de ce jour qui ne correspondent à aucun créneau :
+              // remplacements, rattrapages, ou tout le cahier tant que
+              // l'emploi du temps n'est pas saisi.
+              const horsCreneau = entries
+                .filter(
+                  (entree) =>
+                    entree.sessionDate === iso &&
+                    !duJour.some(
+                      (slot) =>
+                        slot.classId === entree.classId && slot.subjectId === entree.subjectId,
+                    ),
+                )
+                .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+
               return (
-                <div className={styles.day} key={toISODate(jour)}>
-                  <h2>{formatDayShort(jour)}</h2>
-                  {!duJour.length && <span className={styles.free}>—</span>}
+                <div className={styles.day} key={iso}>
+                  <h2>
+                    {formatDayShort(jour)}
+                    <button
+                      type="button"
+                      className={styles.addDay}
+                      title={`Consigner une séance le ${formatDayLong(jour)}`}
+                      aria-label={`Consigner une séance le ${formatDayLong(jour)}`}
+                      onClick={() => {
+                        setLibreDate(iso);
+                        setLibre(true);
+                      }}
+                    >
+                      <Plus />
+                    </button>
+                  </h2>
+
                   {duJour.map((slot) => {
                     const consignee = entryFor(jour, slot.classId, slot.subjectId);
                     const choisie =
-                      selection?.slotId === slot.id &&
-                      toISODate(selection.date) === toISODate(jour);
+                      selection?.slotId === slot.id && toISODate(selection.date) === iso;
                     return (
                       <button
                         type="button"
@@ -387,8 +384,7 @@ export function LessonBookManager() {
                         }`}
                       >
                         {/* L'heure de début suffit dans une colonne étroite ;
-                            l'horaire complet reste affiché en tête du
-                            formulaire, une fois la séance choisie. */}
+                            l'horaire complet reste en tête du formulaire. */}
                         <small>{slot.startsAt}</small>
                         <b>{slot.className}</b>
                         <em>{slot.subjectLabel}</em>
@@ -406,6 +402,46 @@ export function LessonBookManager() {
                       </button>
                     );
                   })}
+
+                  {horsCreneau.map((entree) => {
+                    const affectation = assignments.find(
+                      (item) =>
+                        item.classId === entree.classId && item.subjectId === entree.subjectId,
+                    );
+                    const choisie =
+                      !selection?.slotId &&
+                      selection?.classId === entree.classId &&
+                      toISODate(selection.date) === iso;
+                    return (
+                      <button
+                        type="button"
+                        key={entree.id}
+                        onClick={() =>
+                          affectation &&
+                          ouvrirSaisieLibre(
+                            affectation,
+                            jour,
+                            entree.startsAt,
+                            entree.endsAt,
+                          )
+                        }
+                        className={`${styles.slot} ${choisie ? styles.slotActive : ""} ${
+                          entree.isPublished ? styles.slotDone : styles.slotDraft
+                        }`}
+                      >
+                        <small>{entree.startsAt || "—"}</small>
+                        <b>{affectation?.className || "Séance"}</b>
+                        <em>{affectation?.subjectLabel || entree.title || "Cours"}</em>
+                        <span className={styles.badge}>
+                          {entree.isPublished ? "remis" : "brouillon"}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {!duJour.length && !horsCreneau.length && (
+                    <span className={styles.free}>—</span>
+                  )}
                 </div>
               );
             })
@@ -471,7 +507,12 @@ export function LessonBookManager() {
                   <div className={styles.row}>
                     <label>
                       Date
-                      <input type="date" name="date" defaultValue={toISODate(jours[0])} required />
+                      <input
+                        type="date"
+                        name="date"
+                        defaultValue={libreDate || toISODate(jours[0])}
+                        required
+                      />
                     </label>
                     <label>
                       Début
