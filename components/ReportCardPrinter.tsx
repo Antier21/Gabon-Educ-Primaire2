@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Bell, Printer, Send, TriangleAlert, Undo2 } from "lucide-react";
+import { Bell, Building2, Printer, Send, TriangleAlert, Undo2 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
-import { SimpleSpaceNav } from "@/components/SpaceNavigation";
+import { AdminMegaNav, SimpleSpaceNav } from "@/components/SpaceNavigation";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { listClasses, type ClassRecord } from "@/lib/class-store";
 import { PRODUCT } from "@/lib/product-edition";
@@ -56,8 +56,21 @@ function defaultPeriodId(periods: readonly SchoolPeriodRow[]): string {
   return (ordinaire || periods[0])?.id || "";
 }
 
-export function ReportCardPrinter() {
+/**
+ * Le même écran, ouvert des deux côtés.
+ *
+ * L'enseignant consulte et imprime les bulletins de ses classes. La direction
+ * fait de même, et elle seule dispose du bouton de publication : « seul le
+ * responsable et celui à qui il aura confié le rôle sont habilités à publier
+ * les bulletins ».
+ *
+ * L'écran n'avait d'abord été posé que dans l'espace enseignant, si bien que
+ * la direction n'avait aucun chemin vers le bouton qu'elle est pourtant seule
+ * à pouvoir actionner.
+ */
+export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
   const router = useRouter();
+  const isAdmin = space === "admin";
   const [schoolId, setSchoolId] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [yearLabel, setYearLabel] = useState("");
@@ -95,9 +108,14 @@ export function ReportCardPrinter() {
         ]);
         setClasses(classResult.items);
         setDomains(model);
+        // Le secrétariat est écarté : il assiste la direction, il ne décide
+        // pas de la remise des bulletins aux familles.
         const roles = await resolveMyRoles(school.id);
         setMayPublish(
-          Boolean(roles?.roles?.some((role) => isManagementRole(role) && role !== "secretary")),
+          space === "admin" &&
+            Boolean(
+              roles?.roles?.some((role) => isManagementRole(role) && role !== "secretary"),
+            ),
         );
         setPublications(await loadPublications(school.id));
         if (year) {
@@ -112,7 +130,7 @@ export function ReportCardPrinter() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [space]);
 
   const refresh = useCallback(async (nextClassId: string, nextPeriodId: string) => {
     if (!nextClassId || !nextPeriodId) {
@@ -179,7 +197,7 @@ export function ReportCardPrinter() {
 
   async function logout() {
     await signOut();
-    router.push("/gabon-educ/connexion");
+    router.push(isAdmin ? "/gabon-educ/connexion-administration" : "/gabon-educ/connexion");
     router.refresh();
   }
 
@@ -188,35 +206,67 @@ export function ReportCardPrinter() {
   const current = pupils.find((item) => item.id === selected) || null;
 
   return (
-    <main className="family-space family-space-teacher">
-      <header className="family-space-brandbar">
-        <Image
-          src="/branding/logo-gabon-educ-plus-v2.png"
-          alt={`Logo ${PRODUCT.name}`}
-          width={52}
-          height={52}
-          unoptimized
-        />
-        <div>
-          <b>{PRODUCT.name}</b>
-          <span>Bulletins — {schoolName || "établissement"}</span>
-        </div>
-        <Bell />
-      </header>
+    <main className={isAdmin ? "admin-workspace" : "family-space family-space-teacher"}>
+      {isAdmin ? (
+        <>
+          <header className="admin-brandbar">
+            <div className="admin-brand-identity">
+              <div className="admin-seal"><Printer /></div>
+              <div><b>{PRODUCT.name}</b><span>Bulletins et publication</span></div>
+            </div>
+            <div className="admin-school-profile" aria-label="Établissement actif">
+              <Building2 />
+              <div>
+                <span>ÉTABLISSEMENT ACTIF</span>
+                <strong>{schoolName || "Chargement…"}</strong>
+                <small>{yearLabel || "Année en cours de résolution"}</small>
+              </div>
+            </div>
+          </header>
+          <AdminMegaNav onLogout={() => void logout()} />
+          <section className="admin-contextbar">
+            <div>
+              <b>Bulletins et publication</b>
+              <span>
+                {ready
+                  ? `${pupils.length} élève(s) · ${report.rankedCount} classé(s) · moyenne de classe ${formatAverage(report.classAverage)}`
+                  : "Choisissez une classe et une période."}
+              </span>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <header className="family-space-brandbar">
+            <Image
+              src="/branding/logo-gabon-educ-plus-v2.png"
+              alt={`Logo ${PRODUCT.name}`}
+              width={52}
+              height={52}
+              unoptimized
+            />
+            <div>
+              <b>{PRODUCT.name}</b>
+              <span>Bulletins — {schoolName || "établissement"}</span>
+            </div>
+            <Bell />
+          </header>
 
-      <SimpleSpaceNav space="teacher" onLogout={() => void logout()} />
+          <SimpleSpaceNav space="teacher" onLogout={() => void logout()} />
 
-      <section className="family-space-welcome">
-        <div>
-          <small>Espace enseignant</small>
-          <h1><Printer /> Imprimer les bulletins</h1>
-          <p>
-            {ready
-              ? `${pupils.length} élève(s) · ${report.rankedCount} classé(s) · moyenne de classe ${formatAverage(report.classAverage)}`
-              : "Choisissez une classe et une période."}
-          </p>
-        </div>
-      </section>
+          <section className="family-space-welcome">
+            <div>
+              <small>Espace enseignant</small>
+              <h1><Printer /> Imprimer les bulletins</h1>
+              <p>
+                {ready
+                  ? `${pupils.length} élève(s) · ${report.rankedCount} classé(s) · moyenne de classe ${formatAverage(report.classAverage)}`
+                  : "Choisissez une classe et une période."}
+              </p>
+            </div>
+          </section>
+        </>
+      )}
 
       <section className={styles.panel}>
         <div className={styles.pickers}>
@@ -305,7 +355,9 @@ export function ReportCardPrinter() {
           <p className={published ? styles.publishedTag : styles.draftTag}>
             {published
               ? "Ce bulletin est visible par les familles de la classe."
-              : "Ce bulletin n’est pas encore remis aux familles. Elles voient le relevé de notes, pas le document."}
+              : isAdmin
+                ? "Ce bulletin n’est pas encore remis aux familles. Elles voient le relevé de notes, pas le document."
+                : "Ce bulletin n’est pas encore remis aux familles. Seule la direction peut le publier."}
           </p>
         )}
 

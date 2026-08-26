@@ -46,6 +46,7 @@ const protectedPrefixes = [
   "/gabon-educ/modele-bulletin",
   "/gabon-educ/saisie-bulletin",
   "/gabon-educ/impression-bulletins",
+  "/gabon-educ/bulletins-publication",
   "/gabon-educ/journal-audit",
   "/gabon-educ/import-export",
   "/gabon-educ/synchronisation",
@@ -95,6 +96,7 @@ const loginByPrefix: Array<[string, string]> = [
   // renverraient vers la connexion des enseignants.
   ["/gabon-educ/notes-bulletins", "/gabon-educ/connexion-administration"],
   ["/gabon-educ/modele-bulletin", "/gabon-educ/connexion-administration"],
+  ["/gabon-educ/bulletins-publication", "/gabon-educ/connexion-administration"],
   ["/gabon-educ/journal-audit", "/gabon-educ/connexion-administration"],
   ["/gabon-educ/import-export", "/gabon-educ/connexion-administration"],
   ["/gabon-educ/synchronisation", "/gabon-educ/connexion-administration"],
