@@ -339,6 +339,22 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
               disabled={!ready || busy}
               onClick={() =>
                 void (async () => {
+                  /*
+                   * Publier un bulletin sans aucune note est presque toujours
+                   * une erreur de période : les notes sont ailleurs. Un
+                   * établissement l'a fait, et la famille n'a rien vu paraître
+                   * sans comprendre pourquoi. On demande confirmation plutôt
+                   * que d'interdire — un bulletin vide peut se justifier, par
+                   * exemple pour ouvrir l'accès avant les conseils.
+                   */
+                  if (!published && report.rankedCount === 0) {
+                    const suite = window.confirm(
+                      `Aucun élève n'a de note pour « ${period?.label} ».\n\n` +
+                        "Les familles verraient un bulletin vide. Vos notes sont peut-être " +
+                        "sur une autre période.\n\nPublier quand même ?",
+                    );
+                    if (!suite) return;
+                  }
                   setBusy(true);
                   setError("");
                   setMessage("");
@@ -392,6 +408,12 @@ export function ReportCardPrinter({ space }: { space: "teacher" | "admin" }) {
             {myRoles.length ? `le rôle « ${myRoles.join(" », « ")} »` : "aucun rôle actif"} dans
             l’établissement {schoolName || "actif"}. Il faut « school_admin », « headmaster » ou
             « academic_director », avec une appartenance active dans cet établissement.
+          </p>
+        )}
+        {ready && report.rankedCount === 0 && (
+          <p className={styles.draftTag}>
+            Aucun élève n’a de note pour « {period?.label} ». Le bulletin sortirait vide —
+            vérifiez la période avant d’imprimer ou de publier.
           </p>
         )}
         {ready && (
