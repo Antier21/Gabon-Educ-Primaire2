@@ -382,3 +382,139 @@ export async function detachPlan(entryId: string, planId: string): Promise<void>
     .select("id");
   confirmWrite(result, "le retrait de cette fiche");
 }
+
+/* ===================================================================
+ * Les fichiers joints à une séance.
+ *
+ * Le seau est privé : la lecture passe par une adresse signée, valable
+ * quelques minutes. Un seau public rendrait chaque devoir consultable par
+ * quiconque devine ou reçoit un lien, sans connexion.
+ * =================================================================== */
+
+const SEAU = "cahier-de-textes";
+
+/** 10 Mo : assez pour un sujet scanné, assez peu pour une connexion d'école. */
+export const LESSON_FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+export type LessonFile = {
+  id: string;
+  path: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+/**
+ * Un nom de fichier utilisable comme clé de stockage.
+ *
+ * Les accents, les espaces et les apostrophes d'un « Contrôle n°2 — l'accord
+ * du participe.pdf » produisent des clés fragiles selon les outils qui les
+ * relisent. Le nom d'origine est conservé dans le registre et c'est lui qui
+ * s'affiche ; seule la clé technique est simplifiée.
+ */
+function cleDeFichier(nom: string): string {
+  return (
+    String(nom || "fichier")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(-80) || "fichier"
+  );
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+export async function loadLessonFiles(entryId: string): Promise<LessonFile[]> {
+  if (!entryId) return [];
+  const { data, error } = await createClient()
+    .from("lesson_book_files")
+    .select("id,storage_path,file_name,mime_type,size_bytes")
+    .eq("entry_id", entryId)
+    .order("created_at");
+  if (error) throw new Error(describe(error));
+  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    path: String(row.storage_path || ""),
+    name: String(row.file_name || "Fichier"),
+    mimeType: String(row.mime_type || ""),
+    sizeBytes: Number(row.size_bytes || 0),
+  }));
+}
+
+/**
+ * Dépose un fichier et l'inscrit au registre.
+ *
+ * L'ordre compte : les octets d'abord, le registre ensuite. Inscrire d'abord
+ * laisserait une ligne pointant vers un fichier inexistant si l'envoi échouait
+ * — et l'écran promettrait une pièce jointe introuvable.
+ */
+export async function uploadLessonFile(
+  entryId: string,
+  schoolId: string,
+  file: File,
+): Promise<void> {
+  if (file.size > LESSON_FILE_MAX_BYTES) {
+    throw new Error(
+      `« ${file.name} » pèse ${formatFileSize(file.size)}. La limite est de ${formatFileSize(
+        LESSON_FILE_MAX_BYTES,
+      )} par fichier.`,
+    );
+  }
+  const client = createClient();
+  const { data: auth } = await client.auth.getUser();
+  // Le chemin porte l'établissement puis la séance : c'est de ce deuxième
+  // dossier que le serveur déduit qui a le droit de lire le fichier.
+  const chemin = `${schoolId}/${entryId}/${crypto.randomUUID()}-${cleDeFichier(file.name)}`;
+
+  const envoi = await client.storage.from(SEAU).upload(chemin, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (envoi.error) throw new Error(describe(envoi.error));
+
+  const { error } = await client.from("lesson_book_files").insert({
+    entry_id: entryId,
+    school_id: schoolId,
+    storage_path: chemin,
+    file_name: file.name,
+    mime_type: file.type || "",
+    size_bytes: file.size,
+    uploaded_by: auth.user?.id || null,
+  });
+  if (error) {
+    // Le registre a refusé : on retire les octets plutôt que de laisser un
+    // fichier orphelin occuper l'espace sans que rien ne le désigne.
+    await client.storage.from(SEAU).remove([chemin]);
+    throw new Error(describe(error));
+  }
+}
+
+export async function deleteLessonFile(fichier: LessonFile): Promise<void> {
+  const client = createClient();
+  const result = await client
+    .from("lesson_book_files")
+    .delete()
+    .eq("id", fichier.id)
+    .select("id");
+  confirmWrite(result, "la suppression de cette pièce jointe");
+  // Les octets ensuite : si le retrait du seau échoue, la ligne a déjà
+  // disparu et le fichier n'est plus atteignable par personne.
+  await client.storage.from(SEAU).remove([fichier.path]);
+}
+
+/**
+ * Une adresse de lecture, valable une heure.
+ *
+ * Assez pour ouvrir ou télécharger le document ; assez peu pour qu'un lien
+ * recopié ailleurs cesse vite de fonctionner.
+ */
+export async function lessonFileUrl(path: string): Promise<string> {
+  const { data, error } = await createClient().storage.from(SEAU).createSignedUrl(path, 3600);
+  if (error) throw new Error(describe(error));
+  return String(data?.signedUrl || "");
+}

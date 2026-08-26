@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
   ChevronLeft,
@@ -21,15 +21,21 @@ import { isRichTextEmpty } from "@/lib/lesson-book/rich-text";
 import {
   LESSON_CATEGORIES,
   attachPlan,
+  deleteLessonFile,
   detachPlan,
+  formatFileSize,
+  lessonFileUrl,
   loadAttachments,
+  loadLessonFiles,
   loadTeacherAssignments,
   loadTeacherPlans,
   loadTeacherSlots,
   loadWeekEntries,
   saveEntry,
   setEntryPublished,
+  uploadLessonFile,
   type Attachment,
+  type LessonFile,
   type LessonBookEntry,
   type TeacherPlan,
   type TeacherAssignment,
@@ -139,6 +145,9 @@ export function LessonBookManager() {
   const [plans, setPlans] = useState<TeacherPlan[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [choixFiche, setChoixFiche] = useState(false);
+  /** Les fichiers déposés depuis l'ordinateur, et leur champ caché. */
+  const [files, setFiles] = useState<LessonFile[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const jours = useMemo(() => weekDays(monday), [monday]);
 
@@ -214,7 +223,11 @@ export function LessonBookManager() {
       setError("");
       // Les pièces jointes suivent la séance affichée, jamais l'inverse.
       setAttachments([]);
-      if (existante?.id) void loadAttachments(existante.id).then(setAttachments).catch(() => undefined);
+      setFiles([]);
+      if (existante?.id) {
+        void loadAttachments(existante.id).then(setAttachments).catch(() => undefined);
+        void loadLessonFiles(existante.id).then(setFiles).catch(() => undefined);
+      }
     },
     [entryFor],
   );
@@ -243,6 +256,66 @@ export function LessonBookManager() {
       setMessage("Fiche jointe à la séance.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Rattachement impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Dépose les fichiers choisis dans l'explorateur.
+   *
+   * Comme pour les fiches, la séance est enregistrée d'abord si elle ne l'est
+   * pas encore : un fichier doit se rattacher à quelque chose qui existe, et
+   * l'enseignant qui clique sur le trombone en premier ne doit pas être
+   * renvoyé à un enregistrement préalable.
+   */
+  async function deposer(liste: FileList | null) {
+    if (!liste || !liste.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      let id = brouillon.id;
+      if (!id) {
+        id = await enregistrerSeance();
+        setBrouillon((b) => ({ ...b, id }));
+      }
+      // Un par un, et non tous ensemble : un fichier trop lourd ne doit pas
+      // faire échouer le dépôt des autres.
+      const refus: string[] = [];
+      for (const fichier of Array.from(liste)) {
+        try {
+          await uploadLessonFile(id, schoolId, fichier);
+        } catch (caught) {
+          refus.push(caught instanceof Error ? caught.message : fichier.name);
+        }
+      }
+      setFiles(await loadLessonFiles(id));
+      if (refus.length) setError(refus.join(" "));
+      else setMessage("Pièce(s) jointe(s) déposée(s).");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Dépôt impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function ouvrirFichier(fichier: LessonFile) {
+    try {
+      const url = await lessonFileUrl(fichier.path);
+      window.open(url, "_blank", "noopener");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Ouverture impossible.");
+    }
+  }
+
+  async function retirerFichier(fichier: LessonFile) {
+    if (!window.confirm(`Retirer « ${fichier.name} » de cette séance ?`)) return;
+    setBusy(true);
+    try {
+      await deleteLessonFile(fichier);
+      if (brouillon.id) setFiles(await loadLessonFiles(brouillon.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Retrait impossible.");
     } finally {
       setBusy(false);
     }
@@ -590,15 +663,70 @@ export function LessonBookManager() {
             <RichTextEditor
               value={brouillon.contentHtml}
               onChange={(html) => setBrouillon((b) => ({ ...b, contentHtml: html }))}
-              onAttach={() => setChoixFiche((ouvert) => !ouvert)}
-              attachCount={attachments.length}
+              onAttach={() => fileRef.current?.click()}
+              attachCount={attachments.length + files.length}
             />
           </label>
 
           {/*
-            Le choix de la fiche à joindre. Aucun téléversement : les fiches
-            sont celles que l'enseignant a déjà écrites dans l'application.
+            Le champ de fichiers, invisible : c'est le trombone de la barre qui
+            le déclenche, là où la main le cherche.
           */}
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            className={styles.hiddenFile}
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.txt"
+            onChange={(event) => {
+              void deposer(event.target.files);
+              // Remis à zéro pour que redéposer le même fichier déclenche bien
+              // un nouvel événement.
+              event.target.value = "";
+            }}
+          />
+
+          {/* Les fichiers déposés. */}
+          {files.length > 0 && (
+            <div className={styles.attached}>
+              {files.map((fichier) => (
+                <span key={fichier.id}>
+                  <Paperclip />
+                  <button
+                    type="button"
+                    className={styles.fileName}
+                    onClick={() => void ouvrirFichier(fichier)}
+                    title="Ouvrir le fichier"
+                  >
+                    {fichier.name}
+                  </button>
+                  <i>{formatFileSize(fichier.sizeBytes)}</i>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void retirerFichier(fichier)}
+                    aria-label={`Retirer ${fichier.name}`}
+                    title="Retirer ce fichier"
+                  >
+                    <X />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/*
+            La fiche de préparation, second type de pièce jointe : elle vit
+            déjà en base, on la désigne au lieu de la téléverser.
+          */}
+          <button
+            type="button"
+            className={styles.linkPlan}
+            onClick={() => setChoixFiche((ouvert) => !ouvert)}
+          >
+            {choixFiche ? "Fermer" : "Joindre plutôt une fiche de préparation"}
+          </button>
+
           {choixFiche && (
             <div className={styles.plans}>
               <b>Joindre une fiche de préparation</b>
