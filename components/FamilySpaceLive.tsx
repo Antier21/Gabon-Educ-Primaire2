@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, MessageCircle, PhoneCall, UserRoundCheck } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, ListTodo, MessageCircle, PhoneCall, UserRoundCheck } from "lucide-react";
 import {
   loadAttendance,
   loadClassEvaluations,
@@ -63,6 +63,7 @@ const TABS = [
   // tandis que le bulletin ne paraît qu'une fois par trimestre.
   { key: "scores", hash: "releve-de-notes", label: "Relevé de notes", icon: ListChecks },
   { key: "results", hash: "bulletins", label: "Bulletins", icon: GraduationCap },
+  { key: "homework", hash: "travail-a-faire", label: "Travail à faire", icon: ListTodo },
   { key: "lessons", hash: "cahiers-de-texte", label: "Cahiers de texte", icon: BookOpen },
   { key: "evaluations", hash: "evaluations", label: "Évaluations", icon: ClipboardCheck },
   { key: "attendance", hash: "vie-scolaire", label: "Vie scolaire", icon: UserRoundCheck },
@@ -296,6 +297,9 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         ...reports.map((item) => item.publishedAt),
         ...bulletins.map((item) => item.publishedAt),
       ],
+      // Une remise enseignant met à jour la séance qui porte le devoir : les
+      // deux modules peuvent donc partager le même signal de nouveauté.
+      homework: lessonUpdates,
       lessons: lessonUpdates,
       evaluations: evaluations.map((item) => item.announcedAt),
       attendance: attendance.map((item) => item.recordedAt),
@@ -603,12 +607,26 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
         a eu lieu, et ne parvient à la famille qu'une fois remis. La migration
         091 avait séparé les deux tables ; l'écran était resté du mauvais côté.
       */}
+      {tab === "homework" && (
+        <section className={styles.panel}>
+          <FamilyLessonBook
+            classId={child?.classId ?? ""}
+            initialView="travail"
+            showSwitch={false}
+          />
+        </section>
+      )}
+
       {tab === "lessons" && (
         <section className={styles.panel}>
           {/* L'enfant est déjà choisi quand cet onglet s'affiche ; « ?? "" »
               n'existe que pour ne pas dépendre de cet ordre — le composant rend
               alors un message plutôt que de rompre. */}
-          <FamilyLessonBook classId={child?.classId ?? ""} />
+          <FamilyLessonBook
+            classId={child?.classId ?? ""}
+            initialView="seances"
+            showSwitch={false}
+          />
         </section>
       )}
 

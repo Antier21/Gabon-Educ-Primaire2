@@ -85,6 +85,11 @@ export function shiftISODate(iso: string, days: number): string {
   return toISODate(new Date(base.getFullYear(), base.getMonth(), base.getDate() + days, 12));
 }
 
+/** Filtre PostgREST : échéances encore utiles OU absence d'échéance. */
+export function familyHomeworkDateFilter(since: string): string {
+  return `due_date.gte.${since},due_date.is.null`;
+}
+
 /* ===================================================================
  * Le classement des devoirs — sans base, donc vérifiable.
  * =================================================================== */
@@ -188,7 +193,11 @@ export async function loadFamilyHomework(
     )
     .eq("lesson_book_entries.class_group_id", classId)
     .eq("lesson_book_entries.is_published", true)
-    .gte("due_date", depuis)
+    // Une échéance est facultative côté enseignant. Un simple « gte » écarte
+    // les valeurs NULL en SQL et faisait donc disparaître ces devoirs chez la
+    // famille, alors que l'écran sait précisément les ranger « Sans échéance
+    // précisée ».
+    .or(familyHomeworkDateFilter(depuis))
     .order("due_date")
     .limit(120);
   if (error) throw new Error(describe(error));

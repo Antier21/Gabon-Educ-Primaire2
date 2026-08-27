@@ -53,6 +53,17 @@ const MODE_LABELS = new Map(HOMEWORK_MODES.map((mode) => [mode.value, mode.label
 
 type Vue = "travail" | "seances";
 
+type FamilyLessonBookProps = {
+  classId: string;
+  /** Vue imposée par le module qui accueille le composant. */
+  initialView?: Vue;
+  /**
+   * Conservé pour les anciens écrans qui réunissent encore les deux lectures.
+   * Les espaces famille les présentent désormais comme deux modules séparés.
+   */
+  showSwitch?: boolean;
+};
+
 function detailDevoir(devoir: FamilyHomework): string {
   const morceaux: string[] = [];
   if (devoir.mode !== "papier") morceaux.push(MODE_LABELS.get(devoir.mode) || devoir.mode);
@@ -60,8 +71,12 @@ function detailDevoir(devoir: FamilyHomework): string {
   return morceaux.join(" · ");
 }
 
-export function FamilyLessonBook({ classId }: { classId: string }) {
-  const [vue, setVue] = useState<Vue>("travail");
+export function FamilyLessonBook({
+  classId,
+  initialView = "travail",
+  showSwitch = true,
+}: FamilyLessonBookProps) {
+  const [vue, setVue] = useState<Vue>(initialView);
   /*
    * La date du jour est figée à l'ouverture de l'écran.
    *
@@ -78,12 +93,14 @@ export function FamilyLessonBook({ classId }: { classId: string }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (vue !== "travail") return;
     if (!classId) {
       setChargement(false);
       return;
     }
     void (async () => {
       setChargement(true);
+      setError("");
       try {
         setDevoirs(await loadFamilyHomework(classId, today));
       } catch (caught) {
@@ -92,13 +109,14 @@ export function FamilyLessonBook({ classId }: { classId: string }) {
         setChargement(false);
       }
     })();
-  }, [classId, today]);
+  }, [classId, today, vue]);
 
   const lireSemaine = useCallback(
     async (lundi: Date) => {
       if (!classId) return;
       const jours = weekDays(lundi);
       setLectureSemaine(true);
+      setError("");
       try {
         setSeances(
           await loadFamilySessions(
@@ -154,27 +172,29 @@ export function FamilyLessonBook({ classId }: { classId: string }) {
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.switch} role="tablist" aria-label="Cahier de textes">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={vue === "travail"}
-          className={vue === "travail" ? styles.on : ""}
-          onClick={() => setVue("travail")}
-        >
-          <ListTodo /> Travail à faire
-          {devoirs.length > 0 && <span>{devoirs.length}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={vue === "seances"}
-          className={vue === "seances" ? styles.on : ""}
-          onClick={() => setVue("seances")}
-        >
-          <BookOpenCheck /> Ce qui a été fait en classe
-        </button>
-      </div>
+      {showSwitch && (
+        <div className={styles.switch} role="tablist" aria-label="Cahier de textes">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={vue === "travail"}
+            className={vue === "travail" ? styles.on : ""}
+            onClick={() => setVue("travail")}
+          >
+            <ListTodo /> Travail à faire
+            {devoirs.length > 0 && <span>{devoirs.length}</span>}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={vue === "seances"}
+            className={vue === "seances" ? styles.on : ""}
+            onClick={() => setVue("seances")}
+          >
+            <BookOpenCheck /> Ce qui a été fait en classe
+          </button>
+        </div>
+      )}
 
       {error && (
         <p className={styles.error}>

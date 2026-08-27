@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { groupHomeworkByDue, shiftISODate, type FamilyHomework } from "./lesson-book";
+import {
+  familyHomeworkDateFilter,
+  groupHomeworkByDue,
+  shiftISODate,
+  type FamilyHomework,
+} from "./lesson-book";
 
 function devoir(id: string, dueDate: string, subject = "Français"): FamilyHomework {
   return {
@@ -99,5 +104,13 @@ describe("groupHomeworkByDue", () => {
 
   it("ne rend rien quand il n’y a rien", () => {
     expect(groupHomeworkByDue([], today)).toEqual([]);
+  });
+});
+
+describe("familyHomeworkDateFilter", () => {
+  it("n'écarte pas les devoirs dont l'enseignant n'a pas daté l'échéance", () => {
+    expect(familyHomeworkDateFilter("2026-09-07")).toBe(
+      "due_date.gte.2026-09-07,due_date.is.null",
+    );
   });
 });

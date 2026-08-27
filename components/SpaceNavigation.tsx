@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, BriefcaseBusiness, CalendarDays, CalendarRange, ChevronDown, ClipboardCheck, ExternalLink,
-  GraduationCap, HeartPulse, Home, Library, LogOut, Menu, MessageCircle, NotebookPen,
-  PenLine, Printer, School, ShieldCheck, UserRound, Users, X, PhoneCall} from "lucide-react";
+  GraduationCap, HeartPulse, Home, Library, ListTodo, LogOut, Menu, MessageCircle, NotebookPen,
+  PenLine, PhoneCall, Printer, School, ShieldCheck, UserRound, Users, X,
+} from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
 import type { SchoolRole } from "@/lib/platform/types";
@@ -306,6 +307,7 @@ const simpleNav: Record<SimpleSpace, SimpleNavEntry[]> = {
     { label: "Accueil", href: "/gabon-educ/espace-parent", icon: Home },
     { label: "Relevé de notes", href: "/gabon-educ/espace-parent#releve-de-notes", icon: ClipboardCheck },
     { label: "Bulletins", href: "/gabon-educ/espace-parent#bulletins", icon: GraduationCap },
+    { label: "Travail à faire", href: "/gabon-educ/espace-parent#travail-a-faire", icon: ListTodo },
     { label: "Cahiers de texte", href: "/gabon-educ/espace-parent#cahiers-de-texte", icon: NotebookPen },
     { label: "Évaluations", href: "/gabon-educ/espace-parent#evaluations", icon: CalendarDays },
     { label: "Vie scolaire", href: "/gabon-educ/espace-parent#vie-scolaire", icon: UserRound },
@@ -317,6 +319,7 @@ const simpleNav: Record<SimpleSpace, SimpleNavEntry[]> = {
     { label: "Accueil", href: "/gabon-educ/espace-eleve", icon: Home },
     { label: "Relevé de notes", href: "/gabon-educ/espace-eleve#releve-de-notes", icon: ClipboardCheck },
     { label: "Bulletins", href: "/gabon-educ/espace-eleve#bulletins", icon: GraduationCap },
+    { label: "Travail à faire", href: "/gabon-educ/espace-eleve#travail-a-faire", icon: ListTodo },
     { label: "Cahiers de texte", href: "/gabon-educ/espace-eleve#cahiers-de-texte", icon: NotebookPen },
     { label: "Évaluations", href: "/gabon-educ/espace-eleve#evaluations", icon: CalendarDays },
     { label: "Vie scolaire", href: "/gabon-educ/espace-eleve#vie-scolaire", icon: UserRound },
