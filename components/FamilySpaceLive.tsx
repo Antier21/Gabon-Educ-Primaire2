@@ -6,6 +6,8 @@ import {
   loadAttendance,
   loadClassEvaluations,
   loadMessages,
+  markFamilyMessagesRead,
+  acknowledgeFamilyMessage,
   loadReportCards,
   loadScoreStatements,
   loadTimetable,
@@ -170,6 +172,8 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [contactMessage, setContactMessage] = useState("");
   const [contactError, setContactError] = useState("");
   const [savingContact, setSavingContact] = useState(false);
+  const [acknowledgingMessage, setAcknowledgingMessage] = useState("");
+  const [messageActionError, setMessageActionError] = useState("");
   const [pendingRequest, setPendingRequest] = useState<ContactRequestState | null>(null);
 
   useEffect(() => {
@@ -193,6 +197,22 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
       }
     })();
   }, [space]);
+
+  useEffect(() => {
+    if (space !== "parent" || tab !== "messages") return;
+    const unread = messages.filter((message) => !message.readAt).map((message) => message.id);
+    if (!unread.length) return;
+    void markFamilyMessagesRead(unread)
+      .then(() => {
+        const readAt = new Date().toISOString();
+        setMessages((current) =>
+          current.map((message) => (unread.includes(message.id) ? { ...message, readAt } : message)),
+        );
+      })
+      .catch((caught) =>
+        setMessageActionError(caught instanceof Error ? caught.message : "Lecture impossible."),
+      );
+  }, [messages, space, tab]);
 
   // L'onglet suit l'ancre de l'adresse. Le menu et les vignettes d'accueil
   // pointent vers « …/espace-parent#vie-scolaire » : la page est déjà ouverte,
@@ -309,6 +329,12 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
     };
     const counts = {} as Record<TabKey, number>;
     for (const { key } of TABS) {
+      if (key === "messages") {
+        counts[key] = visited.includes(seenKey(childId, key))
+          ? 0
+          : messages.filter((message) => !message.readAt).length;
+        continue;
+      }
       counts[key] = visited.includes(seenKey(childId, key))
         ? 0
         : countFresh(source[key], seenAtOpen[seenKey(childId, key)]);
@@ -710,17 +736,62 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
 
       {space === "parent" && tab === "messages" && (
         <section className={styles.panel}>
+          {messageActionError && <p className={styles.contactError}>{messageActionError}</p>}
           {!messages.length ? (
             <p className={styles.empty}>Aucun message reçu de l’établissement.</p>
           ) : (
             messages.map((message) => (
-              <article key={message.id} className={styles.message}>
+              <article
+                key={message.id}
+                className={`${styles.message} ${styles[`message_${message.priority}`] || ""}`}
+              >
                 <header>
-                  <b>{message.title}</b>
+                  <div>
+                    <b>{message.title}</b>
+                    {message.priority !== "normal" && (
+                      <span className={styles.messagePriority}>
+                        {message.priority === "urgent" ? "Urgent" : "Important"}
+                      </span>
+                    )}
+                  </div>
                   <small>{formatDate(message.receivedAt)}</small>
                 </header>
                 <p>{message.body}</p>
                 {message.studentName && <small>Concerne {message.studentName}</small>}
+                <footer>
+                  {message.acknowledgedAt ? (
+                    <span className={styles.messageAcknowledged}>Pris en connaissance</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.messageAcknowledge}
+                      disabled={acknowledgingMessage === message.id}
+                      onClick={async () => {
+                        setAcknowledgingMessage(message.id);
+                        setMessageActionError("");
+                        try {
+                          await acknowledgeFamilyMessage(message.id);
+                          const acknowledgedAt = new Date().toISOString();
+                          setMessages((current) =>
+                            current.map((item) =>
+                              item.id === message.id
+                                ? { ...item, readAt: item.readAt || acknowledgedAt, acknowledgedAt }
+                                : item,
+                            ),
+                          );
+                        } catch (caught) {
+                          setMessageActionError(
+                            caught instanceof Error ? caught.message : "Confirmation impossible.",
+                          );
+                        } finally {
+                          setAcknowledgingMessage("");
+                        }
+                      }}
+                    >
+                      J’ai pris connaissance
+                    </button>
+                  )}
+                </footer>
               </article>
             ))
           )}

@@ -64,6 +64,9 @@ export type FamilyMessage = {
   body: string;
   studentName: string;
   receivedAt: string;
+  priority: "normal" | "important" | "urgent";
+  readAt: string;
+  acknowledgedAt: string;
 };
 
 /**
@@ -544,7 +547,7 @@ export async function loadMessages(guardianId: string): Promise<FamilyMessage[]>
   if (!guardianId) return [];
   const { data, error } = await createClient()
     .from("message_recipients")
-    .select("id,resolved_body,student_name,created_at,message_campaigns(title,publish_to_parent_space)")
+    .select("id,resolved_body,student_name,created_at,read_at,acknowledged_at,message_campaigns(title,priority,publish_to_parent_space)")
     .eq("guardian_id", guardianId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -554,7 +557,13 @@ export async function loadMessages(guardianId: string): Promise<FamilyMessage[]>
     resolved_body?: string;
     student_name?: string;
     created_at?: string;
-    message_campaigns?: { title?: string; publish_to_parent_space?: boolean } | null;
+    read_at?: string;
+    acknowledged_at?: string;
+    message_campaigns?: {
+      title?: string;
+      priority?: "normal" | "important" | "urgent";
+      publish_to_parent_space?: boolean;
+    } | null;
   };
   return ((data || []) as unknown as MessageRow[])
     .filter((row) => row.message_campaigns?.publish_to_parent_space !== false)
@@ -564,7 +573,28 @@ export async function loadMessages(guardianId: string): Promise<FamilyMessage[]>
       body: String(row.resolved_body || ""),
       studentName: String(row.student_name || ""),
       receivedAt: String(row.created_at || ""),
+      priority: row.message_campaigns?.priority || "normal",
+      readAt: String(row.read_at || ""),
+      acknowledgedAt: String(row.acknowledged_at || ""),
     }));
+}
+
+/** Marque en une seule requête les messages affichés dans la boîte du parent. */
+export async function markFamilyMessagesRead(recipientIds: string[]): Promise<void> {
+  if (!recipientIds.length) return;
+  const { error } = await createClient().rpc("mark_my_parent_messages_read", {
+    target_recipient_ids: recipientIds,
+  });
+  if (error) throw new Error(describe(error));
+}
+
+/** Accusé volontaire : distinct de la simple ouverture de la boîte. */
+export async function acknowledgeFamilyMessage(recipientId: string): Promise<void> {
+  const { data, error } = await createClient().rpc("acknowledge_my_parent_message", {
+    target_recipient_id: recipientId,
+  });
+  if (error) throw new Error(describe(error));
+  if (data !== true) throw new Error("Ce message n’a pas pu être confirmé.");
 }
 
 /**

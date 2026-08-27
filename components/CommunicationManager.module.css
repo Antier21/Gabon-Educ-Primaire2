@@ -58,6 +58,8 @@
 .variables button{padding:5px 10px;border:1px dashed #b6d4c6;border-radius:8px;background:#f7fbf9;color:#0b5138;font:inherit;font-size:12px;cursor:pointer}
 .checkboxRow{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:#3d4d47}
 .checkboxRow input{width:auto}
+.internalNotice{display:flex;align-items:center;gap:8px;margin:2px 0 16px;padding:11px 13px;border:1px solid #bfe3d2;border-radius:10px;background:#eef7f3;color:#0b5138;font-size:13px;font-weight:600}
+.internalNotice svg{width:17px;height:17px;flex:0 0 auto}
 
 .preview{background:#f7fbf9;border:1px solid #dce7e2;border-radius:12px;padding:14px;margin-bottom:16px}
 .preview small{display:block;color:#65766f;font-size:12px;margin-bottom:6px}

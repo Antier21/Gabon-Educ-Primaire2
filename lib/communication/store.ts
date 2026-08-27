@@ -13,7 +13,8 @@ import { confirmWrite } from "@/lib/supabase/confirm-write";
  * remontée telle quelle à l'appelant.
  */
 
-export type AudienceKind = "class" | "level" | "students";
+export type AudienceKind = "school" | "class" | "level" | "students";
+export type MessagePriority = "normal" | "important" | "urgent";
 
 export type CampaignTarget = {
   kind: AudienceKind;
@@ -42,7 +43,7 @@ export type MessageTemplate = {
 };
 
 /** Par quel canal le parent a réellement été joint. Vide tant qu'il ne l'est pas. */
-export type SentChannel = "whatsapp" | "sms" | "manual" | "group" | "";
+export type SentChannel = "internal" | "whatsapp" | "sms" | "manual" | "group" | "";
 
 export type CampaignRecipient = RecipientDraft & {
   id: string;
@@ -51,6 +52,9 @@ export type CampaignRecipient = RecipientDraft & {
   failureReason: string;
   sentAt: string;
   sentChannel: SentChannel;
+  deliveredAt: string;
+  readAt: string;
+  acknowledgedAt: string;
 };
 
 export type Campaign = {
@@ -63,6 +67,10 @@ export type Campaign = {
   status: string;
   recipientCount: number;
   sentCount: number;
+  readCount: number;
+  acknowledgedCount: number;
+  priority: MessagePriority;
+  channel: string;
   createdAt: string;
 };
 
@@ -247,25 +255,27 @@ export async function createCampaign(input: {
   body: string;
   target: CampaignTarget;
   recipients: RecipientDraft[];
-  publishToParentSpace: boolean;
+  priority: MessagePriority;
 }): Promise<string> {
   const client = createClient();
   const { data: auth } = await client.auth.getUser();
 
+  const deliveredAt = new Date().toISOString();
   const campaign = await client
     .from("message_campaigns")
     .insert({
       school_id: input.schoolId,
       title: input.title.trim(),
       body: input.body,
-      channel: "whatsapp",
+      channel: "internal",
       audience_kind: input.target.kind,
       class_group_id: input.target.kind === "class" ? input.target.classId || null : null,
       level_code: input.target.kind === "level" ? input.target.levelCode || null : null,
-      status: "sending",
-      publish_to_parent_space: input.publishToParentSpace,
+      status: "sent",
+      publish_to_parent_space: true,
+      priority: input.priority,
       recipient_count: input.recipients.length,
-      sent_count: 0,
+      sent_count: input.recipients.length,
       created_by: auth.user?.id || null,
     })
     .select("id")
@@ -283,12 +293,11 @@ export async function createCampaign(input: {
     class_name: recipient.className,
     phone: recipient.phone,
     resolved_body: resolveBodyFor(input.body, recipient, input.schoolName),
-    status: recipient.phoneUsable && recipient.contactAllowed ? "pending" : "skipped",
-    failure_reason: !recipient.contactAllowed
-      ? "Ce responsable a refusé d'être contacté."
-      : !recipient.phoneUsable
-        ? "Numéro de téléphone inutilisable."
-        : null,
+    status: "sent",
+    failure_reason: null,
+    sent_at: deliveredAt,
+    delivered_at: deliveredAt,
+    sent_channel: "internal",
   }));
 
   const inserted = await client.from("message_recipients").insert(rows);
@@ -338,6 +347,9 @@ export async function listCampaignRecipients(campaignId: string): Promise<Campai
     failureReason: String(row.failure_reason || ""),
     sentAt: String(row.sent_at || ""),
     sentChannel: String(row.sent_channel || "") as SentChannel,
+    deliveredAt: String(row.delivered_at || row.created_at || ""),
+    readAt: String(row.read_at || ""),
+    acknowledgedAt: String(row.acknowledged_at || ""),
   }));
 }
 
@@ -425,12 +437,17 @@ export async function refreshCampaignProgress(campaignId: string): Promise<void>
 export async function listCampaigns(schoolId: string): Promise<Campaign[]> {
   const { data, error } = await createClient()
     .from("message_campaigns")
-    .select("id,title,body,audience_kind,level_code,status,recipient_count,sent_count,created_at,class_groups(name)")
+    .select("id,title,body,channel,audience_kind,level_code,status,recipient_count,sent_count,priority,created_at,class_groups(name),message_recipients(read_at,acknowledged_at)")
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw new Error(describe(error));
-  return (data || []).map((row: Record<string, unknown>) => ({
+  return (data || []).map((row: Record<string, unknown>) => {
+    const recipientRows = (row.message_recipients || []) as Array<{
+      read_at?: string | null;
+      acknowledged_at?: string | null;
+    }>;
+    return {
     id: String(row.id),
     title: String(row.title || ""),
     body: String(row.body || ""),
@@ -440,6 +457,11 @@ export async function listCampaigns(schoolId: string): Promise<Campaign[]> {
     status: String(row.status || "draft"),
     recipientCount: Number(row.recipient_count || 0),
     sentCount: Number(row.sent_count || 0),
+    readCount: recipientRows.filter((item) => Boolean(item.read_at)).length,
+    acknowledgedCount: recipientRows.filter((item) => Boolean(item.acknowledged_at)).length,
+    priority: String(row.priority || "normal") as MessagePriority,
+    channel: String(row.channel || "whatsapp"),
     createdAt: String(row.created_at || ""),
-  }));
+    };
+  });
 }

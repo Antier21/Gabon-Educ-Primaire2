@@ -64,11 +64,21 @@
 .day small{margin-left:auto;color:#65766f;font-size:12px}
 
 .message{border:1px solid #e6edea;border-radius:14px;padding:16px}
+.message_important{border-left:4px solid #d99a16;background:#fffcf5}
+.message_urgent{border-left:4px solid #c0392b;background:#fff9f8}
 .message header{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+.message header>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .message header b{font-size:15px}
 .message header small{margin-left:auto;color:#65766f;font-size:12px}
 .message p{margin:0 0 6px;line-height:1.6;font-size:14px;white-space:pre-wrap}
 .message>small{color:#65766f;font-size:12px}
+.messagePriority{padding:3px 8px;border-radius:999px;background:#fff0c7;color:#7a5300;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.message_urgent .messagePriority{background:#fde7e4;color:#96271b}
+.message footer{display:flex;justify-content:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid #eef2f0}
+.messageAcknowledge{padding:8px 13px;border:1px solid #08734f;border-radius:999px;background:#fff;color:#08734f;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.messageAcknowledge:hover{background:#eef7f3}
+.messageAcknowledge:disabled{opacity:.6;cursor:progress}
+.messageAcknowledged{color:#08734f;font-size:12px;font-weight:700}
 
 /* Relevé de notes */
 .statement{border:1px solid #e6edea;border-radius:14px;padding:16px;display:grid;gap:14px}

@@ -35,6 +35,7 @@ import {
   type CampaignRecipient,
   type CampaignTarget,
   type MessageTemplate,
+  type MessagePriority,
   type RecipientDraft,
   type SentChannel,
 } from "@/lib/communication/store";
@@ -57,6 +58,7 @@ import styles from "./CommunicationManager.module.css";
 import { BackToSpace } from "@/components/BackToSpace";
 
 const AUDIENCES: Array<{ kind: AudienceKind; label: string; hint: string }> = [
+  { kind: "school", label: "Tout l’établissement", hint: "Tous les parents rattachés à un élève actif" },
   { kind: "class", label: "Une classe", hint: "Tous les parents d'une même classe" },
   { kind: "level", label: "Un niveau", hint: "Toutes les classes d'un même niveau" },
   { kind: "students", label: "Des élèves choisis", hint: "Sélection manuelle, élève par élève" },
@@ -75,7 +77,7 @@ export function CommunicationManager() {
   const [studentIds, setStudentIds] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [publishToParentSpace, setPublishToParentSpace] = useState(true);
+  const [priority, setPriority] = useState<MessagePriority>("normal");
 
   const [drafts, setDrafts] = useState<RecipientDraft[]>([]);
   const [campaignId, setCampaignId] = useState("");
@@ -176,14 +178,14 @@ export function CommunicationManager() {
         body,
         target,
         recipients: drafts,
-        publishToParentSpace,
+        priority,
       });
       setCampaignId(id);
       setRecipients(await listCampaignRecipients(id));
       setCampaigns(await listCampaigns(schoolId));
       setNotice({
         kind: "success",
-        text: "Campagne enregistrée. Envoyez maintenant les messages un par un ci-dessous.",
+        text: `Message remis dans Gabon Éduc+ à ${drafts.length} parent(s).`,
       });
     } catch (error) {
       setNotice({ kind: "error", text: error instanceof Error ? error.message : "Création impossible." });
@@ -285,7 +287,6 @@ export function CommunicationManager() {
     }
   }
 
-  const contactable = drafts.filter((item) => item.contactAllowed && item.phoneUsable);
   const excluded = drafts.filter((item) => !item.contactAllowed || !item.phoneUsable);
   const pending = recipients.filter((item) => item.status === "pending");
   const sent = recipients.filter((item) => item.status === "sent");
@@ -322,8 +323,8 @@ export function CommunicationManager() {
             <small>ESPACE ADMINISTRATION</small>
             <h1>Écrire aux parents</h1>
             <p>
-              Les messages partent par WhatsApp, sur le numéro enregistré de chaque responsable.
-              Vous validez chaque envoi, et l’application garde la trace de ce qui est parti.
+              Envoyez un message privé à une classe, un niveau ou tout l’établissement.
+              Chaque parent le reçoit dans son espace Gabon Éduc+, sans voir les autres destinataires.
             </p>
           </div>
         </div>
@@ -428,14 +429,14 @@ export function CommunicationManager() {
 
           {drafts.length > 0 && (
             <div className={styles.recipientSummary}>
-              <span className={styles.badgeOk}>{contactable.length} parent(s) joignable(s)</span>
-              {excluded.length > 0 && <span className={styles.badgeWarn}>{excluded.length} écarté(s)</span>}
+              <span className={styles.badgeOk}>{drafts.length} parent(s) recevront le message interne</span>
+              {excluded.length > 0 && <span className={styles.badgeWarn}>{excluded.length} sans WhatsApp utilisable</span>}
               {excluded.length > 0 && (
                 <ul className={styles.excludedList}>
                   {excluded.slice(0, 5).map((item) => (
                     <li key={`${item.guardianId}-${item.studentId}`}>
                       {item.guardianName} ({item.studentName}) —{" "}
-                      {!item.contactAllowed ? "contact refusé" : "numéro inutilisable"}
+                      {!item.contactAllowed ? "canal externe désactivé" : "numéro inutilisable"}
                     </li>
                   ))}
                   {excluded.length > 5 && <li>et {excluded.length - 5} autre(s)…</li>}
@@ -474,6 +475,14 @@ export function CommunicationManager() {
             />
           </label>
           <label>
+            Importance
+            <select value={priority} onChange={(event) => setPriority(event.target.value as MessagePriority)}>
+              <option value="normal">Information</option>
+              <option value="important">Important</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </label>
+          <label>
             Message
             <textarea
               rows={6}
@@ -495,14 +504,9 @@ export function CommunicationManager() {
             ))}
             <span className={styles.muted}>Cliquez pour insérer — remplacé pour chaque parent.</span>
           </div>
-          <label className={styles.checkboxRow}>
-            <input
-              type="checkbox"
-              checked={publishToParentSpace}
-              onChange={(event) => setPublishToParentSpace(event.target.checked)}
-            />
-            Publier aussi le message dans l’espace parent de l’application
-          </label>
+          <div className={styles.internalNotice}>
+            <CheckCircle2 /> Remise privée dans l’espace parent, avec suivi de lecture.
+          </div>
           {preview && (
             <div className={styles.preview}>
               <small>Aperçu pour {drafts[0]?.guardianName}</small>
@@ -513,23 +517,23 @@ export function CommunicationManager() {
             type="button"
             className={styles.primary}
             onClick={() => void startCampaign()}
-            disabled={busy || !contactable.length}
+            disabled={busy || !drafts.length}
           >
-            <Send /> Préparer l’envoi à {contactable.length} parent(s)
+            <Send /> Envoyer à {drafts.length} parent(s)
           </button>
         </section>
 
         {campaignId && (
           <section className={styles.card}>
             <h2>
-              <Send /> 3. Envoyer
+              <CheckCircle2 /> 3. Message interne remis
               <span className={styles.progress}>
                 {sent.length} / {recipients.length}
               </span>
             </h2>
             <p className={styles.muted}>
-              Chaque bouton ouvre WhatsApp avec le message déjà écrit. Il ne vous reste qu’à appuyer sur
-              envoyer, puis à revenir ici — la ligne passe automatiquement en « envoyé ».
+              Le message est déjà disponible dans l’espace privé de chaque parent. Le suivi ci-dessous
+              distingue les messages remis, lus et confirmés. WhatsApp reste disponible comme renfort.
             </p>
 
             {/*
@@ -661,16 +665,38 @@ export function CommunicationManager() {
                   </div>
                   <div className={styles.rowActions}>
                     {recipient.status === "sent" && (
-                      <span className={styles.sentTag}>
-                        <CheckCircle2 /> Envoyé
-                        {recipient.sentChannel === "sms"
-                          ? " · SMS"
-                          : recipient.sentChannel === "whatsapp"
-                            ? " · WhatsApp"
-                            : recipient.sentChannel === "group"
-                              ? " · Groupe classe"
-                              : ""}
-                      </span>
+                      <>
+                        <span className={styles.sentTag}>
+                          <CheckCircle2 />
+                          {recipient.acknowledgedAt
+                            ? "Pris en connaissance"
+                            : recipient.readAt
+                              ? "Lu"
+                              : recipient.sentChannel === "internal"
+                                ? "Remis"
+                                : "Envoyé"}
+                          {recipient.sentChannel === "sms"
+                            ? " · SMS"
+                            : recipient.sentChannel === "whatsapp"
+                              ? " · WhatsApp"
+                              : recipient.sentChannel === "group"
+                                ? " · Groupe classe"
+                                : recipient.sentChannel === "internal"
+                                  ? " · Gabon Éduc+"
+                                  : ""}
+                        </span>
+                        {recipient.sentChannel === "internal" && recipient.phoneUsable && (
+                          <a
+                            className={styles.ghost}
+                            href={buildWhatsAppLink(recipient.phone, recipient.resolvedBody)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Renvoyer aussi ce message par WhatsApp"
+                          >
+                            <Smartphone /> WhatsApp en renfort
+                          </a>
+                        )}
+                      </>
                     )}
                     {recipient.status === "pending" && (
                       <>
@@ -731,7 +757,7 @@ export function CommunicationManager() {
               ))}
             </ul>
             {!pending.length && recipients.length > 0 && (
-              <p className={styles.done}>Tous les messages de cette campagne ont été traités.</p>
+              <p className={styles.done}>Tous les messages ont été remis dans les espaces parents.</p>
             )}
           </section>
         )}
@@ -812,6 +838,8 @@ export function CommunicationManager() {
                   <th>Objet</th>
                   <th>Cible</th>
                   <th>Envoyés</th>
+                  <th>Lus</th>
+                  <th>Confirmés</th>
                   <th>Date</th>
                   <th />
                 </tr>
@@ -825,11 +853,15 @@ export function CommunicationManager() {
                         ? campaign.className || "Classe"
                         : campaign.audienceKind === "level"
                           ? `Niveau ${campaign.levelCode}`
-                          : "Sélection d’élèves"}
+                          : campaign.audienceKind === "school"
+                            ? "Tout l’établissement"
+                            : "Sélection d’élèves"}
                     </td>
                     <td>
                       {campaign.sentCount} / {campaign.recipientCount}
                     </td>
+                    <td>{campaign.readCount} / {campaign.recipientCount}</td>
+                    <td>{campaign.acknowledgedCount} / {campaign.recipientCount}</td>
                     <td>{campaign.createdAt ? new Date(campaign.createdAt).toLocaleDateString("fr-FR") : ""}</td>
                     <td>
                       <button type="button" className={styles.ghost} onClick={() => void openCampaign(campaign)}>
