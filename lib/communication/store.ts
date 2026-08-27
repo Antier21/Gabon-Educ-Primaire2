@@ -16,6 +16,20 @@ import { confirmWrite } from "@/lib/supabase/confirm-write";
 export type AudienceKind = "school" | "class" | "level" | "students";
 export type MessagePriority = "normal" | "important" | "urgent";
 
+export type MessageRetentionSettings = {
+  enabled: boolean;
+  normalDays: number | null;
+  importantDays: number | null;
+  urgentDays: number | null;
+};
+
+export const DEFAULT_RETENTION_SETTINGS: MessageRetentionSettings = {
+  enabled: true,
+  normalDays: null,
+  importantDays: null,
+  urgentDays: null,
+};
+
 export type CampaignTarget = {
   kind: AudienceKind;
   classId?: string;
@@ -394,7 +408,11 @@ export async function refreshCampaignProgress(campaignId: string): Promise<void>
 }
 
 export async function listCampaigns(schoolId: string): Promise<Campaign[]> {
-  const { data, error } = await createClient()
+  const client = createClient();
+  // Nettoyage automatique de repli si pg_cron n'est pas activé sur le projet.
+  // Son échec ne doit jamais empêcher l'ouverture du journal.
+  await client.rpc("purge_school_expired_messages", { p_school_id: schoolId });
+  const { data, error } = await client
     .from("message_campaigns")
     .select("id,title,body,channel,audience_kind,level_code,status,recipient_count,sent_count,priority,created_at,class_groups(name),message_recipients(read_at,acknowledged_at)")
     .eq("school_id", schoolId)
@@ -423,4 +441,48 @@ export async function listCampaigns(schoolId: string): Promise<Campaign[]> {
     createdAt: String(row.created_at || ""),
     };
   });
+}
+
+export async function loadRetentionSettings(schoolId: string): Promise<MessageRetentionSettings> {
+  const { data, error } = await createClient()
+    .from("message_retention_settings")
+    .select("auto_delete_enabled,normal_days,important_days,urgent_days")
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (error) throw new Error(describe(error));
+  if (!data) return DEFAULT_RETENTION_SETTINGS;
+  return {
+    enabled: data.auto_delete_enabled !== false,
+    normalDays: data.normal_days == null ? null : Number(data.normal_days),
+    importantDays: data.important_days == null ? null : Number(data.important_days),
+    urgentDays: data.urgent_days == null ? null : Number(data.urgent_days),
+  };
+}
+
+export async function saveRetentionSettings(
+  schoolId: string,
+  settings: MessageRetentionSettings,
+): Promise<void> {
+  const client = createClient();
+  const { data: auth } = await client.auth.getUser();
+  const result = await client
+    .from("message_retention_settings")
+    .upsert({
+      school_id: schoolId,
+      auto_delete_enabled: settings.enabled,
+      normal_days: settings.normalDays,
+      important_days: settings.importantDays,
+      urgent_days: settings.urgentDays,
+      updated_by: auth.user?.id || null,
+    })
+    .select("school_id");
+  confirmWrite(result, "l’enregistrement de la conservation des messages");
+}
+
+export async function deleteCampaign(campaignId: string): Promise<void> {
+  const { data, error } = await createClient().rpc("delete_school_message_campaign", {
+    p_campaign_id: campaignId,
+  });
+  if (error) throw new Error(describe(error));
+  if (data !== true) throw new Error("La campagne n’a pas été supprimée.");
 }

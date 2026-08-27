@@ -87,12 +87,25 @@
 .journal th{text-align:left;padding:10px 12px;border-bottom:1px solid #dce7e2;color:#677870;font-weight:700;font-size:13px}
 .journal td{padding:11px 12px;border-bottom:1px solid #f0f4f2}
 .journal tr:hover td{background:#f7fbf9}
+.journalActions{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.deleteButton{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border:1px solid #efc6c2;border-radius:9px;background:#fff;color:#a52b22;font:inherit;font-size:13px;cursor:pointer}
+.deleteButton:hover{background:#fff4f3;border-color:#d98e87}
+.deleteButton:disabled{opacity:.55;cursor:progress}
+.deleteButton svg{width:15px;height:15px}
+.retentionPanel{margin-top:16px;padding-top:16px;border-top:1px solid #eef2f0}
+.retentionGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 16px}
+.retentionGrid label{margin:0}
+.dayInput{display:flex;align-items:center;border:1px solid #cfe2da;border-radius:10px;overflow:hidden;background:#fff}
+.dayInput input{border:0!important;border-radius:0!important;min-width:0}
+.dayInput span{padding:0 12px;color:#65766f;font-size:12px}
 .muted{color:#65766f;font-size:13px;line-height:1.6}
 
 @media(max-width:760px){
   .shell{padding:22px 16px 48px}
   .row_pending,.row_sent,.row_failed,.row_skipped{flex-wrap:wrap}
   .rowActions{margin-left:0;width:100%}
+  .retentionGrid{grid-template-columns:1fr}
+  .journal{display:block;overflow-x:auto}
 }
 
 /* L'envoi enchaîné : le parent suivant se présente de lui-même.

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, ListTodo, MessageCircle, PhoneCall, UserRoundCheck } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Info, ListChecks, ListTodo, MessageCircle, PhoneCall, Trash2, UserRoundCheck } from "lucide-react";
 import {
   loadAttendance,
   loadClassEvaluations,
   loadMessages,
   markFamilyMessagesRead,
   acknowledgeFamilyMessage,
+  hideFamilyMessage,
   loadReportCards,
   loadScoreStatements,
   loadTimetable,
@@ -173,6 +174,7 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
   const [contactError, setContactError] = useState("");
   const [savingContact, setSavingContact] = useState(false);
   const [acknowledgingMessage, setAcknowledgingMessage] = useState("");
+  const [hidingMessage, setHidingMessage] = useState("");
   const [messageActionError, setMessageActionError] = useState("");
   const [pendingRequest, setPendingRequest] = useState<ContactRequestState | null>(null);
 
@@ -791,6 +793,28 @@ export function FamilySpaceLive({ space }: { space: "parent" | "student" }) {
                       J’ai pris connaissance
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className={styles.messageDelete}
+                    disabled={hidingMessage === message.id}
+                    onClick={async () => {
+                      if (!window.confirm("Retirer ce message de votre boîte ?")) return;
+                      setHidingMessage(message.id);
+                      setMessageActionError("");
+                      try {
+                        await hideFamilyMessage(message.id);
+                        setMessages((current) => current.filter((item) => item.id !== message.id));
+                      } catch (caught) {
+                        setMessageActionError(
+                          caught instanceof Error ? caught.message : "Suppression impossible.",
+                        );
+                      } finally {
+                        setHidingMessage("");
+                      }
+                    }}
+                  >
+                    <Trash2 /> Retirer
+                  </button>
                 </footer>
               </article>
             ))

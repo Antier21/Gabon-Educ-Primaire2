@@ -74,11 +74,15 @@
 .message>small{color:#65766f;font-size:12px}
 .messagePriority{padding:3px 8px;border-radius:999px;background:#fff0c7;color:#7a5300;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .message_urgent .messagePriority{background:#fde7e4;color:#96271b}
-.message footer{display:flex;justify-content:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid #eef2f0}
+.message footer{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #eef2f0}
 .messageAcknowledge{padding:8px 13px;border:1px solid #08734f;border-radius:999px;background:#fff;color:#08734f;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .messageAcknowledge:hover{background:#eef7f3}
 .messageAcknowledge:disabled{opacity:.6;cursor:progress}
 .messageAcknowledged{color:#08734f;font-size:12px;font-weight:700}
+.messageDelete{display:inline-flex;align-items:center;gap:5px;padding:8px 12px;border:1px solid #e8cecb;border-radius:999px;background:#fff;color:#9b342b;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.messageDelete:hover{background:#fff5f4}
+.messageDelete:disabled{opacity:.6;cursor:progress}
+.messageDelete svg{width:14px;height:14px}
 
 /* Relevé de notes */
 .statement{border:1px solid #e6edea;border-radius:14px;padding:16px;display:grid;gap:14px}

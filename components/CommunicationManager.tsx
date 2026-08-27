@@ -10,11 +10,13 @@ import {
   Filter,
   MessageSquare,
   Send,
+  Settings,
   ShieldAlert,
   SkipForward,
   Smartphone,
   Users2,
   Users,
+  Trash2,
   X,
 } from "lucide-react";
 import { Brand } from "@/components/Brand";
@@ -22,20 +24,25 @@ import { loadPlatformWorkspace } from "@/lib/platform/store";
 import { listClasses, type ClassRecord } from "@/lib/class-store";
 import {
   createCampaign,
+  deleteCampaign,
+  DEFAULT_RETENTION_SETTINGS,
   listCampaignRecipients,
   listCampaigns,
   listTemplates,
+  loadRetentionSettings,
   markAllPending,
   markRecipient,
   refreshCampaignProgress,
   resolveBodyFor,
   resolveRecipients,
+  saveRetentionSettings,
   type AudienceKind,
   type Campaign,
   type CampaignRecipient,
   type CampaignTarget,
   type MessageTemplate,
   type MessagePriority,
+  type MessageRetentionSettings,
   type RecipientDraft,
   type SentChannel,
 } from "@/lib/communication/store";
@@ -70,6 +77,8 @@ export function CommunicationManager() {
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [retention, setRetention] = useState<MessageRetentionSettings>(DEFAULT_RETENTION_SETTINGS);
+  const [retentionPanel, setRetentionPanel] = useState(false);
 
   const [audience, setAudience] = useState<AudienceKind>("class");
   const [classId, setClassId] = useState("");
@@ -118,12 +127,14 @@ export function CommunicationManager() {
         });
         setClasses(classResult.items);
         setClassId((current) => current || classResult.items[0]?.id || "");
-        const [templateList, campaignList] = await Promise.all([
+        const [templateList, campaignList, retentionSettings] = await Promise.all([
           listTemplates(school.id),
           listCampaigns(school.id),
+          loadRetentionSettings(school.id),
         ]);
         setTemplates(templateList);
         setCampaigns(campaignList);
+        setRetention(retentionSettings);
         setClassGroups(await loadClassGroups(school.id));
       } catch (error) {
         setNotice({ kind: "error", text: error instanceof Error ? error.message : "Chargement impossible." });
@@ -282,6 +293,39 @@ export function CommunicationManager() {
       setDrafts([]);
     } catch (error) {
       setNotice({ kind: "error", text: error instanceof Error ? error.message : "Ouverture impossible." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveRetention() {
+    if (!schoolId) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await saveRetentionSettings(schoolId, retention);
+      setNotice({ kind: "success", text: "Règles de conservation enregistrées." });
+    } catch (error) {
+      setNotice({ kind: "error", text: error instanceof Error ? error.message : "Enregistrement impossible." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeCampaign(campaign: Campaign) {
+    if (!window.confirm(`Supprimer définitivement « ${campaign.title} » et tous ses destinataires ?`)) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await deleteCampaign(campaign.id);
+      if (campaignId === campaign.id) {
+        setCampaignId("");
+        setRecipients([]);
+      }
+      setCampaigns(await listCampaigns(schoolId));
+      setNotice({ kind: "success", text: "Campagne supprimée définitivement." });
+    } catch (error) {
+      setNotice({ kind: "error", text: error instanceof Error ? error.message : "Suppression impossible." });
     } finally {
       setBusy(false);
     }
@@ -827,6 +871,67 @@ export function CommunicationManager() {
 
         <section className={styles.card}>
           <h2>
+            <Settings /> Conservation des messages
+            <button
+              type="button"
+              className={styles.ghost}
+              style={{ marginLeft: "auto" }}
+              onClick={() => setRetentionPanel((open) => !open)}
+            >
+              {retentionPanel ? "Replier" : "Programmer"}
+            </button>
+          </h2>
+          <p className={styles.muted}>
+            L’établissement choisit combien de jours chaque type de message doit être conservé.
+            Laissez un champ vide pour conserver cette catégorie jusqu’à une suppression manuelle.
+          </p>
+          {retentionPanel && (
+            <div className={styles.retentionPanel}>
+              <label className={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={retention.enabled}
+                  onChange={(event) => setRetention((current) => ({ ...current, enabled: event.target.checked }))}
+                />
+                Activer la suppression automatique
+              </label>
+              <div className={styles.retentionGrid}>
+                {([
+                  ["normalDays", "Messages ordinaires"],
+                  ["importantDays", "Messages importants"],
+                  ["urgentDays", "Messages urgents"],
+                ] as const).map(([key, label]) => (
+                  <label key={key}>
+                    {label}
+                    <div className={styles.dayInput}>
+                      <input
+                        type="number"
+                        min={1}
+                        max={3650}
+                        disabled={!retention.enabled}
+                        value={retention[key] ?? ""}
+                        placeholder="Jamais"
+                        onChange={(event) =>
+                          setRetention((current) => ({
+                            ...current,
+                            [key]: event.target.value ? Number(event.target.value) : null,
+                          }))
+                        }
+                      />
+                      <span>jours</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <button type="button" className={styles.primary} disabled={busy} onClick={() => void saveRetention()}>
+                Enregistrer la programmation
+              </button>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.card}>
+          <h2>
             <ClipboardList /> Journal des envois
           </h2>
           {!campaigns.length ? (
@@ -864,9 +969,19 @@ export function CommunicationManager() {
                     <td>{campaign.acknowledgedCount} / {campaign.recipientCount}</td>
                     <td>{campaign.createdAt ? new Date(campaign.createdAt).toLocaleDateString("fr-FR") : ""}</td>
                     <td>
-                      <button type="button" className={styles.ghost} onClick={() => void openCampaign(campaign)}>
-                        Ouvrir
-                      </button>
+                      <div className={styles.journalActions}>
+                        <button type="button" className={styles.ghost} onClick={() => void openCampaign(campaign)}>
+                          Ouvrir
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.deleteButton}
+                          disabled={busy}
+                          onClick={() => void removeCampaign(campaign)}
+                        >
+                          <Trash2 /> Supprimer
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -549,6 +549,7 @@ export async function loadMessages(guardianId: string): Promise<FamilyMessage[]>
     .from("message_recipients")
     .select("id,resolved_body,student_name,created_at,read_at,acknowledged_at,message_campaigns(title,priority,publish_to_parent_space)")
     .eq("guardian_id", guardianId)
+    .is("hidden_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw new Error(describe(error));
@@ -595,6 +596,15 @@ export async function acknowledgeFamilyMessage(recipientId: string): Promise<voi
   });
   if (error) throw new Error(describe(error));
   if (data !== true) throw new Error("Ce message n’a pas pu être confirmé.");
+}
+
+/** Retire le message de la boîte de ce parent sans détruire la campagne. */
+export async function hideFamilyMessage(recipientId: string): Promise<void> {
+  const { data, error } = await createClient().rpc("hide_my_parent_message", {
+    p_recipient_id: recipientId,
+  });
+  if (error) throw new Error(describe(error));
+  if (data !== true) throw new Error("Ce message n’a pas pu être retiré.");
 }
 
 /**
