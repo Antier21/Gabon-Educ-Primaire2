@@ -232,6 +232,16 @@ export function AdminMegaNav({ onLogout, role }: { onLogout: () => void; role?: 
 export type SimpleSpace = "teacher" | "parent" | "student";
 
 type SimpleNavItem = NavItem & { icon: React.ComponentType<{ className?: string }> };
+type SimpleNavGroup = {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: SimpleNavItem[];
+};
+type SimpleNavEntry = SimpleNavItem | SimpleNavGroup;
+
+function isSimpleNavGroup(entry: SimpleNavEntry): entry is SimpleNavGroup {
+  return "items" in entry;
+}
 
 /**
  * Menus des espaces simples.
@@ -245,7 +255,7 @@ type SimpleNavItem = NavItem & { icon: React.ComponentType<{ className?: string 
  * reviendront au menu le jour où elles auront un contenu, et pas avant.
  * Promettre moins et tenir tout inspire davantage confiance que l'inverse.
  */
-const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
+const simpleNav: Record<SimpleSpace, SimpleNavEntry[]> = {
   teacher: [
     { label: "Accueil", href: "/gabon-educ/tableau-de-bord", icon: Home },
     { label: "Voir mes classes", href: "/gabon-educ/mes-classes", icon: Users },
@@ -268,12 +278,28 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
     },
     { label: "Fiches de préparation", href: "/gabon-educ/mes-fiches", icon: BookOpen },
     { label: "Notes", href: "/gabon-educ/notes", icon: ClipboardCheck },
-    { label: "Saisie du bulletin", href: "/gabon-educ/saisie-bulletin", icon: PenLine },
-    { label: "Imprimer les bulletins", href: "/gabon-educ/impression-bulletins", icon: Printer },
-    { label: "Bulletins", href: "/gabon-educ/bulletins", icon: GraduationCap },
+    {
+      label: "Bulletin",
+      icon: GraduationCap,
+      items: [
+        { label: "Bulletin", href: "/gabon-educ/bulletins", icon: GraduationCap },
+        { label: "Saisie des bulletins", href: "/gabon-educ/saisie-bulletin", icon: PenLine },
+        { label: "Appréciation des bulletins par les enseignants", href: "/gabon-educ/bulletins", icon: NotebookPen },
+        { label: "Appréciations générales", href: "/gabon-educ/bulletins", icon: ClipboardCheck },
+        { label: "Impression des bulletins", href: "/gabon-educ/impression-bulletins", icon: Printer },
+      ],
+    },
     { label: "Ressources", href: "/gabon-educ/documents", icon: BookOpen },
-    { label: "Cahiers d’appel", href: "/gabon-educ/assiduite", icon: School },
-    { label: "Vie scolaire", href: "/gabon-educ/assiduite", icon: UserRound },
+    {
+      label: "Vie scolaire",
+      icon: UserRound,
+      items: [
+        { label: "La liste d’appel", href: "/gabon-educ/assiduite", icon: School },
+        { label: "Le livret scolaire", href: "/gabon-educ/modules/livret-scolaire", icon: Library },
+        { label: "Récapitulatif des absences, retards et exclusions", href: "/gabon-educ/assiduite", icon: ClipboardCheck },
+        { label: "Discipline", href: "/gabon-educ/modules/discipline", icon: ShieldCheck },
+      ],
+    },
     { label: "Communication", href: "/gabon-educ/notifications", icon: MessageCircle },
   ],
   parent: [
@@ -300,22 +326,65 @@ const simpleNav: Record<SimpleSpace, SimpleNavItem[]> = {
 
 export function SimpleSpaceNav({ space, onLogout }: { space: SimpleSpace; onLogout?: () => void }) {
   const [open, setOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function closeOutside(event: MouseEvent | TouchEvent) {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) setOpenGroup(null);
+    }
+    function closeWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenGroup(null);
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("touchstart", closeOutside);
+    document.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("touchstart", closeOutside);
+      document.removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, []);
+
+  function closeNavigation() {
+    setOpen(false);
+    setOpenGroup(null);
+  }
+
+  function renderItem(item: SimpleNavItem, nested = false) {
+    const Icon = item.icon;
+    const className = nested ? "space-nav-dropdown-link" : item.external ? "apc-nav-link" : undefined;
+    if (item.external) {
+      return <a href={item.href} key={item.label} onClick={closeNavigation} target="_blank" rel="noopener noreferrer" className={className}><Icon />{item.label}<ExternalLink /></a>;
+    }
+    // Les liens vers une ancre restent des liens ordinaires : le routeur
+    // de Next change l'adresse par l'API d'historique, qui n'émet pas
+    // « hashchange » — l'onglet visé ne s'ouvrirait donc jamais.
+    if (item.href.includes("#")) {
+      return <a href={item.href} key={item.label} onClick={closeNavigation} className={className}><Icon />{item.label}</a>;
+    }
+    return <Link href={item.href} key={item.label} onClick={closeNavigation} className={className}><Icon />{item.label}</Link>;
+  }
+
   return (
-    <nav className={`space-topnav space-topnav-${space} ${open ? "open" : ""}`} aria-label={`Navigation espace ${space}`}>
-      <button className="space-topnav-toggle" onClick={() => setOpen(value => !value)}>{open ? <X /> : <Menu />} Menu</button>
+    <nav ref={navRef} className={`space-topnav space-topnav-${space} ${open ? "open" : ""}`} aria-label={`Navigation espace ${space}`}>
+      <button className="space-topnav-toggle" onClick={() => { setOpen(value => !value); setOpenGroup(null); }}>{open ? <X /> : <Menu />} Menu</button>
       <div className="space-topnav-links">
-        {simpleNav[space].map(item => {
-          const Icon = item.icon;
-          if (item.external) {
-            return <a href={item.href} key={item.label} onClick={() => setOpen(false)} target="_blank" rel="noopener noreferrer" className="apc-nav-link"><Icon />{item.label}<ExternalLink /></a>;
-          }
-          // Les liens vers une ancre restent des liens ordinaires : le routeur
-          // de Next change l'adresse par l'API d'historique, qui n'émet pas
-          // « hashchange » — l'onglet visé ne s'ouvrirait donc jamais.
-          if (item.href.includes("#")) {
-            return <a href={item.href} key={item.label} onClick={() => setOpen(false)}><Icon />{item.label}</a>;
-          }
-          return <Link href={item.href} key={item.label} onClick={() => setOpen(false)}><Icon />{item.label}</Link>;
+        {simpleNav[space].map(entry => {
+          if (!isSimpleNavGroup(entry)) return renderItem(entry);
+          const Icon = entry.icon;
+          const isOpen = openGroup === entry.label;
+          return <div className={`space-nav-group ${isOpen ? "open" : ""}`} key={entry.label} onMouseEnter={() => setOpenGroup(entry.label)} onMouseLeave={() => setOpenGroup(null)}>
+            <button type="button" onClick={() => setOpenGroup(isOpen ? null : entry.label)} aria-expanded={isOpen}>
+              <Icon />{entry.label}<ChevronDown className="space-nav-chevron" />
+            </button>
+            <div className="space-nav-dropdown" role="menu" aria-label={entry.label}>
+              {entry.items.map(item => renderItem(item, true))}
+            </div>
+          </div>;
         })}
         {onLogout && <button onClick={onLogout}><LogOut />Déconnexion</button>}
       </div>
