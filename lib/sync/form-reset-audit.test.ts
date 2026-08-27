@@ -32,4 +32,13 @@ describe("formulaires asynchrones", () => {
     expect(source).toContain("const form=e.currentTarget");
     expect(source).toContain("form.reset()");
   });
+  it("rend la fiche du personnel visible malgré l’isolation globale des bulletins", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "components/PersonnelManager.tsx"),
+      "utf8",
+    );
+    expect(source).toContain(
+      "body.printing-personnel .personnel-print-sheet *{visibility:visible!important}",
+    );
+  });
 });
