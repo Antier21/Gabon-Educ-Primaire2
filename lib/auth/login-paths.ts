@@ -61,7 +61,7 @@ export const LOGIN_BY_PREFIX: ReadonlyArray<readonly [string, string]> = [
 ];
 
 export function loginPathFor(pathname: string): string {
-  const match = LOGIN_BY_PREFIX.find(([prefix]) => matchesRoutePath(pathname, prefix));
+  const match = LOGIN_BY_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
   return match ? match[1] : "/gabon-educ/connexion";
 }
 
@@ -73,10 +73,6 @@ export function loginPathFor(pathname: string): string {
  */
 const PUBLIC_PREFIXES = [
   "/gabon-educ/connexion",
-  "/gabon-educ/connexion-administration",
-  "/gabon-educ/connexion-eleves",
-  "/gabon-educ/connexion-parents",
-  "/gabon-educ/connexion-vie-scolaire",
   "/gabon-educ/ouvrir-compte",
   "/gabon-educ/enregistrer-etablissement",
   "/gabon-educ/espaces",
@@ -86,6 +82,5 @@ const PUBLIC_PREFIXES = [
 
 export function isPublicPath(pathname: string): boolean {
   if (pathname === "/gabon-educ" || pathname === "/gabon-educ/") return true;
-  return PUBLIC_PREFIXES.some((prefix) => matchesRoutePath(pathname, prefix));
+  return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
-import { matchesRoutePath } from "@/lib/auth/path-matching";
