@@ -2439,6 +2439,40 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
     form.reset();
   }
 
+  /**
+   * Rejoue les affectations visibles vers la table centrale.
+   *
+   * Les anciennes versions sauvegardaient parfois le tableau local sans vider
+   * la file de synchronisation. L'administration voyait donc l'affectation,
+   * mais le compte enseignant — qui ne lit que la table centrale — ne voyait
+   * aucune classe. Cette action répare l'historique sans demander de ressaisir
+   * chaque titulaire.
+   */
+  async function synchronizeTeacherAssignments() {
+    const assignments = workspace.assignments.filter((item) => item.active);
+    if (!assignments.length) {
+      alert("Aucune affectation active à synchroniser.");
+      return;
+    }
+    await persist(
+      workspace,
+      assignments.map((assignment) => ({
+        module: "assignments" as const,
+        operation: "create" as const,
+        entityId: assignment.id,
+        payload: {
+          assignment,
+          subject: workspace.subjects.find((item) => item.id === assignment.subjectId),
+        },
+        // Réparation volontaire : la liste affichée est celle que
+        // l'administration vient de confirmer. Ne pas transformer une ancienne
+        // date locale en conflit qui empêcherait précisément la remise en ligne.
+        baseUpdatedAt: null,
+      })),
+      `${assignments.length} affectation(s) synchronisée(s) avec les espaces enseignants.`,
+    );
+  }
+
   const activeAssignments = workspace.assignments.filter((item) => item.active);
   const activeSubjects = workspace.subjects.filter((item) => item.active);
   const eligibleTeachers = workspace.users.filter(
@@ -2495,10 +2529,20 @@ function SubjectsView({ workspace, classes, persist }: ViewProps) {
                   : "Choisissez la classe, la matière et l’enseignant concerné."}
               </p>
             </div>
-            <div className={styles.assignmentStats}>
-              <span><b>{classes.length}</b> classes</span>
-              <span><b>{eligibleTeachers.length}</b> enseignants</span>
-              <span><b>{exceptions.length}</b> exceptions</span>
+            <div className={styles.assignmentIntroAside}>
+              <div className={styles.assignmentStats}>
+                <span><b>{classes.length}</b> classes</span>
+                <span><b>{eligibleTeachers.length}</b> enseignants</span>
+                <span><b>{exceptions.length}</b> exceptions</span>
+              </div>
+              <button
+                type="button"
+                className={styles.assignmentSyncButton}
+                onClick={() => void synchronizeTeacherAssignments()}
+                disabled={!activeAssignments.length}
+              >
+                Synchroniser avec le cahier de textes
+              </button>
             </div>
           </section>
 

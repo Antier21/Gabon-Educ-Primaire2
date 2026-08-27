@@ -130,6 +130,41 @@ export type TeacherAssignment = {
 };
 
 /**
+ * Transforme aussi bien la réponse de la fonction sécurisée que celle de la
+ * requête historique. La fonction renvoie des noms à plat ; PostgREST renvoie
+ * les relations sous forme d'objets.
+ */
+export function teacherAssignmentsFromRows(
+  rows: Array<Record<string, unknown>>,
+): TeacherAssignment[] {
+  const vues = new Set<string>();
+  const sortie: TeacherAssignment[] = [];
+  for (const row of rows) {
+    const classeBrute = row.class_groups as { name?: string } | Array<{ name?: string }> | null;
+    const matiereBrute = row.school_subjects as
+      | { label?: string }
+      | Array<{ label?: string }>
+      | null;
+    const classe = Array.isArray(classeBrute) ? classeBrute[0] : classeBrute;
+    const matiere = Array.isArray(matiereBrute) ? matiereBrute[0] : matiereBrute;
+    const classId = String(row.class_group_id || "");
+    const subjectId = String(row.school_subject_id || "");
+    const cle = `${classId}|${subjectId}`;
+    if (!classId || !subjectId || vues.has(cle)) continue;
+    vues.add(cle);
+    sortie.push({
+      classId,
+      className: String(row.class_name || classe?.name || "Classe"),
+      subjectId,
+      subjectLabel: String(row.subject_label || matiere?.label || "Matière"),
+    });
+  }
+  return sortie.sort((a, b) =>
+    `${a.className}${a.subjectLabel}`.localeCompare(`${b.className}${b.subjectLabel}`, "fr"),
+  );
+}
+
+/**
  * Ce que l'enseignant enseigne, indépendamment de tout emploi du temps.
  *
  * C'est la source qui permet de tenir le cahier de textes dans un
@@ -140,35 +175,30 @@ export type TeacherAssignment = {
  */
 export async function loadTeacherAssignments(teacherId: string): Promise<TeacherAssignment[]> {
   if (!teacherId) return [];
-  const { data, error } = await createClient()
+  const client = createClient();
+
+  /*
+   * Lecture principale : la base déduit l'enseignant de la session. Le
+   * navigateur ne peut donc ni se tromper d'identifiant, ni demander les
+   * classes d'un collègue. La requête directe reste en repli le temps que la
+   * migration soit appliquée sur tous les environnements.
+   */
+  const secured = await client.rpc("get_my_lesson_book_assignments");
+  if (!secured.error) {
+    return teacherAssignmentsFromRows(
+      (secured.data || []) as unknown as Array<Record<string, unknown>>,
+    );
+  }
+
+  const { data, error } = await client
     .from("school_teaching_assignments")
     .select("class_group_id,school_subject_id,class_groups(name),school_subjects(label)")
     .eq("teacher_id", teacherId)
     .eq("is_active", true);
   if (error) throw new Error(describe(error));
 
-  type Row = {
-    class_group_id: string;
-    school_subject_id: string;
-    class_groups?: { name?: string } | null;
-    school_subjects?: { label?: string } | null;
-  };
-
-  const vues = new Set<string>();
-  const sortie: TeacherAssignment[] = [];
-  for (const row of (data || []) as unknown as Row[]) {
-    const cle = `${row.class_group_id}|${row.school_subject_id}`;
-    if (vues.has(cle)) continue;
-    vues.add(cle);
-    sortie.push({
-      classId: String(row.class_group_id || ""),
-      className: String(row.class_groups?.name || "Classe"),
-      subjectId: String(row.school_subject_id || ""),
-      subjectLabel: String(row.school_subjects?.label || "Matière"),
-    });
-  }
-  return sortie.sort((a, b) =>
-    `${a.className}${a.subjectLabel}`.localeCompare(`${b.className}${b.subjectLabel}`, "fr"),
+  return teacherAssignmentsFromRows(
+    (data || []) as unknown as Array<Record<string, unknown>>,
   );
 }
 

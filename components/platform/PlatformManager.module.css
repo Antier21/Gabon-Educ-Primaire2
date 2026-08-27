@@ -20,6 +20,9 @@
 .assignmentStats{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .assignmentStats span{min-width:92px;padding:10px 12px;border:1px solid #d9e7e1;border-radius:12px;background:#fff;color:#65756e;text-align:center;font-size:10px}
 .assignmentStats b{display:block;margin-bottom:2px;color:#08734f;font-size:19px}
+.assignmentIntroAside{display:grid;justify-items:end;gap:9px;flex:none}
+.assignmentSyncButton{border:1px solid #b9d7cb;border-radius:10px;padding:10px 13px;background:#fff;color:#08734f;font-size:10px;font-weight:900;cursor:pointer}
+.assignmentSyncButton:hover{background:#eaf7f1}.assignmentSyncButton:disabled{opacity:.5;cursor:not-allowed}
 .assignmentForms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
 .assignmentCard{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:22px;border:1px solid #d9e5df;border-radius:17px;background:#fff;box-shadow:0 9px 27px rgba(20,70,53,.045);overflow:hidden}
 .assignmentCard:nth-child(2){grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -42,7 +45,7 @@
 .titularLine{display:grid;gap:3px;padding:11px;border-radius:10px;background:#f1f7f4}.titularLine small{color:#73827b;font-size:9px}.titularLine b{overflow:hidden;text-overflow:ellipsis;font-size:13px}
 .exceptionList{display:grid;gap:7px}.exceptionList>small{color:#75837d;font-size:9px;font-weight:900;text-transform:uppercase}.exceptionList>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 9px;border:1px solid #e4ece8;border-radius:9px}.exceptionList>div>span{display:grid;min-width:0}.exceptionList b{font-size:11px}.exceptionList small{overflow:hidden;text-overflow:ellipsis;color:#74827c;font-size:9px}.exceptionList button,.removeTitular{border:0;background:transparent;color:#a24747;font-size:9px;font-weight:900;cursor:pointer}.removeTitular{justify-self:start;padding:0}.subjectSetup>button{flex:none}.subjectCreationForm{max-width:850px}.subjectCreationForm h2{margin-bottom:10px}
 @media(max-width:1100px){.assignmentForms,.classAssignmentGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.assignmentCard:nth-child(2){grid-template-columns:1fr}.assignmentSingleForm{grid-template-columns:repeat(2,minmax(0,1fr))}.assignmentSingleForm button{grid-column:1/-1}}
-@media(max-width:700px){.subjectTabs{width:100%}.subjectTab,.subjectTabActive{flex:1;justify-content:center;padding:10px 8px;font-size:11px}.assignmentIntro,.subjectSetup,.classAssignments>header{align-items:flex-start;flex-direction:column}.assignmentStats{width:100%;justify-content:stretch}.assignmentStats span{flex:1}.assignmentForms,.classAssignmentGrid,.assignmentCard,.assignmentCard:nth-child(2),.assignmentSingleForm{grid-template-columns:1fr}.assignmentPrimaryButton,.assignmentSecondaryButton{width:100%;justify-self:stretch}.classAssignmentGrid{padding:10px}.subjectSetup>button{width:100%}}
+@media(max-width:700px){.subjectTabs{width:100%}.subjectTab,.subjectTabActive{flex:1;justify-content:center;padding:10px 8px;font-size:11px}.assignmentIntro,.subjectSetup,.classAssignments>header{align-items:flex-start;flex-direction:column}.assignmentIntroAside,.assignmentStats{width:100%;justify-items:stretch}.assignmentStats{justify-content:stretch}.assignmentStats span{flex:1}.assignmentSyncButton{width:100%}.assignmentForms,.classAssignmentGrid,.assignmentCard,.assignmentCard:nth-child(2),.assignmentSingleForm{grid-template-columns:1fr}.assignmentPrimaryButton,.assignmentSecondaryButton{width:100%;justify-self:stretch}.classAssignmentGrid{padding:10px}.subjectSetup>button{width:100%}}
 
 /* Le logo de l'établissement : vignette à gauche, champ et boutons à droite.
    La vignette est bornée en millimètres du même ordre que sur le bulletin,
