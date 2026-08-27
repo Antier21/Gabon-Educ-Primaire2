@@ -1,4 +1,5 @@
 import { ConnectionBanner } from "@/components/ConnectionBanner";
+import { RouteRoleGuard } from "@/components/RouteRoleGuard";
 
 /**
  * Le bandeau de connexion est posé ici, et nulle part ailleurs.
@@ -14,7 +15,7 @@ export default function GabonEducLayout({
   return (
     <>
       <ConnectionBanner />
-      {children}
+      <RouteRoleGuard>{children}</RouteRoleGuard>
     </>
   );
 }

@@ -53,5 +53,6 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/gabon-educ/administration")).toBe(false);
     expect(isPublicPath("/gabon-educ/tableau-de-bord")).toBe(false);
     expect(isPublicPath("/gabon-educ-service")).toBe(false);
+    expect(isPublicPath("/gabon-educ/connexion-factice")).toBe(false);
   });
 });

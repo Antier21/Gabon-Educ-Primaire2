@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
 import { readLocal, STORAGE_KEYS } from "@/lib/storage-mode";
 import type { SchoolRole } from "@/lib/platform/types";
+import { deniedAccessReturnPath } from "@/lib/roles/route-access";
 
 /**
  * Le portier des écrans sensibles.
@@ -23,11 +24,9 @@ import type { SchoolRole } from "@/lib/platform/types";
  *
  * Deux règles gouvernent ce fichier, et chacune vient d'une erreur commise.
  *
- * **Le super-administrateur passe partout.** La première version ne comparait
- * que les rôles tenus dans un établissement — directeur, secrétaire. Or le
- * super-administrateur n'en tient pas nécessairement : il est au-dessus d'eux.
- * Il se voyait donc refuser les écrans techniques de sa propre plateforme. Son
- * cas se tranche avant tout le reste.
+ * **Le super-administrateur est un rôle de plateforme.** Il passe sur les
+ * écrans qui lui sont réservés, mais pas implicitement dans les espaces métier
+ * d'une école. Un accès partagé doit être déclaré explicitement.
  *
  * **Un refus doit dire ce qu'il a vu.** Un « Accès réservé » sans motif est
  * indiscernable d'une panne — c'est la leçon qui revient à chaque étape de ce
@@ -40,12 +39,15 @@ type Etat = "verification" | "autorise" | "refuse";
 
 export function RequireRole({
   allow,
+  allowSuperAdmin = false,
   superAdminOnly = false,
   what,
   children,
 }: {
-  /** Rôles d'établissement admis. Le super-administrateur passe de toute façon. */
+  /** Rôles d'établissement admis. */
   allow?: SchoolRole[];
+  /** Autorise explicitement l'éditeur sur un écran d'établissement. */
+  allowSuperAdmin?: boolean;
   /** Réservé à l'éditeur de la plateforme. */
   superAdminOnly?: boolean;
   /** Ce que l'écran est, pour l'annoncer dans le refus. */
@@ -93,9 +95,10 @@ export function RequireRole({
           return;
         }
 
-        // Le super-administrateur précède les rôles d'établissement : il n'a
-        // pas à en tenir un pour ouvrir un écran technique.
-        if (superAdmin) {
+        // Le rôle de plateforme n'accorde pas implicitement l'accès aux
+        // espaces métier d'une école (enseignant, parent, élève…). Les rares
+        // écrans partagés doivent l'autoriser explicitement.
+        if (superAdmin && allowSuperAdmin) {
           setEtat("autorise");
           return;
         }
@@ -127,7 +130,7 @@ export function RequireRole({
         setEtat("refuse");
       }
     })();
-  }, [admisCle, superAdminOnly]);
+  }, [admisCle, allowSuperAdmin, superAdminOnly]);
 
   if (etat === "verification") {
     return (
@@ -140,6 +143,10 @@ export function RequireRole({
   }
 
   if (etat === "refuse") {
+    const returnPath = deniedAccessReturnPath(
+      sansEtablissement,
+      homeForRole(monRole || "teacher"),
+    );
     return (
       <main className="center-page">
         <div className="simple-card">
@@ -151,11 +158,9 @@ export function RequireRole({
             {what} n’est pas ouvert à votre compte. {raison}
           </p>
           {constat && <p className="demo-note">{constat}</p>}
-          {sansEtablissement ? (
-            <Link href="/gabon-educ/service-abonnements">Choisir un établissement</Link>
-          ) : (
-            <Link href={homeForRole(monRole || "teacher")}>Retourner à mon espace</Link>
-          )}
+          <Link href={returnPath}>
+            {sansEtablissement ? "Retour à l’accueil" : "Retourner à mon espace"}
+          </Link>
         </div>
       </main>
     );
