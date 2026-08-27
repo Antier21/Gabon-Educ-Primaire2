@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isEmailLogin, normalizeAccessIdentifier, roleRedirect } from "@/lib/access-identifiers";
 import { normalizeSchoolSector, normalizeSchoolType, type SchoolEducationLevel, type SchoolSector } from "@/lib/school-profiles";
+import { STORAGE_KEYS, writeLocal } from "@/lib/storage-mode";
 
 type AuthFormProps = {
   mode: "login" | "signup";
@@ -147,7 +148,7 @@ export function AuthForm({
           localStorage.removeItem("gabon-educ-plus:v0.9:active-school");
         } else if (resolved.schoolId) {
           // Un identifiant utilisateur désigne explicitement son établissement.
-          localStorage.setItem("gabon-educ-plus:v0.9:active-school", String(resolved.schoolId));
+          writeLocal(STORAGE_KEYS.activeSchool, String(resolved.schoolId));
         }
         // Pour le compte principal connecté par e-mail, conserver l'établissement actif
         // sélectionné/enregistré juste avant la connexion. resolveActiveSchool vérifiera

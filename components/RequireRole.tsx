@@ -5,7 +5,7 @@ import { ShieldAlert } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
-import { readLocal, STORAGE_KEYS } from "@/lib/storage-mode";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
 import type { SchoolRole } from "@/lib/platform/types";
 
 /**
@@ -88,8 +88,12 @@ export function RequireRole({
             setRaison("Cet écran appartient à l’éditeur de la plateforme.");
             setConstat("Votre compte ne porte pas le rôle « super_admin ».");
           }
-          const idEcole = readLocal<string>(STORAGE_KEYS.activeSchool, "");
-          if (idEcole) setMonRole((await resolveMyRoles(idEcole))?.primary || null);
+          try {
+            const contexteEcole = await resolveActiveSchoolContext();
+            setMonRole((await resolveMyRoles(contexteEcole.school.id))?.primary || null);
+          } catch {
+            // Le rôle de retour est facultatif sur un écran réservé à l'éditeur.
+          }
           return;
         }
 
@@ -100,11 +104,17 @@ export function RequireRole({
           return;
         }
 
-        const idEcole = readLocal<string>(STORAGE_KEYS.activeSchool, "");
-        if (!idEcole) {
+        let idEcole = "";
+        try {
+          idEcole = (await resolveActiveSchoolContext()).school.id;
+        } catch (schoolError) {
           setSansEtablissement(true);
-          setRaison("Aucun établissement actif n’est sélectionné sur cet appareil.");
-          setConstat("Le portier ne peut pas lire vos rôles sans savoir de quelle école il s’agit.");
+          setRaison(
+            schoolError instanceof Error
+              ? schoolError.message
+              : "Aucun établissement actif n’est disponible.",
+          );
+          setConstat("Les rôles ne peuvent pas être lus sans établissement actif validé.");
           setEtat("refuse");
           return;
         }

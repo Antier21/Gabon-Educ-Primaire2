@@ -42,6 +42,13 @@ const rolePrecedence: SchoolRole[] = [
 
 const knownRoles = new Set<string>(rolePrecedence);
 
+/** Le SQL historique nomme le rôle familial `parent`; l'interface dit `guardian`. */
+export function normalizeSchoolRole(value: unknown): SchoolRole | null {
+  const role = String(value || "");
+  const normalized = role === "parent" ? "guardian" : role;
+  return knownRoles.has(normalized) ? (normalized as SchoolRole) : null;
+}
+
 export type RoleContext = {
   roles: SchoolRole[];
   /** Rôle le plus étendu, celui qui décide de l'accueil et du menu. */
@@ -63,7 +70,10 @@ function readCache(userId: string, schoolId: string): SchoolRole[] | null {
   const cached = readLocal<CachedRoles | null>(ROLE_CACHE_KEY, null);
   if (!cached || cached.userId !== userId || cached.schoolId !== schoolId)
     return null;
-  return Array.isArray(cached.roles) ? cached.roles : null;
+  if (!Array.isArray(cached.roles)) return null;
+  return cached.roles
+    .map(normalizeSchoolRole)
+    .filter((role): role is SchoolRole => role !== null);
 }
 
 /**
@@ -116,8 +126,8 @@ export async function resolveMyRoles(
   const roles = Array.from(
     new Set(
       data
-        .map((row) => String((row as { role?: unknown }).role || ""))
-        .filter((role) => knownRoles.has(role)),
+        .map((row) => normalizeSchoolRole((row as { role?: unknown }).role))
+        .filter((role): role is SchoolRole => role !== null),
     ),
   ) as SchoolRole[];
 
@@ -145,7 +155,11 @@ export async function resolveMyRoles(
  */
 export function readCachedPrimaryRole(): SchoolRole | null {
   const cached = readLocal<CachedRoles | null>(ROLE_CACHE_KEY, null);
-  const roles = Array.isArray(cached?.roles) ? cached.roles : [];
+  const roles = Array.isArray(cached?.roles)
+    ? cached.roles
+        .map(normalizeSchoolRole)
+        .filter((role): role is SchoolRole => role !== null)
+    : [];
   if (!roles.length) return null;
   return pickPrimary(roles);
 }

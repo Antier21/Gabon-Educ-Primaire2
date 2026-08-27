@@ -62,6 +62,41 @@ export function readCachedActiveSchool(): SchoolProfile | null {
   return school;
 }
 
+/**
+ * Lit l'identifiant actif dans les trois formats déjà rencontrés en production.
+ *
+ * Les premières connexions par identifiant écrivaient l'UUID directement,
+ * tandis que `readLocal` attend du JSON. Lorsqu'un tel UUID est rencontré, il
+ * est immédiatement réécrit avec le sérialiseur commun afin de réparer le
+ * navigateur une fois pour toutes.
+ */
+export function readStoredActiveSchoolId(
+  cachedSchool: SchoolProfile | null = readCachedActiveSchool(),
+): string {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.activeSchool);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as unknown;
+        if (typeof parsed === "string" && uuidPattern.test(parsed)) return parsed;
+      } catch {
+        if (uuidPattern.test(stored)) {
+          writeLocal(STORAGE_KEYS.activeSchool, stored);
+          return stored;
+        }
+      }
+    }
+  } catch {
+    // Le profil v1 reste un repli valide si le stockage actif est illisible.
+  }
+
+  if (cachedSchool?.id && uuidPattern.test(cachedSchool.id)) {
+    writeLocal(STORAGE_KEYS.activeSchool, cachedSchool.id);
+    return cachedSchool.id;
+  }
+  return "";
+}
+
 function errorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === "object" && "message" in error) {
@@ -102,7 +137,7 @@ export async function resolveActiveSchoolContext(): Promise<ActiveSchoolContext>
       .filter((school) => school.id && school.isActive && productAllowsSchoolType(school.schoolType));
     if (rpcSchools.length) {
       const storedSchoolId = previousUserId === user.id
-        ? readLocal<string>(STORAGE_KEYS.activeSchool, "")
+        ? readStoredActiveSchoolId(cachedSchool)
         : "";
       const school = rpcSchools.find((item) => item.id === storedSchoolId) || rpcSchools[0];
       writeLocal(ACTIVE_SCHOOL_USER_KEY, user.id);
@@ -133,7 +168,7 @@ export async function resolveActiveSchoolContext(): Promise<ActiveSchoolContext>
   // Si le profil déjà validé appartient toujours à la session, il peut être
   // utilisé immédiatement sans seconde requête. Cela accélère aussi A/B.
   const storedSchoolId = previousUserId === user.id
-    ? readLocal<string>(STORAGE_KEYS.activeSchool, "")
+    ? readStoredActiveSchoolId(cachedSchool)
     : "";
   if (cachedSchool && schoolIds.includes(cachedSchool.id) && productAllowsSchoolType(cachedSchool.schoolType)) {
     writeLocal(ACTIVE_SCHOOL_USER_KEY, user.id);
