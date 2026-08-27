@@ -258,34 +258,7 @@ export async function createCampaign(input: {
   priority: MessagePriority;
 }): Promise<string> {
   const client = createClient();
-  const { data: auth } = await client.auth.getUser();
-
-  const deliveredAt = new Date().toISOString();
-  const campaign = await client
-    .from("message_campaigns")
-    .insert({
-      school_id: input.schoolId,
-      title: input.title.trim(),
-      body: input.body,
-      channel: "internal",
-      audience_kind: input.target.kind,
-      class_group_id: input.target.kind === "class" ? input.target.classId || null : null,
-      level_code: input.target.kind === "level" ? input.target.levelCode || null : null,
-      status: "sent",
-      publish_to_parent_space: true,
-      priority: input.priority,
-      recipient_count: input.recipients.length,
-      sent_count: input.recipients.length,
-      created_by: auth.user?.id || null,
-    })
-    .select("id")
-    .single();
-  if (campaign.error) throw new Error(describe(campaign.error));
-
-  const campaignId = String(campaign.data.id);
-  const rows = input.recipients.map((recipient) => ({
-    campaign_id: campaignId,
-    school_id: input.schoolId,
+  const recipients = input.recipients.map((recipient) => ({
     guardian_id: recipient.guardianId,
     student_id: recipient.studentId,
     guardian_name: recipient.guardianName,
@@ -293,34 +266,20 @@ export async function createCampaign(input: {
     class_name: recipient.className,
     phone: recipient.phone,
     resolved_body: resolveBodyFor(input.body, recipient, input.schoolName),
-    status: "sent",
-    failure_reason: null,
-    sent_at: deliveredAt,
-    delivered_at: deliveredAt,
-    sent_channel: "internal",
   }));
-
-  const inserted = await client.from("message_recipients").insert(rows);
-  if (inserted.error) {
-    // La campagne sans destinataires n'a aucun sens : on ne laisse pas de trace
-    // partielle qui laisserait croire à un envoi en cours.
-    await client.from("message_campaigns").delete().eq("id", campaignId);
-    // Si le nettoyage échoue lui aussi, la campagne reste en base sans
-    // destinataires : on le dit dans le même message plutôt que de le taire,
-    // sans masquer l'erreur d'origine qui reste la cause.
-    const leftover = await client
-      .from("message_campaigns")
-      .select("id")
-      .eq("id", campaignId);
-    const orpheline = !leftover.error && (leftover.data || []).length > 0;
-    throw new Error(
-      describe(inserted.error) +
-        (orpheline
-          ? " — la campagne vide n’a pas pu être retirée du serveur ; signalez-la à la direction."
-          : ""),
-    );
-  }
-  return campaignId;
+  const { data, error } = await client.rpc("create_internal_message_campaign", {
+    p_school_id: input.schoolId,
+    p_title: input.title.trim(),
+    p_body: input.body,
+    p_audience_kind: input.target.kind,
+    p_class_group_id: input.target.kind === "class" ? input.target.classId || null : null,
+    p_level_code: input.target.kind === "level" ? input.target.levelCode || null : null,
+    p_priority: input.priority,
+    p_recipients: recipients,
+  });
+  if (error) throw new Error(describe(error));
+  if (!data) throw new Error("La campagne n’a pas été créée.");
+  return String(data);
 }
 
 export async function listCampaignRecipients(campaignId: string): Promise<CampaignRecipient[]> {
