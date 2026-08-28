@@ -49,6 +49,24 @@ export function normalizeSchoolRole(value: unknown): SchoolRole | null {
   return knownRoles.has(normalized) ? (normalized as SchoolRole) : null;
 }
 
+/** Rôle local explicite du mode démonstration, jamais utilisé sans son cookie. */
+export function readDemoRole(): SchoolRole | null {
+  if (typeof document === "undefined") return null;
+  const demoSession = document.cookie
+    .split(";")
+    .some((item) => item.trim() === "gabon-educ-demo-session=1");
+  if (!demoSession) return null;
+  const demo = readLocal<{ role?: unknown } | null>("gabon-educ-demo-user", null);
+  return normalizeSchoolRole(demo?.role);
+}
+
+export function hasAnyAllowedRole(
+  roles: readonly SchoolRole[],
+  allowed: readonly SchoolRole[],
+): boolean {
+  return roles.some((role) => allowed.includes(role));
+}
+
 export type RoleContext = {
   roles: SchoolRole[];
   /** Rôle le plus étendu, celui qui décide de l'accueil et du menu. */

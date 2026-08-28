@@ -4,7 +4,12 @@ import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
+import {
+  hasAnyAllowedRole,
+  homeForRole,
+  readDemoRole,
+  resolveMyRoles,
+} from "@/lib/roles/current-role";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import type { SchoolRole } from "@/lib/platform/types";
 
@@ -68,10 +73,31 @@ export function RequireRole({
 
   useEffect(() => {
     void (async () => {
-      const client = createClient();
       try {
+        const admis = admisCle ? (admisCle.split(",") as SchoolRole[]) : [];
+        const demoRole = readDemoRole();
+        const terminerEnDemo = () => {
+          if (!demoRole || superAdminOnly) return false;
+          const autorise = hasAnyAllowedRole([demoRole], admis);
+          setMonRole(demoRole);
+          setEtat(autorise ? "autorise" : "refuse");
+          if (!autorise) {
+            setRaison("Votre rôle de démonstration ne donne pas accès à cet écran.");
+            setConstat(`Rôle lu : ${demoRole}. Rôles attendus : ${admis.join(", ")}.`);
+          }
+          return true;
+        };
+
+        let client: ReturnType<typeof createClient>;
+        try {
+          client = createClient();
+        } catch (clientError) {
+          if (terminerEnDemo()) return;
+          throw clientError;
+        }
         const { data: auth, error: authError } = await client.auth.getUser();
         if (authError || !auth.user) {
+          if (terminerEnDemo()) return;
           setRaison("Votre session a expiré. Reconnectez-vous pour continuer.");
           setEtat("refuse");
           return;
@@ -121,8 +147,7 @@ export function RequireRole({
 
         const contexte = await resolveMyRoles(idEcole);
         setMonRole(contexte?.primary || null);
-        const admis = admisCle ? (admisCle.split(",") as SchoolRole[]) : [];
-        const autorise = (contexte?.roles || []).some((role) => admis.includes(role));
+        const autorise = hasAnyAllowedRole(contexte?.roles || [], admis);
         setEtat(autorise ? "autorise" : "refuse");
         if (!autorise) {
           setRaison("Votre rôle dans cet établissement ne donne pas accès à cet écran.");
