@@ -74,6 +74,7 @@ describe("correspondance payloads métier et schéma Supabase", () => {
     expect(mutation.row).toMatchObject({
       first_name: "Élise",
       last_name: "Ondo",
+      academic_year_id: "55555555-5555-4555-8555-555555555555",
       class_group_id: "66666666-6666-4666-8666-666666666666",
       created_by: actor.userId,
     });
@@ -86,6 +87,7 @@ describe("correspondance payloads métier et schéma Supabase", () => {
         last_name: "Ondo",
       },
     });
+    expect(mutation.related?.[0].row).not.toHaveProperty("academic_year_id");
   });
 
   it("traduit un élève de Mes classes vers class_students", () => {
@@ -107,6 +109,7 @@ describe("correspondance payloads métier et schéma Supabase", () => {
         school_id: actor.schoolId,
       },
     });
+    expect(mutation.related?.[0].row).not.toHaveProperty("academic_year_id");
   });
 
   it("traduit une classe sans envoyer la clé class", () => {

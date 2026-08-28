@@ -198,7 +198,6 @@ export function buildSupabaseMutation(
             id: operation.entityId,
             school_id: requiredSchool(actor, operation.module),
             class_student_id: operation.entityId,
-            academic_year_id: null,
             class_group_id: operation.payload.classId,
             registration_number: nullable(item.registrationNumber),
             first_name: item.firstName,

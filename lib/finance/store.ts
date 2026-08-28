@@ -8,7 +8,7 @@ import { librevilleDate } from "@/lib/finance/calculations";
 
 export type FinanceContext = { schoolId: string; userId: string; role: SchoolRole; academicYearId: string };
 export type FeeTypeRow = { id: string; code: string; label: string; category: string; is_active: boolean; academic_year_id: string };
-export type StudentRow = { id: string; first_name: string; last_name: string; registration_number: string | null; class_group_id: string | null };
+export type StudentRow = { id: string; first_name: string; last_name: string; registration_number: string | null; school_id:string; academic_year_id:string|null; class_group_id: string | null; status:string };
 export type ChargeRow = { id: string; student_id: string; fee_type_id:string; source_scale_id:string|null; amount_fcfa: number; status: string; finance_fee_types: { label: string } | null };
 export type ChargeInstallmentRow = { id: string; charge_id: string; label: string; due_on: string; amount_fcfa: number; status: string };
 export type PaymentRow = { id: string; student_id: string; payer_name: string; amount_fcfa: number; paid_at: string; payment_method: string; receipt_number: string; status: string; cancellation_reason: string | null; cancelled_at: string | null; cancelled_by: string | null };
@@ -39,7 +39,7 @@ export async function loadFinanceData(context: FinanceContext) {
   const [fees, scales, students, guardians, links, charges, installments, payments, settings, classes, closures] = await Promise.all([
     client.from("finance_fee_types").select("id,code,label,category,is_active,academic_year_id").eq("school_id", context.schoolId).eq("academic_year_id", context.academicYearId).order("display_order"),
     client.from("finance_fee_scales").select("id,fee_type_id,scope_type,grade_level_id,class_group_id,student_id,amount_fcfa,publish_to_parents").eq("school_id",context.schoolId).eq("academic_year_id",context.academicYearId).eq("is_active",true),
-    client.from("student_records").select("id,first_name,last_name,registration_number,class_group_id").eq("school_id", context.schoolId).eq("status", "active").order("last_name"),
+    client.from("student_records").select("id,first_name,last_name,registration_number,school_id,academic_year_id,class_group_id,status").eq("school_id", context.schoolId).eq("status", "active").order("last_name"),
     client.from("guardians").select("id,first_name,last_name,phone").eq("school_id",context.schoolId).eq("status","active").order("last_name"),
     client.from("guardian_student_links").select("guardian_id,student_id").eq("school_id",context.schoolId),
     client.from("finance_student_charges").select("id,student_id,fee_type_id,source_scale_id,amount_fcfa,status,finance_fee_types(label)").eq("school_id", context.schoolId).eq("academic_year_id", context.academicYearId),

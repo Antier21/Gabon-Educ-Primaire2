@@ -46,6 +46,8 @@ La migration `100_finance_scolarite.sql` a été appliquée avec succès. Le con
 
 Deux corrections de privilèges ont ensuite été exécutées manuellement. La migration idempotente `101_finance_internal_function_privileges.sql` est requise dans l’historique Git pour reproduire exactement cet état final : quatre fonctions internes sans droit client et dix RPC applicatives exécutables uniquement par `authenticated`. Elle doit être appliquée sur tout nouvel environnement après la migration 100.
 
+Le premier test financier réel a révélé des dossiers élèves rattachés à une classe mais sans `academic_year_id`. La migration `102_student_records_academic_year_integrity.sql` répare ces dossiers depuis l’année de leur classe et installe un trigger permanent. Elle refuse toute classe d’un autre établissement, mais conserve la possibilité d’un dossier sans classe et sans année. Elle doit être appliquée après les migrations 100 et 101 ; elle n’a pas été exécutée automatiquement par ce travail.
+
 ## Contrôles SQL préalables en lecture seule
 
 Exécuter dans SQL Editor avant la migration 100. Ces requêtes ne modifient rien.
@@ -100,8 +102,8 @@ Résultat obtenu après migration 100 et correctifs de privilèges reproduits pa
 
 1. Effectuer une sauvegarde Supabase vérifiée et noter son identifiant.
 2. Exécuter les contrôles préalables ci-dessus en lecture seule.
-3. Sur un nouvel environnement seulement, appliquer `100_finance_scolarite.sql`, puis `101_finance_internal_function_privileges.sql` dans cet ordre.
-4. Exécuter immédiatement les contrôles après les deux migrations et conserver les résultats.
+3. Sur un nouvel environnement seulement, appliquer `100_finance_scolarite.sql`, `101_finance_internal_function_privileges.sql`, puis `102_student_records_academic_year_integrity.sql` dans cet ordre.
+4. Exécuter immédiatement les contrôles après les trois migrations et conserver les résultats.
 5. Exécuter les tests fonctionnels sur un compte de direction, un secrétaire et un parent avant ouverture générale.
 6. Après validation de la base, committer et pousser le code applicatif.
 7. Déployer sur Netlify.
@@ -126,5 +128,7 @@ Le retour applicatif consiste à redéployer la version précédente et à retir
 - Dans deux sessions, mettre en concurrence encaissement/clôture puis annulation/clôture : le premier détenteur du verrou doit déterminer sans ambiguïté le contenu historique de la clôture.
 - Tester à `23:30 UTC` le rattachement à la journée suivante de Libreville et, le 31 décembre, à la nouvelle année de reçu.
 - Créer successivement des barèmes établissement, niveau, classe et élève dans plusieurs ordres ; vérifier les compteurs `overshadowed_count` et `conflict_count` et l’absence de remplacement d’une ancienne charge payée.
+- Vérifier qu’un dossier actif rattaché à une classe possède exactement l’année de cette classe, puis changer sa classe et contrôler la mise à jour automatique de l’année.
+- Vérifier que la prévisualisation financière exclut et signale les dossiers incomplets au lieu de les annoncer comme de nouvelles attributions.
 - Activer/désactiver la publication parent et vérifier deux familles distinctes.
 - Vérifier qu’enseignant, vie scolaire, parent et élève ne peuvent ouvrir l’administration financière.

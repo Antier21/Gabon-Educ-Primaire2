@@ -100,13 +100,14 @@ export function validateCustomInstallments(total:unknown,rows:CustomInstallmentI
  return normalized.sort((a,b)=>a.position-b.position);
 }
 
-export function previewCollectiveAssignment(students:Array<{id:string;active:boolean;schoolId:string;gradeLevelId:string;classGroupId:string}>,scale:ApplicableScale&{schoolId:string;amountFcfa:number},allScales:ApplicableScale[],existingCharges:Array<{studentId:string;sourceScaleId:string|null}>){
- const eligible=students.filter(student=>student.active&&student.schoolId===scale.schoolId&&(
-  scale.scopeType==="school"||(scale.scopeType==="level"&&student.gradeLevelId===scale.gradeLevelId)||(scale.scopeType==="class"&&student.classGroupId===scale.classGroupId)||(scale.scopeType==="student"&&student.id===scale.studentId)));
+export function previewCollectiveAssignment(students:Array<{id:string;active:boolean;schoolId:string;academicYearId:string|null;gradeLevelId:string;classGroupId:string}>,scale:ApplicableScale&{schoolId:string;academicYearId:string;amountFcfa:number},allScales:ApplicableScale[],existingCharges:Array<{studentId:string;sourceScaleId:string|null}>){
+ const inScope=(student:typeof students[number])=>scale.scopeType==="school"||(scale.scopeType==="level"&&student.gradeLevelId===scale.gradeLevelId)||(scale.scopeType==="class"&&student.classGroupId===scale.classGroupId)||(scale.scopeType==="student"&&student.id===scale.studentId);
+ const scopeCandidates=students.filter(inScope);const eligible=scopeCandidates.filter(student=>student.active&&student.schoolId===scale.schoolId&&student.academicYearId===scale.academicYearId&&(scale.scopeType!=="class"&&scale.scopeType!=="level"||Boolean(student.classGroupId)&&(scale.scopeType!=="level"||Boolean(student.gradeLevelId))));
+ const excluded=scopeCandidates.filter(student=>!eligible.includes(student));
  const winning=eligible.filter(student=>resolveApplicableScale(allScales,{studentId:student.id,classGroupId:student.classGroupId,gradeLevelId:student.gradeLevelId})?.id===scale.id);
  const overshadowed=eligible.filter(student=>!winning.includes(student));const existing=new Map(existingCharges.map(c=>[c.studentId,c.sourceScaleId]));
  const valid=winning.filter(student=>existing.get(student.id)===scale.id);const conflicts=winning.filter(student=>existing.has(student.id)&&existing.get(student.id)!==scale.id);const pending=winning.filter(student=>!existing.has(student.id));
- return{eligibleIds:eligible.map(s=>s.id),winningIds:winning.map(s=>s.id),overshadowedIds:overshadowed.map(s=>s.id),alreadyAssignedIds:valid.map(s=>s.id),conflictIds:conflicts.map(s=>s.id),pendingIds:pending.map(s=>s.id),amountPerStudent:fcfa(scale.amountFcfa),theoreticalTotal:winning.length*fcfa(scale.amountFcfa),newTotal:pending.length*fcfa(scale.amountFcfa)};
+ return{eligibleIds:eligible.map(s=>s.id),excludedIncompleteIds:excluded.map(s=>s.id),winningIds:winning.map(s=>s.id),overshadowedIds:overshadowed.map(s=>s.id),alreadyAssignedIds:valid.map(s=>s.id),conflictIds:conflicts.map(s=>s.id),pendingIds:pending.map(s=>s.id),amountPerStudent:fcfa(scale.amountFcfa),theoreticalTotal:winning.length*fcfa(scale.amountFcfa),newTotal:pending.length*fcfa(scale.amountFcfa)};
 }
 
 export function formatFcfa(value: unknown): string {
