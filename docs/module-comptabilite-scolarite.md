@@ -48,6 +48,8 @@ Deux corrections de privilèges ont ensuite été exécutées manuellement. La m
 
 Le premier test financier réel a révélé des dossiers élèves rattachés à une classe mais sans `academic_year_id`. La migration `102_student_records_academic_year_integrity.sql` répare ces dossiers depuis l’année de leur classe et installe un trigger permanent. Elle refuse toute classe d’un autre établissement, mais conserve la possibilité d’un dossier sans classe et sans année. Elle doit être appliquée après les migrations 100 et 101 ; elle n’a pas été exécutée automatiquement par ce travail.
 
+Le premier encaissement réel a ensuite échoué avant toute écriture avec `column reference "sequence_year" is ambiguous` : la variable PL/pgSQL portait le même nom que la colonne de `finance_receipt_sequences`. La migration `103_finance_receipt_sequence_ambiguity.sql` redéfinit uniquement `record_finance_payment`, renomme la variable en `receipt_year` et cible explicitement `finance_receipt_sequences_pkey`. Elle conserve l’idempotence, les verrous, les contrôles de clôture, les allocations, l’audit et le fuseau de Libreville. Le contrôle a confirmé qu’aucun paiement, aucune allocation, aucune séquence et aucun audit partiel n’avaient été créés par l’appel en échec.
+
 ## Contrôles SQL préalables en lecture seule
 
 Exécuter dans SQL Editor avant la migration 100. Ces requêtes ne modifient rien.
@@ -102,8 +104,8 @@ Résultat obtenu après migration 100 et correctifs de privilèges reproduits pa
 
 1. Effectuer une sauvegarde Supabase vérifiée et noter son identifiant.
 2. Exécuter les contrôles préalables ci-dessus en lecture seule.
-3. Sur un nouvel environnement seulement, appliquer `100_finance_scolarite.sql`, `101_finance_internal_function_privileges.sql`, puis `102_student_records_academic_year_integrity.sql` dans cet ordre.
-4. Exécuter immédiatement les contrôles après les trois migrations et conserver les résultats.
+3. Sur un nouvel environnement seulement, appliquer `100_finance_scolarite.sql`, `101_finance_internal_function_privileges.sql`, `102_student_records_academic_year_integrity.sql`, puis `103_finance_receipt_sequence_ambiguity.sql` dans cet ordre.
+4. Exécuter immédiatement les contrôles après les quatre migrations et conserver les résultats.
 5. Exécuter les tests fonctionnels sur un compte de direction, un secrétaire et un parent avant ouverture générale.
 6. Après validation de la base, committer et pousser le code applicatif.
 7. Déployer sur Netlify.
