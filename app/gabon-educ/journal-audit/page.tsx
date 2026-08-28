@@ -1,5 +1,6 @@
 import { OperationsCenter } from "@/components/preproduction/OperationsCenter";
 import { RequireRole } from "@/components/RequireRole";
+import { DIRECTION_ROLES } from "@/lib/roles/page-policies";
 
 export const metadata={title:"Journal d’audit | Gabon Éduc+"};
 
@@ -11,7 +12,7 @@ export const metadata={title:"Journal d’audit | Gabon Éduc+"};
  */
 export default function Page(){
   return (
-    <RequireRole allow={["school_admin", "headmaster", "academic_director", "secretary"]} what="Le journal d’audit">
+    <RequireRole allow={DIRECTION_ROLES} what="Le journal d’audit">
       <OperationsCenter module="audit"/>
     </RequireRole>
   );

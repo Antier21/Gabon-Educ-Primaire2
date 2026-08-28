@@ -1,5 +1,6 @@
 import { OperationsCenter } from "@/components/preproduction/OperationsCenter";
 import { RequireRole } from "@/components/RequireRole";
+import { DIRECTION_ROLES } from "@/lib/roles/page-policies";
 
 export const metadata={title:"Import et export | Gabon Éduc+"};
 
@@ -11,7 +12,7 @@ export const metadata={title:"Import et export | Gabon Éduc+"};
  */
 export default function Page(){
   return (
-    <RequireRole allow={["school_admin", "headmaster", "academic_director", "secretary"]} what="L’import et l’export de données">
+    <RequireRole allow={DIRECTION_ROLES} what="L’import et l’export de données">
       <OperationsCenter module="import-export"/>
     </RequireRole>
   );

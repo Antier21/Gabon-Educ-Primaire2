@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Brand } from "@/components/Brand";
 import { AuthForm } from "@/components/AuthForm";
 import { getDefaultSchoolProfile, getSchoolProfileByKey } from "@/lib/school-profiles";
+import { RequireRole } from "@/components/RequireRole";
+import { SECRETARIAT_ROLES } from "@/lib/roles/page-policies";
 
 type Props = { searchParams: Promise<{ profile?: string }> };
 
@@ -12,6 +14,7 @@ export default async function Signup({ searchParams }: Props) {
   const profileLabel = profile.label;
 
   return (
+    <RequireRole allow={SECRETARIAT_ROLES} what="L’inscription">
     <main className="auth-page">
       <section className="auth-aside">
         <Brand />
@@ -42,5 +45,6 @@ export default async function Signup({ searchParams }: Props) {
         </div>
       </section>
     </main>
+    </RequireRole>
   );
 }

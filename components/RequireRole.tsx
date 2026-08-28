@@ -28,11 +28,9 @@ import type { SchoolRole } from "@/lib/platform/types";
  *
  * Deux règles gouvernent ce fichier, et chacune vient d'une erreur commise.
  *
- * **Le super-administrateur passe partout.** La première version ne comparait
- * que les rôles tenus dans un établissement — directeur, secrétaire. Or le
- * super-administrateur n'en tient pas nécessairement : il est au-dessus d'eux.
- * Il se voyait donc refuser les écrans techniques de sa propre plateforme. Son
- * cas se tranche avant tout le reste.
+ * **Le super-administrateur passe sur les écrans administratifs.** Il n'a pas
+ * nécessairement de rôle dans un établissement. Les espaces personnels parent
+ * et élève peuvent toutefois désactiver explicitement ce passe-droit.
  *
  * **Un refus doit dire ce qu'il a vu.** Un « Accès réservé » sans motif est
  * indiscernable d'une panne — c'est la leçon qui revient à chaque étape de ce
@@ -45,12 +43,15 @@ type Etat = "verification" | "autorise" | "refuse";
 
 export function RequireRole({
   allow,
+  allowSuperAdmin = true,
   superAdminOnly = false,
   what,
   children,
 }: {
-  /** Rôles d'établissement admis. Le super-administrateur passe de toute façon. */
-  allow?: SchoolRole[];
+  /** Rôles d'établissement admis. */
+  allow?: readonly SchoolRole[];
+  /** Désactivé uniquement pour les espaces personnels parent et élève. */
+  allowSuperAdmin?: boolean;
   /** Réservé à l'éditeur de la plateforme. */
   superAdminOnly?: boolean;
   /** Ce que l'écran est, pour l'annoncer dans le refus. */
@@ -123,6 +124,14 @@ export function RequireRole({
           return;
         }
 
+        if (superAdmin && !allowSuperAdmin) {
+          setMonRole("super_admin");
+          setRaison("Le rôle de plateforme ne donne pas accès à cet espace personnel.");
+          setConstat(`Rôle lu : super_admin. Rôles attendus : ${admis.join(", ")}.`);
+          setEtat("refuse");
+          return;
+        }
+
         // Le super-administrateur précède les rôles d'établissement : il n'a
         // pas à en tenir un pour ouvrir un écran technique.
         if (superAdmin) {
@@ -162,7 +171,7 @@ export function RequireRole({
         setEtat("refuse");
       }
     })();
-  }, [admisCle, superAdminOnly]);
+  }, [admisCle, allowSuperAdmin, superAdminOnly]);
 
   if (etat === "verification") {
     return (

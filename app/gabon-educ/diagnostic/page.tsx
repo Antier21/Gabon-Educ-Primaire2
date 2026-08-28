@@ -1,5 +1,6 @@
 import { OperationsCenter } from "@/components/preproduction/OperationsCenter";
 import { RequireRole } from "@/components/RequireRole";
+import { DIRECTION_ROLES } from "@/lib/roles/page-policies";
 
 export const metadata={title:"Diagnostic | Gabon Éduc+"};
 
@@ -11,7 +12,7 @@ export const metadata={title:"Diagnostic | Gabon Éduc+"};
  */
 export default function Page(){
   return (
-    <RequireRole allow={["school_admin", "headmaster", "academic_director", "secretary"]} what="Le diagnostic technique">
+    <RequireRole allow={DIRECTION_ROLES} what="Le diagnostic technique">
       <OperationsCenter module="diagnostic"/>
     </RequireRole>
   );

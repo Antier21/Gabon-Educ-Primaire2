@@ -1,5 +1,6 @@
 import { OperationsCenter } from "@/components/preproduction/OperationsCenter";
 import { RequireRole } from "@/components/RequireRole";
+import { COMMUNICATION_ROLES } from "@/lib/roles/page-policies";
 
 export const metadata={title:"Notifications | Gabon Éduc+"};
 
@@ -11,7 +12,7 @@ export const metadata={title:"Notifications | Gabon Éduc+"};
  */
 export default function Page(){
   return (
-    <RequireRole allow={["school_admin", "headmaster", "academic_director", "secretary"]} what="Le centre de notifications">
+    <RequireRole allow={COMMUNICATION_ROLES} what="Le centre de notifications">
       <OperationsCenter module="notifications"/>
     </RequireRole>
   );
