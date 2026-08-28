@@ -16,6 +16,7 @@
     "@opentelemetry/api": "^1.9.1",
     "@supabase/ssr": "^0.6.0",
     "@supabase/supabase-js": "^2.49.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
