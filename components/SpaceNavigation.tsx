@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BookOpen, BriefcaseBusiness, CalendarDays, CalendarRange, ChevronDown, ClipboardCheck, ExternalLink,
   GraduationCap, HeartPulse, Home, Library, ListTodo, LogOut, Menu, MessageCircle, NotebookPen,
-  PenLine, PhoneCall, Printer, School, ShieldCheck, UserRound, Users, X,
+  Banknote, PenLine, PhoneCall, Printer, Receipt, School, ShieldCheck, UserRound, Users, X,
 } from "lucide-react";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { homeForRole, resolveMyRoles } from "@/lib/roles/current-role";
@@ -49,6 +49,13 @@ type AdminGroup = {
  * Chaque entrée mène désormais à une destination distincte et réelle.
  */
 const adminGroups: AdminGroup[] = [
+  {
+    label: "Finances scolaires",
+    icon: Banknote,
+    items: [
+      { label: "Comptabilité et frais de scolarité", href: "/gabon-educ/comptabilite" },
+    ],
+  },
   {
     label: "Direction et secrétariat",
     icon: ShieldCheck,
@@ -116,11 +123,11 @@ const adminGroups: AdminGroup[] = [
     ],
   },
   {
-    // Une seule entrée pour les onze modules non construits, en fin de menu.
+    // Une seule entrée pour les dix modules non construits, en fin de menu.
     label: "Modules à venir",
     icon: Library,
     items: [
-      { label: "Comptabilité, santé, bibliothèque…", href: "/gabon-educ/modules-a-venir" },
+      { label: "Paie, santé, bibliothèque…", href: "/gabon-educ/modules-a-venir" },
     ],
   },
 ];
@@ -314,6 +321,7 @@ const simpleNav: Record<SimpleSpace, SimpleNavEntry[]> = {
     { label: "Emploi du temps", href: "/gabon-educ/espace-parent#emploi-du-temps", icon: CalendarDays },
     { label: "Messages", href: "/gabon-educ/espace-parent#messages", icon: MessageCircle },
     { label: "Mes coordonnées", href: "/gabon-educ/espace-parent#mes-coordonnees", icon: PhoneCall },
+    { label: "Frais de scolarité", href: "/gabon-educ/espace-parent#frais-de-scolarite", icon: Receipt },
   ],
   student: [
     { label: "Accueil", href: "/gabon-educ/espace-eleve", icon: Home },

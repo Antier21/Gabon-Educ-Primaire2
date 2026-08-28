@@ -161,7 +161,7 @@ export function AdminDashboardClient() {
           <header><div><h2>Centre des opérations</h2><p>Accès direct aux tâches quotidiennes de l’administration.</p></div><ShieldCheck /></header>
           <div className="admin-module-grid">
             {quickModules.map(item => <Link href={item.href} key={item.href}><span><item.icon /></span><div><b>{item.label}</b><small>{item.description}</small></div><strong>Ouvrir →</strong></Link>)}
-            <article className="admin-finance-coming"><span><WalletCards /></span><div><b>Comptabilité et inscriptions</b><small>Frais, paiements, reçus, caisse et états financiers.</small></div><em>À concevoir selon le modèle de l’établissement</em></article>
+            <Link href="/gabon-educ/comptabilite"><span><WalletCards /></span><div><b>Comptabilité et frais de scolarité</b><small>Frais, paiements, reçus, impayés et clôtures de caisse.</small></div><strong>Ouvrir →</strong></Link>
           </div>
         </section>
 

@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { SchoolRole } from "@/lib/platform/types";
+import { FINANCE_MODULE_ROLES } from "@/lib/finance/policy";
 import {
   BULLETIN_PRINT_ROLES,
   COMMUNICATION_ROLES,
@@ -154,6 +155,15 @@ describe("vie scolaire", () => {
   ));
 });
 
+describe("comptabilité scolaire", () => {
+  it("utilise une garde locale unique", () => expectLocalGuard(["comptabilite"], "FINANCE_MODULE_ROLES"));
+  it("autorise direction financière et secrétariat", () => expectRoles(
+    FINANCE_MODULE_ROLES,
+    ["school_admin", "headmaster", "secretary", "super_admin"],
+    ["academic_director", "teacher", "head_teacher", "supervisor", "guardian", "student"],
+  ));
+});
+
 describe("espaces personnels stricts", () => {
   it("pose une garde locale sans passe-droit super_admin", () => {
     expectLocalGuard(["espace-parent"], "PARENT_SPACE_ROLES", true);
@@ -179,6 +189,7 @@ describe("routes publiques et noms voisins", () => {
       "impression-bulletins",
       "documents",
       "assiduite",
+      "comptabilite",
       "espace-parent",
       "espace-eleve",
       "service-abonnements",

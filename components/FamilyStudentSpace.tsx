@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { PRODUCT } from "@/lib/product-edition";
-import { Bell, CalendarDays, GraduationCap, ListChecks, ListTodo, MessageCircle, UserRoundCheck } from "lucide-react";
+import { Bell, CalendarDays, GraduationCap, ListChecks, ListTodo, MessageCircle, Receipt, UserRoundCheck } from "lucide-react";
 import { SimpleSpaceNav, type SimpleSpace } from "@/components/SpaceNavigation";
 import { FamilySpaceLive } from "@/components/FamilySpaceLive";
+import { ParentFinancePanel } from "@/components/finance/ParentFinancePanel";
 
 export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "parent" | "student"> }) {
   const isParent = space === "parent";
@@ -32,9 +33,10 @@ export function FamilyStudentSpace({ space }: { space: Extract<SimpleSpace, "par
           <a href={`${base}#vie-scolaire`}><UserRoundCheck /><b>Vie scolaire</b><span>Absences, retards et justificatifs</span></a>
           <a href={`${base}#emploi-du-temps`}><CalendarDays /><b>Emploi du temps</b><span>Voir la semaine scolaire</span></a>
           {isParent && <a href={`${base}#messages`}><MessageCircle /><b>Messages</b><span>Informations reçues de l’établissement</span></a>}
+          {isParent && <a href={`${base}#frais-de-scolarite`}><Receipt /><b>Frais de scolarité</b><span>Échéances, paiements et reçus publiés</span></a>}
         </div>
       </section>
-      <div className="family-space-data"><FamilySpaceLive space={space} /></div>
+      <div className="family-space-data"><FamilySpaceLive space={space} />{isParent && <ParentFinancePanel />}</div>
     </main>
   );
 }

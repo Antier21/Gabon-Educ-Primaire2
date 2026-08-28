@@ -31,19 +31,6 @@ type Module = {
 
 const MODULES: Module[] = [
   {
-    nom: "Comptabilité et frais de scolarité",
-    icone: Wallet,
-    domaine: "Comptabilité",
-    description:
-      "Le module le plus attendu d'un établissement privé, et celui qui manque le plus aujourd'hui.",
-    attendu: [
-      "Encaissement des frais d'inscription et de scolarité",
-      "Reçus numérotés et remis à la famille",
-      "Suivi des impayés par classe et par élève",
-      "États de caisse pour la direction",
-    ],
-  },
-  {
     nom: "Salaires",
     icone: Wallet,
     domaine: "Comptabilité",
@@ -171,15 +158,15 @@ export function UpcomingModules({ onLogout }: { onLogout?: () => void }) {
 
       <section className={styles.intro}>
         <p className={styles.kicker}>Feuille de route</p>
-        <h1>Onze modules prévus, aucun encore réalisé</h1>
+        <h1>Dix modules restent à construire</h1>
         <p className={styles.lede}>
-          Ces modules figurent dans l’architecture de Gabon Éduc+ mais ne sont pas construits. Ils sont
+          Ces dix modules figurent dans l’architecture de Gabon Éduc+ mais ne sont pas encore construits. Ils sont
           présentés ici plutôt que dispersés dans les menus, pour qu’aucune entrée ne promette une
           fonction qui n’existe pas.
         </p>
         <p className={styles.note}>
           Ce que l’application fait aujourd’hui — inscriptions, classes, notes, bulletins, espaces
-          familles, messages aux parents — fonctionne et a été éprouvé. Cette page dit le reste.
+          familles, messages aux parents, comptabilité et frais de scolarité — fonctionne et a été éprouvé. Cette page dit le reste.
         </p>
       </section>
 
