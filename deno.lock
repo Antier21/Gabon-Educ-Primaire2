@@ -12,6 +12,7 @@
     "packageJson": {
       "dependencies": [
         "npm:@netlify/blobs@^8.1.0",
+        "npm:@opentelemetry/api@^1.9.1",
         "npm:@supabase/ssr@0.6",
         "npm:@supabase/supabase-js@^2.49.0",
         "npm:@types/node@22",
@@ -19,6 +20,7 @@
         "npm:@types/react@19",
         "npm:eslint-config-next@15",
         "npm:eslint@9",
+        "npm:jspdf@^4.2.1",
         "npm:lucide-react@0.468",
         "npm:next@15",
         "npm:react-dom@19",
