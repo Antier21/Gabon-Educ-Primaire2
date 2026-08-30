@@ -1,6 +1,26 @@
 import type { SchoolRole } from "@/lib/platform/types";
 
+/**
+ * Rôles qui pilotent l'établissement au sens large. Cette politique historique
+ * reste utilisée par plusieurs écrans partagés avec la direction des études.
+ */
 export const DIRECTION_ROLES: readonly SchoolRole[] = [
+  "school_admin",
+  "headmaster",
+  "academic_director",
+];
+
+/**
+ * Le tableau de bord Administration est désormais distinct de l'espace
+ * Pédagogie : le directeur des études n'y est plus envoyé ni admis.
+ */
+export const ADMINISTRATION_ROLES: readonly SchoolRole[] = [
+  "school_admin",
+  "headmaster",
+];
+
+/** Rôles admis dans le tableau de bord autonome de la pédagogie. */
+export const ACADEMIC_DIRECTION_ROLES: readonly SchoolRole[] = [
   "school_admin",
   "headmaster",
   "academic_director",
