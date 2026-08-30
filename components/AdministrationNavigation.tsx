@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Banknote,
   BriefcaseBusiness,
+  CalendarDays,
   ChevronDown,
   GraduationCap,
   HeartPulse,
@@ -105,6 +106,36 @@ export function AdministrationMegaNav({ onLogout }: { onLogout: () => void }) {
     setMobileOpen(false);
   }
 
+  function renderGroup(group: NavGroup) {
+    const Icon = group.icon;
+    const isOpen = openGroup === group.label;
+    return (
+      <div
+        className={isOpen ? "admin-nav-group open" : "admin-nav-group"}
+        key={group.label}
+        onMouseEnter={() => setOpenGroup(group.label)}
+        onMouseLeave={() => setOpenGroup(null)}
+      >
+        <button
+          type="button"
+          onClick={() => setOpenGroup(isOpen ? null : group.label)}
+          aria-expanded={isOpen}
+        >
+          <Icon className="admin-nav-group-icon" />
+          <span>{group.label}</span>
+          <ChevronDown className="admin-nav-chevron" />
+        </button>
+        <div className="admin-nav-dropdown" role="menu">
+          {group.items.map((item) => (
+            <Link key={item.label} href={item.href} role="menuitem" onClick={closeNavigation}>
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <nav
       ref={navRef}
@@ -125,35 +156,17 @@ export function AdministrationMegaNav({ onLogout }: { onLogout: () => void }) {
         <Link className="admin-meganav-home" href="/gabon-educ/pedagogie" onClick={closeNavigation}>
           <GraduationCap />Pédagogie
         </Link>
-        {administrationGroups.map((group) => {
-          const Icon = group.icon;
-          const isOpen = openGroup === group.label;
-          return (
-            <div
-              className={isOpen ? "admin-nav-group open" : "admin-nav-group"}
-              key={group.label}
-              onMouseEnter={() => setOpenGroup(group.label)}
-              onMouseLeave={() => setOpenGroup(null)}
-            >
-              <button
-                type="button"
-                onClick={() => setOpenGroup(isOpen ? null : group.label)}
-                aria-expanded={isOpen}
-              >
-                <Icon className="admin-nav-group-icon" />
-                <span>{group.label}</span>
-                <ChevronDown className="admin-nav-chevron" />
-              </button>
-              <div className="admin-nav-dropdown" role="menu">
-                {group.items.map((item) => (
-                  <Link key={item.label} href={item.href} role="menuitem" onClick={closeNavigation}>
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {administrationGroups.slice(0, 2).map(renderGroup)}
+        <Link
+          className="admin-meganav-home"
+          href="/gabon-educ/emplois-du-temps"
+          onClick={closeNavigation}
+          aria-label="EDT — Emplois du temps"
+          style={{ backgroundColor: "#FF2400", color: "#fff", fontWeight: 900 }}
+        >
+          <CalendarDays />EDT
+        </Link>
+        {administrationGroups.slice(2).map(renderGroup)}
         <button className="admin-meganav-logout" onClick={onLogout}>
           <LogOut />Déconnexion
         </button>
