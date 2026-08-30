@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  CalendarDays,
   ChevronDown,
   ExternalLink,
   GraduationCap,
@@ -39,7 +40,6 @@ const pedagogyGroups: PedagogyGroup[] = [
     icon: School,
     items: [
       { label: "Matières et affectations", href: "/gabon-educ/matieres" },
-      { label: "Emplois du temps", href: "/gabon-educ/emplois-du-temps" },
       { label: "Créer un enseignant", href: "/gabon-educ/creer-enseignant" },
     ],
   },
@@ -100,6 +100,49 @@ export function PedagogyMegaNav({ onLogout }: { onLogout: () => void }) {
     setMobileOpen(false);
   }
 
+  function renderGroup(group: PedagogyGroup) {
+    const Icon = group.icon;
+    const isOpen = openGroup === group.label;
+    return (
+      <div
+        className={isOpen ? "admin-nav-group open" : "admin-nav-group"}
+        key={group.label}
+        onMouseEnter={() => setOpenGroup(group.label)}
+        onMouseLeave={() => setOpenGroup(null)}
+      >
+        <button
+          type="button"
+          onClick={() => setOpenGroup(isOpen ? null : group.label)}
+          aria-expanded={isOpen}
+        >
+          <Icon className="admin-nav-group-icon" />
+          <span>{group.label}</span>
+          <ChevronDown className="admin-nav-chevron" />
+        </button>
+        <div className="admin-nav-dropdown" role="menu">
+          {group.items.map((item) =>
+            item.external ? (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                role="menuitem"
+                onClick={closeNavigation}
+              >
+                {item.label}<ExternalLink />
+              </a>
+            ) : (
+              <Link key={item.label} href={item.href} role="menuitem" onClick={closeNavigation}>
+                {item.label}
+              </Link>
+            ),
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <nav
       ref={navRef}
@@ -117,48 +160,17 @@ export function PedagogyMegaNav({ onLogout }: { onLogout: () => void }) {
         <Link className="admin-meganav-home" href="/gabon-educ/pedagogie" onClick={closeNavigation}>
           <Home />Accueil
         </Link>
-        {pedagogyGroups.map((group) => {
-          const Icon = group.icon;
-          const isOpen = openGroup === group.label;
-          return (
-            <div
-              className={isOpen ? "admin-nav-group open" : "admin-nav-group"}
-              key={group.label}
-              onMouseEnter={() => setOpenGroup(group.label)}
-              onMouseLeave={() => setOpenGroup(null)}
-            >
-              <button
-                type="button"
-                onClick={() => setOpenGroup(isOpen ? null : group.label)}
-                aria-expanded={isOpen}
-              >
-                <Icon className="admin-nav-group-icon" />
-                <span>{group.label}</span>
-                <ChevronDown className="admin-nav-chevron" />
-              </button>
-              <div className="admin-nav-dropdown" role="menu">
-                {group.items.map((item) =>
-                  item.external ? (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      role="menuitem"
-                      onClick={closeNavigation}
-                    >
-                      {item.label}<ExternalLink />
-                    </a>
-                  ) : (
-                    <Link key={item.label} href={item.href} role="menuitem" onClick={closeNavigation}>
-                      {item.label}
-                    </Link>
-                  ),
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {pedagogyGroups.slice(0, 1).map(renderGroup)}
+        <Link
+          className="admin-meganav-home"
+          href="/gabon-educ/emplois-du-temps"
+          onClick={closeNavigation}
+          aria-label="EDT — Emplois du temps"
+          style={{ backgroundColor: "#FF2400", color: "#fff", fontWeight: 900 }}
+        >
+          <CalendarDays />EDT
+        </Link>
+        {pedagogyGroups.slice(1).map(renderGroup)}
         <button className="admin-meganav-logout" onClick={onLogout}>
           <LogOut />Déconnexion
         </button>
