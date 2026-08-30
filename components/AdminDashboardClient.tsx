@@ -10,7 +10,7 @@ import {
   TriangleAlert, BadgeCheck, BookOpen, UserRoundCheck
 } from "lucide-react";
 import { signOut } from "@/lib/profile-store";
-import { AdminMegaNav } from "@/components/SpaceNavigation";
+import { AdministrationMegaNav } from "@/components/AdministrationNavigation";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import type { ClassRecord } from "@/lib/class-store";
 import { listClasses } from "@/lib/class-store";
@@ -53,10 +53,8 @@ const quickModules = [
 },
   { href: "/gabon-educ/eleves", label: "Élèves", description: "Inscrire, rechercher et gérer les dossiers", icon: Users },
   { href: "/gabon-educ/utilisateurs", label: "Personnel et rôles", description: "Créer les comptes et attribuer les responsabilités", icon: UserCog },
-  { href: "/gabon-educ/matieres", label: "Matières et affectations", description: "Configurer les matières et les enseignants", icon: BookOpen },
-  { href: "/gabon-educ/emplois-du-temps", label: "Emplois du temps", description: "Planifier les cours et détecter les conflits", icon: CalendarDays },
+  { href: "/gabon-educ/pedagogie", label: "Pédagogie", description: "Ouvrir le tableau de bord autonome de la direction des études", icon: GraduationCap },
   { href: "/gabon-educ/assiduite", label: "Vie scolaire", description: "Absences, retards et suivi des élèves", icon: UserRoundCheck },
-  { href: "/gabon-educ/notes-bulletins", label: "Résultats et bulletins", description: "Contrôler, valider et publier", icon: GraduationCap },
   { href: "/gabon-educ/documents", label: "Documents", description: "Certificats, attestations et impressions", icon: FileText },
   { href: "/gabon-educ/annonces", label: "Communication", description: "Annonces et informations internes", icon: MessageSquareText },
 ];
@@ -128,7 +126,7 @@ export function AdminDashboardClient() {
         </div>
       </header>
 
-      <AdminMegaNav onLogout={() => void logout()} />
+      <AdministrationMegaNav onLogout={() => void logout()} />
       <SubscriptionBanner />
 
       <section className="admin-contextbar">
@@ -171,7 +169,7 @@ export function AdminDashboardClient() {
             <div className="admin-alert-list">
               <Link href="/gabon-educ/utilisateurs"><span className={pendingUsers.length ? "warning" : "ok"}>{pendingUsers.length ? <TriangleAlert/> : <BadgeCheck/>}</span><div><b>Comptes utilisateurs</b><small>{pendingUsers.length ? `${pendingUsers.length} invitation(s) non acceptée(s)` : "Tous les comptes sont à jour"}</small></div></Link>
               <Link href="/gabon-educ/eleves"><span className={activeStudents.some(item => !item.classId) ? "warning" : "ok"}>{activeStudents.some(item => !item.classId) ? <TriangleAlert/> : <BadgeCheck/>}</span><div><b>Affectation des élèves</b><small>{activeStudents.some(item => !item.classId) ? "Des élèves n’ont pas de classe" : "Tous les élèves actifs ont une classe"}</small></div></Link>
-              <Link href="/gabon-educ/matieres"><span className={workspace.assignments.length ? "ok" : "warning"}>{workspace.assignments.length ? <BadgeCheck/> : <TriangleAlert/>}</span><div><b>Affectations pédagogiques</b><small>{workspace.assignments.length ? `${workspace.assignments.length} affectation(s) enregistrée(s)` : "Aucune affectation enregistrée"}</small></div></Link>
+              <Link href="/gabon-educ/pedagogie"><span className={workspace.assignments.length ? "ok" : "warning"}>{workspace.assignments.length ? <BadgeCheck/> : <TriangleAlert/>}</span><div><b>Pédagogie</b><small>{workspace.assignments.length ? `${workspace.assignments.length} affectation(s) enregistrée(s)` : "Aucune affectation enregistrée"}</small></div></Link>
             </div>
           </section>
 
