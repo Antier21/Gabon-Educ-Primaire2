@@ -4,7 +4,7 @@ export const ACCESS_ROLE_REDIRECTS: Record<string, string> = {
   super_admin: "/gabon-educ/service-abonnements",
   school_admin: "/gabon-educ/administration",
   headmaster: "/gabon-educ/administration",
-  academic_director: "/gabon-educ/administration",
+  academic_director: "/gabon-educ/pedagogie",
   // Le secrétariat a son propre bureau : une liste de ce qui reste à traiter,
   // et non le tableau de pilotage destiné à la direction.
   secretary: "/gabon-educ/secretariat",
