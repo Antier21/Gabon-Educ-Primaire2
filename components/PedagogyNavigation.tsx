@@ -4,19 +4,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
-  CalendarDays,
-  CalendarRange,
   ChevronDown,
-  ClipboardCheck,
   ExternalLink,
   GraduationCap,
   Home,
   LogOut,
   Menu,
-  NotebookPen,
-  PenLine,
   School,
-  Users,
   X,
 } from "lucide-react";
 
@@ -72,12 +66,6 @@ const pedagogyGroups: PedagogyGroup[] = [
       { label: "Fiches de préparation", href: "/gabon-educ/mes-fiches" },
     ],
   },
-];
-
-const directItems: Array<PedagogyItem & { icon: React.ComponentType<{ className?: string }> }> = [
-  { label: "Évaluations", href: "/gabon-educ/evaluations", icon: ClipboardCheck },
-  { label: "Cahier de textes", href: "/gabon-educ/cahier-de-textes", icon: NotebookPen },
-  { label: "Fiches", href: "/gabon-educ/mes-fiches", icon: PenLine },
 ];
 
 export function PedagogyMegaNav({ onLogout }: { onLogout: () => void }) {
@@ -171,16 +159,6 @@ export function PedagogyMegaNav({ onLogout }: { onLogout: () => void }) {
             </div>
           );
         })}
-        <div className="pedagogy-nav-shortcuts" aria-label="Raccourcis pédagogiques">
-          {directItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.label} href={item.href} onClick={closeNavigation}>
-                <Icon />{item.label}
-              </Link>
-            );
-          })}
-        </div>
         <button className="admin-meganav-logout" onClick={onLogout}>
           <LogOut />Déconnexion
         </button>
