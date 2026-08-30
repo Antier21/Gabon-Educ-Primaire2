@@ -113,4 +113,32 @@ describe("génération EDT par année scolaire", () => {
     expect(generated.slots[0].teacherId).toBe("titular-current");
     expect(generated.slots[0].academicYearId).toBe("year-current");
   });
+
+  it("respecte la plage de jours choisie pour la génération primaire", () => {
+    const generated = generateMissingTimetable(workspace(), classes, {
+      weekdays: [1, 2, 3, 4, 5],
+      startsAt: "07:30",
+      endsAt: "12:25",
+    });
+
+    expect(generated.slots).toHaveLength(1);
+    expect(generated.slots[0].weekday).toBeGreaterThanOrEqual(1);
+    expect(generated.slots[0].weekday).toBeLessThanOrEqual(5);
+    expect(generated.slots[0].startsAt).toBeGreaterThanOrEqual("07:30");
+    expect(generated.slots[0].endsAt).toBeLessThanOrEqual("12:25");
+  });
+
+  it("bloque une configuration dont la capacité hebdomadaire est insuffisante", () => {
+    const current = workspace();
+    current.subjects[0] = { ...current.subjects[0], weeklyHours: 3 };
+
+    const check = inspectTimetableGeneration(current, classes, {
+      weekdays: [1],
+      startsAt: "07:30",
+      endsAt: "09:20",
+    });
+
+    expect(check.ready).toBe(false);
+    expect(check.blockers.some((item) => item.includes("n’en offre que 2"))).toBe(true);
+  });
 });

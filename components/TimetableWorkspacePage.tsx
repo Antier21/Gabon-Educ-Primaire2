@@ -29,6 +29,11 @@ export function TimetableWorkspacePage() {
       ? null
       : window.localStorage.getItem(STORAGE_KEYS.subjectAssignments),
   );
+  const timetableSnapshot = useRef<string | null>(
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem(STORAGE_KEYS.timetable),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +61,7 @@ export function TimetableWorkspacePage() {
         subjectAssignmentsSnapshot.current = window.localStorage.getItem(
           STORAGE_KEYS.subjectAssignments,
         );
+        timetableSnapshot.current = window.localStorage.getItem(STORAGE_KEYS.timetable);
         setCatalogReady(true);
         setPlatformRevision((value) => value + 1);
       })
@@ -75,29 +81,34 @@ export function TimetableWorkspacePage() {
 
   useEffect(() => {
     /**
-     * Le paramétrage automatique et l'ancien éditeur de créneaux chargent deux
-     * instances distinctes du workspace. Quand le premier récupère ou modifie
-     * les matières/affectations, le second doit être remonté pour relire la
-     * même source. On compare la valeur sérialisée afin d'éviter une boucle :
-     * loadPlatformWorkspace() réécrit aussi le cache, mais sans changement de
-     * contenu cela ne provoque aucun nouveau remontage.
+     * Le paramétrage automatique et l'éditeur hebdomadaire utilisent deux
+     * instances du workspace. Dès que matières, affectations ou créneaux sont
+     * modifiés, l'éditeur est remonté afin d'afficher immédiatement la nouvelle
+     * grille sans rechargement manuel de la page.
      */
-    const refreshIfSubjectsChanged = () => {
-      const current = window.localStorage.getItem(STORAGE_KEYS.subjectAssignments);
-      if (current === subjectAssignmentsSnapshot.current) return;
-      subjectAssignmentsSnapshot.current = current;
+    const refreshIfWorkspaceChanged = () => {
+      const subjects = window.localStorage.getItem(STORAGE_KEYS.subjectAssignments);
+      const timetable = window.localStorage.getItem(STORAGE_KEYS.timetable);
+      const subjectsChanged = subjects !== subjectAssignmentsSnapshot.current;
+      const timetableChanged = timetable !== timetableSnapshot.current;
+      if (!subjectsChanged && !timetableChanged) return;
+      subjectAssignmentsSnapshot.current = subjects;
+      timetableSnapshot.current = timetable;
       setPlatformRevision((value) => value + 1);
     };
 
     const onStorage = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
-      if (detail?.key === STORAGE_KEYS.subjectAssignments) {
-        refreshIfSubjectsChanged();
+      if (
+        detail?.key === STORAGE_KEYS.subjectAssignments ||
+        detail?.key === STORAGE_KEYS.timetable
+      ) {
+        refreshIfWorkspaceChanged();
       }
     };
 
     window.addEventListener("gabon-educ:storage", onStorage);
-    refreshIfSubjectsChanged();
+    refreshIfWorkspaceChanged();
     return () => window.removeEventListener("gabon-educ:storage", onStorage);
   }, []);
 

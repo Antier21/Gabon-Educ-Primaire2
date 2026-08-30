@@ -15,6 +15,14 @@ const PERIODS = [
   ["16:55", "17:40"],
 ] as const;
 
+const DEFAULT_WEEKDAYS = [1, 2, 3, 4, 5, 6] as const;
+
+export type TimetableGenerationOptions = {
+  weekdays?: readonly number[];
+  startsAt?: string;
+  endsAt?: string;
+};
+
 export type TimetableGenerationCheck = {
   ready: boolean;
   blockers: string[];
@@ -30,6 +38,13 @@ export type TimetableGenerationResult = {
   warnings: string[];
 };
 
+type GenerationAvailability = {
+  weekdays: number[];
+  periods: Array<readonly [string, string]>;
+  startsAt: string;
+  endsAt: string;
+};
+
 function overlaps(a: TimetableSlot, weekday: number, start: string, end: string) {
   return a.weekday === weekday && a.startsAt < end && start < a.endsAt;
 }
@@ -40,6 +55,19 @@ function sameSchool(id: string | undefined, schoolId: string) {
 
 function activeYearId(workspace: PlatformWorkspace) {
   return workspace.academicYears.find((item) => item.active)?.id || workspace.school?.activeAcademicYearId || workspace.academicYears[0]?.id || "";
+}
+
+function generationAvailability(options: TimetableGenerationOptions = {}): GenerationAvailability {
+  const requestedWeekdays = options.weekdays?.length ? options.weekdays : DEFAULT_WEEKDAYS;
+  const weekdays = Array.from(
+    new Set(requestedWeekdays.filter((weekday) => Number.isInteger(weekday) && weekday >= 1 && weekday <= 6)),
+  ).sort((a, b) => a - b);
+  const startsAt = options.startsAt || PERIODS[0][0];
+  const endsAt = options.endsAt || PERIODS[PERIODS.length - 1][1];
+  const periods = PERIODS.filter(
+    ([start, end]) => start >= startsAt && end <= endsAt,
+  );
+  return { weekdays, periods, startsAt, endsAt };
 }
 
 function effectiveAssignments(
@@ -74,14 +102,21 @@ function effectiveAssignments(
 export function inspectTimetableGeneration(
   workspace: PlatformWorkspace,
   classes: ClassRecord[],
+  options: TimetableGenerationOptions = {},
 ): TimetableGenerationCheck {
   const blockers: string[] = [];
   const warnings: string[] = [];
   const schoolId = workspace.school?.id || "";
   const yearId = activeYearId(workspace);
+  const availability = generationAvailability(options);
 
   if (!schoolId || schoolId === "local") blockers.push("Établissement actif non résolu dans Supabase.");
   if (!yearId || yearId === "local") blockers.push("Aucune année scolaire active n’est disponible.");
+  if (!availability.weekdays.length) blockers.push("Sélectionnez au moins un jour d’enseignement.");
+  if (availability.endsAt <= availability.startsAt) blockers.push("L’heure de fin de journée doit être postérieure à l’heure de début.");
+  if (availability.endsAt > availability.startsAt && !availability.periods.length) {
+    blockers.push("La plage horaire choisie ne contient aucun créneau utilisable.");
+  }
 
   const schoolClasses = classes.filter((item) => sameSchool(item.schoolId, schoolId));
   if (!schoolClasses.length) blockers.push("Aucune classe de l’établissement n’est disponible.");
@@ -101,6 +136,7 @@ export function inspectTimetableGeneration(
   if (!activeAssignments.length) blockers.push("Aucune affectation matière–classe–enseignant n’est enregistrée.");
 
   let plannedPeriods = 0;
+  const plannedByClass = new Map<string, number>();
   const seen = new Set<string>();
   for (const assignment of activeAssignments) {
     const key = `${assignment.classId}|${assignment.subjectId}`;
@@ -110,7 +146,7 @@ export function inspectTimetableGeneration(
     const schoolClass = schoolClasses.find((item) => item.id === assignment.classId);
     const subject = schoolSubjects.find((item) => item.id === assignment.subjectId);
     if (!schoolClass) {
-      blockers.push(`Une affectation référence une classe absente de l’établissement.`);
+      blockers.push("Une affectation référence une classe absente de l’établissement.");
       continue;
     }
     if (!subject || !subjectIds.has(assignment.subjectId)) {
@@ -121,13 +157,30 @@ export function inspectTimetableGeneration(
     if (weekly <= 0) {
       blockers.push(`${schoolClass.name} · ${subject.label} : volume hebdomadaire non défini.`);
     } else {
-      plannedPeriods += Math.max(0, Math.round(weekly));
+      const periods = Math.max(0, Math.round(weekly));
+      plannedPeriods += periods;
+      plannedByClass.set(
+        assignment.classId,
+        (plannedByClass.get(assignment.classId) || 0) + periods,
+      );
       if (!Number.isInteger(weekly)) warnings.push(`${subject.label} : ${weekly} h/semaine sera converti en ${Math.round(weekly)} créneau(x).`);
     }
     if (!assignment.teacherId) {
       blockers.push(`${schoolClass.name} · ${subject.label} : aucun enseignant affecté.`);
     } else if (!teacherIds.has(assignment.teacherId)) {
       blockers.push(`${schoolClass.name} · ${subject.label} : l’enseignant affecté n’est pas actif dans cet établissement.`);
+    }
+  }
+
+  const weeklyCapacity = availability.weekdays.length * availability.periods.length;
+  if (weeklyCapacity > 0) {
+    for (const schoolClass of schoolClasses) {
+      const planned = plannedByClass.get(schoolClass.id) || 0;
+      if (planned > weeklyCapacity) {
+        blockers.push(
+          `${schoolClass.name} : ${planned} créneau(x) sont prévus mais la plage choisie n’en offre que ${weeklyCapacity}.`,
+        );
+      }
     }
   }
 
@@ -144,12 +197,14 @@ export function inspectTimetableGeneration(
 export function generateMissingTimetable(
   workspace: PlatformWorkspace,
   classes: ClassRecord[],
+  options: TimetableGenerationOptions = {},
 ): TimetableGenerationResult {
-  const check = inspectTimetableGeneration(workspace, classes);
+  const check = inspectTimetableGeneration(workspace, classes, options);
   if (!check.ready) return { slots: [], unscheduledHours: 0, warnings: check.blockers };
 
   const schoolId = workspace.school!.id;
   const yearId = activeYearId(workspace);
+  const availability = generationAvailability(options);
   const generated: TimetableSlot[] = [];
   const warnings = [...check.warnings];
   let unscheduledHours = 0;
@@ -180,9 +235,9 @@ export function generateMissingTimetable(
 
     while (remaining > 0) {
       const candidates: Array<{ weekday: number; startsAt: string; endsAt: string; score: number }> = [];
-      for (let weekday = 1; weekday <= 6; weekday += 1) {
-        for (let periodIndex = 0; periodIndex < PERIODS.length; periodIndex += 1) {
-          const [startsAt, endsAt] = PERIODS[periodIndex];
+      for (const weekday of availability.weekdays) {
+        for (let periodIndex = 0; periodIndex < availability.periods.length; periodIndex += 1) {
+          const [startsAt, endsAt] = availability.periods[periodIndex];
           const occupied = all().some((slot) => {
             if (!overlaps(slot, weekday, startsAt, endsAt)) return false;
             if (slot.classId === assignment.classId) return true;
@@ -197,7 +252,8 @@ export function generateMissingTimetable(
           const sameSubjectDay = all().filter(
             (slot) => slot.classId === assignment.classId && slot.subjectId === assignment.subjectId && slot.weekday === weekday,
           ).length;
-          // Répartit la matière sur plusieurs jours, équilibre la classe et limite les journées trop chargées de l’enseignant.
+          // Répartit une matière sur plusieurs jours avant d'en doubler une sur
+          // la même journée, puis équilibre la charge de la classe et du titulaire.
           const score = sameSubjectDay * 100 + classDayLoad * 10 + teacherDayLoad * 3 + periodIndex * 0.05;
           candidates.push({ weekday, startsAt, endsAt, score });
         }
