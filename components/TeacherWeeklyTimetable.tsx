@@ -23,15 +23,11 @@ const TIME_ROWS = [
 
 function classLabel(classes: ClassRecord[], classId: string) {
   const item = classes.find((classe) => classe.id === classId);
-  return item?.name || classId || "Classe";
+  return item?.name || "Classe";
 }
 
 function subjectLabel(workspace: PlatformWorkspace, subjectId: string) {
-  return (
-    workspace.subjects.find((subject) => subject.id === subjectId)?.label ||
-    subjectId ||
-    "Matière"
-  );
+  return workspace.subjects.find((subject) => subject.id === subjectId)?.label || "Matière";
 }
 
 function teacherLabel(workspace: PlatformWorkspace, teacherId: string) {

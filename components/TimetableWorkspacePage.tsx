@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AdministrationMegaNav } from "@/components/AdministrationNavigation";
 import { PedagogyMegaNav } from "@/components/PedagogyNavigation";
 import { PrimaryTimetableSetup } from "@/components/PrimaryTimetableSetup";
+import { TimetableCloudPublisher } from "@/components/TimetableCloudPublisher";
 import { PlatformManager } from "@/components/platform/PlatformManager";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { hydrateEdtSubjectCatalog } from "@/lib/platform/edt-subject-catalog";
@@ -151,6 +152,7 @@ export function TimetableWorkspacePage() {
               {catalogWarning}
             </div>
           ) : null}
+          <TimetableCloudPublisher />
           <PrimaryTimetableSetup />
           <PlatformManager key={`timetable-${platformRevision}`} module="timetable" embedded />
         </>
