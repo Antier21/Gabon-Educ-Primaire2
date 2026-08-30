@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import type { SchoolRole } from "@/lib/platform/types";
 import { FINANCE_MODULE_ROLES } from "@/lib/finance/policy";
 import {
+  ACADEMIC_DIRECTION_ROLES,
+  ADMINISTRATION_ROLES,
   BULLETIN_PRINT_ROLES,
   COMMUNICATION_ROLES,
   DIRECTION_ROLES,
@@ -48,7 +50,7 @@ function expectRoles(
 }
 
 const direction = [
-  "administration", "etablissement", "utilisateurs", "creer-enseignant",
+  "etablissement", "utilisateurs", "creer-enseignant",
   "matieres", "emplois-du-temps", "notes-bulletins", "modele-bulletin",
   "bulletins-publication", "journal-audit", "import-export", "synchronisation",
   "diagnostic", "modules-a-venir", "abonnement",
@@ -85,7 +87,27 @@ function discoveredPages(directory: string): string[] {
   return pages.sort();
 }
 
-describe("pages direction", () => {
+describe("tableau de bord administration", () => {
+  it("utilise la politique d’administration générale", () =>
+    expectLocalGuard(["administration"], "ADMINISTRATION_ROLES"));
+  it("n’admet plus le directeur des études", () => expectRoles(
+    ADMINISTRATION_ROLES,
+    ["school_admin", "headmaster", "super_admin"],
+    ["academic_director", "secretary", "teacher", "head_teacher", "supervisor", "guardian", "student"],
+  ));
+});
+
+describe("tableau de bord pédagogie", () => {
+  it("utilise sa politique propre", () =>
+    expectLocalGuard(["pedagogie"], "ACADEMIC_DIRECTION_ROLES"));
+  it("admet la direction des études et la direction générale", () => expectRoles(
+    ACADEMIC_DIRECTION_ROLES,
+    ["school_admin", "headmaster", "academic_director", "super_admin"],
+    ["secretary", "teacher", "head_teacher", "supervisor", "guardian", "student"],
+  ));
+});
+
+describe("pages direction partagées", () => {
   it("utilise une garde locale unique", () => expectLocalGuard(direction, "DIRECTION_ROLES"));
   it("applique les rôles de direction", () => expectRoles(
     DIRECTION_ROLES,
@@ -182,6 +204,8 @@ describe("routes publiques et noms voisins", () => {
   it("classe toutes les pages réellement présentes sous app/gabon-educ", () => {
     const classified = [
       ...publicRoutes,
+      "administration",
+      "pedagogie",
       ...direction,
       ...secretariat,
       ...communication,
