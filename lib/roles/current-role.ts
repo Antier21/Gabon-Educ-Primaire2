@@ -182,7 +182,7 @@ export function readCachedPrimaryRole(): SchoolRole | null {
   return pickPrimary(roles);
 }
 
-/** Rôles autorisés à ouvrir l'espace d'administration. */
+/** Rôles autorisés à ouvrir les écrans de gestion partagés. */
 export const MANAGEMENT_ROLES: SchoolRole[] = [
   "super_admin",
   "school_admin",
@@ -199,6 +199,7 @@ export function isManagementRole(role: SchoolRole) {
 export function homeForRole(role: SchoolRole) {
   if (role === "super_admin") return "/gabon-educ/service-abonnements";
   if (role === "secretary") return "/gabon-educ/secretariat";
+  if (role === "academic_director") return "/gabon-educ/pedagogie";
   if (isManagementRole(role)) return "/gabon-educ/administration";
   if (role === "supervisor") return "/gabon-educ/assiduite";
   if (role === "guardian") return "/gabon-educ/espace-parent";
