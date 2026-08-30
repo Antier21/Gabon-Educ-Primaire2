@@ -52,11 +52,15 @@ function slotForCell(slots: TimetableSlot[], weekday: number, startsAt: string) 
 }
 
 function classLabel(classes: ClassRecord[], classId: string) {
-  return classes.find((item) => item.id === classId)?.name || classId || "Classe";
+  // Un identifiant UUID est une donnée technique. S'il manque encore le
+  // libellé de la classe, on affiche un mot neutre plutôt que l'identifiant.
+  return classes.find((item) => item.id === classId)?.name || "Classe";
 }
 
 function subjectLabel(platform: PlatformWorkspace | null, subjectId: string) {
-  return platform?.subjects.find((item) => item.id === subjectId)?.label || subjectId || "Cours";
+  // Même règle pour les matières : aucun identifiant interne ne doit parvenir
+  // jusqu'à l'interface enseignant.
+  return platform?.subjects.find((item) => item.id === subjectId)?.label || "Cours";
 }
 
 export function DashboardClient() {
