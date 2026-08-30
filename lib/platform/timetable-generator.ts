@@ -42,11 +42,20 @@ function activeYearId(workspace: PlatformWorkspace) {
   return workspace.academicYears.find((item) => item.active)?.id || workspace.school?.activeAcademicYearId || workspace.academicYears[0]?.id || "";
 }
 
-function effectiveAssignments(workspace: PlatformWorkspace, schoolId: string, classIds: Set<string>) {
+function effectiveAssignments(
+  workspace: PlatformWorkspace,
+  schoolId: string,
+  classIds: Set<string>,
+  yearId: string,
+) {
   const primary = workspace.school?.schoolType === "primary";
   const grouped = new Map<string, (typeof workspace.assignments)[number][]>();
   for (const item of workspace.assignments.filter(
-    (assignment) => assignment.active && sameSchool(assignment.schoolId, schoolId) && classIds.has(assignment.classId),
+    (assignment) =>
+      assignment.active &&
+      sameSchool(assignment.schoolId, schoolId) &&
+      classIds.has(assignment.classId) &&
+      (!yearId || !assignment.academicYearId || assignment.academicYearId === yearId),
   )) {
     const key = `${item.classId}|${item.subjectId}`;
     const items = grouped.get(key) || [];
@@ -55,6 +64,8 @@ function effectiveAssignments(workspace: PlatformWorkspace, schoolId: string, cl
   }
   const selected: (typeof workspace.assignments)[number][] = [];
   for (const items of grouped.values()) {
+    // Au primaire, une exception spécialisée remplace le titulaire uniquement
+    // pour la matière concernée. L'année active a déjà été filtrée ci-dessus.
     selected.push(primary ? (items.find((item) => !item.headTeacher) || items[0]) : items[0]);
   }
   return selected;
@@ -86,7 +97,7 @@ export function inspectTimetableGeneration(
       .map((item) => item.id),
   );
 
-  const activeAssignments = effectiveAssignments(workspace, schoolId, schoolClassIds);
+  const activeAssignments = effectiveAssignments(workspace, schoolId, schoolClassIds, yearId);
   if (!activeAssignments.length) blockers.push("Aucune affectation matière–classe–enseignant n’est enregistrée.");
 
   let plannedPeriods = 0;
@@ -149,7 +160,7 @@ export function generateMissingTimetable(
   );
   const all = () => [...existing, ...generated];
 
-  const uniqueAssignments = effectiveAssignments(workspace, schoolId, classIds);
+  const uniqueAssignments = effectiveAssignments(workspace, schoolId, classIds, yearId);
 
   for (const assignment of uniqueAssignments) {
     const subject = workspace.subjects.find(
