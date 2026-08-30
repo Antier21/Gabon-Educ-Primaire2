@@ -21,14 +21,14 @@ describe("homeForRole", () => {
     expect(homeForRole("secretary")).toBe("/gabon-educ/secretariat");
     expect(homeForRole("headmaster")).toBe("/gabon-educ/administration");
     expect(homeForRole("school_admin")).toBe("/gabon-educ/administration");
-    expect(homeForRole("academic_director")).toBe("/gabon-educ/administration");
+    expect(homeForRole("academic_director")).toBe("/gabon-educ/pedagogie");
     expect(homeForRole("teacher")).toBe("/gabon-educ/tableau-de-bord");
     expect(homeForRole("guardian")).toBe("/gabon-educ/espace-parent");
   });
 
   it("n’envoie jamais la direction ni le secrétariat vers l’espace enseignant", () => {
     // C'est le défaut constaté : la flèche de retour d'un écran partagé
-    // ramenait un secrétaire dans un espace qui n'est pas le sien.
+    // ramenait un secrétaire ou un directeur dans un espace qui n'est pas le sien.
     for (const role of ["secretary", "headmaster", "school_admin", "academic_director"] as const) {
       expect(homeForRole(role)).not.toBe("/gabon-educ/tableau-de-bord");
     }
@@ -51,9 +51,6 @@ describe("readCachedPrimaryRole", () => {
   });
 
   it("retient le rôle le plus étendu d’un compte qui en cumule plusieurs", () => {
-    // Un chef d'établissement qui assure quelques heures de cours reste chef
-    // d'établissement : c'est son espace, pas celui de l'enseignant, qui
-    // l'attend au retour.
     stockage.setItem(
       CLE,
       JSON.stringify({ userId: "u1", schoolId: "e1", roles: ["teacher", "headmaster"] }),
