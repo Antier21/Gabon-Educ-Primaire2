@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Ban, Copy, KeyRound, RefreshCcw, ShieldCheck } from "lucide-react";
+import { Ban, Copy, KeyRound, RefreshCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./ActivationCodesPanel.module.css";
 
@@ -158,6 +158,30 @@ export function ActivationCodesPanel() {
     await loadCodes();
   }
 
+  async function archive(row: ActivationCodeRow) {
+    if (row.effective_status === "active") {
+      setError("Révoque d’abord ce code avant de le supprimer de la liste.");
+      return;
+    }
+    if (!window.confirm(`Supprimer la ligne d’activation de « ${row.school_name} » de l’historique visible ? La trace technique restera conservée pour audit.`)) return;
+    setError("");
+    setNotice("");
+    const { data, error: rpcError } = await createClient().rpc("archive_school_activation_code", {
+      p_activation_id: row.activation_id,
+    });
+    if (rpcError) {
+      setError(describe(rpcError));
+      return;
+    }
+    if (data !== true) {
+      setError("Cette ligne n’a pas pu être supprimée. Actualise l’historique puis réessaie.");
+      await loadCodes();
+      return;
+    }
+    setNotice(`Ligne d’activation de « ${row.school_name} » supprimée de l’historique visible.`);
+    await loadCodes();
+  }
+
   return (
     <section className={styles.shell} aria-labelledby="activation-codes-title">
       <div className={styles.panel}>
@@ -166,10 +190,10 @@ export function ActivationCodesPanel() {
             <span className={styles.icon}><KeyRound /></span>
             <div>
               <h2 id="activation-codes-title">Codes d’activation</h2>
-              <p>Délivre les autorisations qui serviront bientôt à ouvrir la création d’un nouvel établissement.</p>
+              <p>Délivre et gère les autorisations nécessaires à la création d’un nouvel établissement.</p>
             </div>
           </div>
-          <span className={styles.phase}><ShieldCheck /> Phase 1 — préparation sécurisée</span>
+          <span className={styles.phase}><ShieldCheck /> Accès sécurisé GEPS</span>
         </div>
 
         {notice && <p className={styles.notice}>{notice}</p>}
@@ -235,7 +259,11 @@ export function ActivationCodesPanel() {
                   <span>{formatDate(row.issued_at)}</span>
                   <span>{formatDate(row.expires_at)}</span>
                   <span><i className={styles.status} data-status={row.effective_status}>{statusLabels[row.effective_status] || row.effective_status}</i></span>
-                  <span>{row.effective_status === "active" ? <button className={styles.danger} type="button" onClick={() => void revoke(row)}><Ban /> Révoquer</button> : "—"}</span>
+                  <span className={styles.actionCell}>
+                    {row.effective_status === "active"
+                      ? <button className={styles.danger} type="button" onClick={() => void revoke(row)}><Ban /> Révoquer</button>
+                      : <button className={styles.delete} type="button" onClick={() => void archive(row)}><Trash2 /> Supprimer</button>}
+                  </span>
                 </div>
               ))}
               {!loading && !codes.length && <div className={styles.empty}>Aucun code d’activation n’a encore été créé.</div>}
@@ -243,7 +271,7 @@ export function ActivationCodesPanel() {
           </article>
         </div>
 
-        <p className={styles.footnote}><strong>Important :</strong> cette première phase ne verrouille pas encore l’inscription actuelle. Le verrouillage ne sera activé qu’après création et test réussi d’un premier code depuis ce centre.</p>
+        <p className={styles.footnote}><strong>Nettoyage :</strong> un code actif doit être révoqué avant suppression. Les lignes supprimées disparaissent de cette liste mais restent conservées en base comme trace d’audit.</p>
       </div>
     </section>
   );
