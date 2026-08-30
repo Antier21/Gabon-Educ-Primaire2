@@ -1,4 +1,5 @@
 import { RequireRole } from "@/components/RequireRole";
+import { ActivationCodesPanel } from "./ActivationCodesPanel";
 import { ServiceControlCenterPage } from "./ServiceControlCenter";
 
 export const metadata = { title: "Centre de pilotage | Gabon Éduc+ Service" };
@@ -13,11 +14,14 @@ export const metadata = { title: "Centre de pilotage | Gabon Éduc+ Service" };
  * y voyait un tableau vide, sans un mot d'explication.
  *
  * Le verdict est désormais demandé à « is_super_admin », jamais déduit.
+ * Les codes d'activation sont placés dans ce même centre : leur RPC revérifie
+ * également le super-admin côté Supabase, indépendamment de cette interface.
  */
 export default function Page() {
   return (
     <RequireRole superAdminOnly what="Le centre de pilotage de la plateforme">
       <ServiceControlCenterPage />
+      <ActivationCodesPanel />
     </RequireRole>
   );
 }
