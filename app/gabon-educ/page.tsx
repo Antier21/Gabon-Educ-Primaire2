@@ -42,7 +42,7 @@ export default function PortalHome() {
           <p className="portal-entry-kicker">{PRODUCT.name.toLocaleUpperCase("fr")}</p>
           <h1 id="onboarding-title">Bienvenue sur {PRODUCT.name}</h1>
           <p className="onboarding-intro">
-            Édition réservée aux {PRODUCT.audience}. Poursuivez pour ouvrir le compte responsable et enregistrer l’établissement.
+            Édition réservée aux {PRODUCT.audience}. Poursuivez pour activer votre établissement, ouvrir le compte responsable et finaliser son enregistrement.
           </p>
           <div className="school-type-grid">
             {groups.map(({ id, title, icon: Icon, description }) => (
@@ -57,12 +57,12 @@ export default function PortalHome() {
                 <div className="school-type-buttons">
                   {SCHOOL_PROFILE_OPTIONS.filter((item) => item.group === id).map((option) => (
                     <Link
-                      href={`/gabon-educ/ouvrir-compte?profile=${option.key}`}
+                      href={`/gabon-educ/activation-etablissement?profile=${option.key}`}
                       key={option.key}
                       className="school-type-button"
                     >
                       <strong>Enregistrez votre établissement</strong>
-                      <small>{option.description}</small>
+                      <small>Activation GEPS requise · {option.description}</small>
                     </Link>
                   ))}
                 </div>
