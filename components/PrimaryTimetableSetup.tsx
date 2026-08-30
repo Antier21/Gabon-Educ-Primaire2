@@ -8,17 +8,82 @@ import {
   subjectsForPrimaryClass,
   type PrimaryTimetableExceptionInput,
 } from "@/lib/platform/primary-timetable-setup";
-import { inspectTimetableGeneration } from "@/lib/platform/timetable-generator";
+import {
+  generateMissingTimetable,
+  inspectTimetableGeneration,
+  type TimetableGenerationOptions,
+} from "@/lib/platform/timetable-generator";
 import {
   defaultPlatformWorkspace,
   loadPlatformWorkspace,
   savePlatformWorkspace,
 } from "@/lib/platform/store";
 import type { PlatformWorkspace } from "@/lib/platform/types";
+import type { SyncOperationMetadata } from "@/lib/sync/types";
 import { assertSubscriptionWriteAllowed } from "@/lib/subscriptions/write-guard";
 import styles from "./PrimaryTimetableSetup.module.css";
 
 type ExceptionRow = PrimaryTimetableExceptionInput & { id: string };
+type DayNumber = 1 | 2 | 3 | 4 | 5 | 6;
+
+type SavedGenerationPreferences = {
+  firstDay: DayNumber;
+  lastDay: DayNumber;
+  startsAt: string;
+  endsAt: string;
+};
+
+const DAYS: Array<{ value: DayNumber; label: string }> = [
+  { value: 1, label: "Lundi" },
+  { value: 2, label: "Mardi" },
+  { value: 3, label: "Mercredi" },
+  { value: 4, label: "Jeudi" },
+  { value: 5, label: "Vendredi" },
+  { value: 6, label: "Samedi" },
+];
+const DEFAULT_PREFERENCES: SavedGenerationPreferences = {
+  firstDay: 1,
+  lastDay: 5,
+  startsAt: "07:30",
+  endsAt: "17:40",
+};
+
+function preferenceKey(schoolId: string) {
+  return `gabon-educ:primary-edt-generation:${schoolId || "local"}`;
+}
+
+function readGenerationPreferences(schoolId: string): SavedGenerationPreferences {
+  if (typeof window === "undefined") return DEFAULT_PREFERENCES;
+  try {
+    const raw = window.localStorage.getItem(preferenceKey(schoolId));
+    if (!raw) return DEFAULT_PREFERENCES;
+    const parsed = JSON.parse(raw) as Partial<SavedGenerationPreferences>;
+    const firstDay = Number(parsed.firstDay) as DayNumber;
+    const lastDay = Number(parsed.lastDay) as DayNumber;
+    return {
+      firstDay: DAYS.some((day) => day.value === firstDay) ? firstDay : DEFAULT_PREFERENCES.firstDay,
+      lastDay: DAYS.some((day) => day.value === lastDay) ? lastDay : DEFAULT_PREFERENCES.lastDay,
+      startsAt: String(parsed.startsAt || DEFAULT_PREFERENCES.startsAt),
+      endsAt: String(parsed.endsAt || DEFAULT_PREFERENCES.endsAt),
+    };
+  } catch {
+    return DEFAULT_PREFERENCES;
+  }
+}
+
+function writeGenerationPreferences(schoolId: string, value: SavedGenerationPreferences) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(preferenceKey(schoolId), JSON.stringify(value));
+}
+
+function weekdaysBetween(firstDay: DayNumber, lastDay: DayNumber) {
+  if (lastDay < firstDay) return [];
+  return DAYS.filter((day) => day.value >= firstDay && day.value <= lastDay).map((day) => day.value);
+}
+
+function dayLabel(value: DayNumber) {
+  return DAYS.find((day) => day.value === value)?.label || "";
+}
 
 export function PrimaryTimetableSetup() {
   const [workspace, setWorkspace] = useState<PlatformWorkspace>(defaultPlatformWorkspace);
@@ -26,6 +91,10 @@ export function PrimaryTimetableSetup() {
   const [hours, setHours] = useState<Record<string, number>>({});
   const [titulars, setTitulars] = useState<Record<string, string>>({});
   const [exceptions, setExceptions] = useState<ExceptionRow[]>([]);
+  const [firstDay, setFirstDay] = useState<DayNumber>(DEFAULT_PREFERENCES.firstDay);
+  const [lastDay, setLastDay] = useState<DayNumber>(DEFAULT_PREFERENCES.lastDay);
+  const [startsAt, setStartsAt] = useState(DEFAULT_PREFERENCES.startsAt);
+  const [endsAt, setEndsAt] = useState(DEFAULT_PREFERENCES.endsAt);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -67,8 +136,6 @@ export function PrimaryTimetableSetup() {
     }
     setTitulars(nextTitulars);
 
-    // Seules les exceptions appartenant au programme réel de la classe sont
-    // pilotées ici. Une ancienne affectation hors périmètre reste intacte.
     const deduped = new Map<string, ExceptionRow>();
     for (const assignment of nextWorkspace.assignments) {
       const schoolClass = nextClasses.find((item) => item.id === assignment.classId);
@@ -106,6 +173,11 @@ export function PrimaryTimetableSetup() {
       setWorkspace(workspaceResult.workspace);
       setClasses(classResult.items);
       hydrateForm(workspaceResult.workspace, classResult.items);
+      const preferences = readGenerationPreferences(workspaceResult.workspace.school?.id || "");
+      setFirstDay(preferences.firstDay);
+      setLastDay(preferences.lastDay);
+      setStartsAt(preferences.startsAt);
+      setEndsAt(preferences.endsAt);
       setMessage("");
     } catch (error) {
       setMessageKind("error");
@@ -158,10 +230,41 @@ export function PrimaryTimetableSetup() {
     () => new Map(workspace.levels.map((level) => [level.id, level.label])),
     [workspace.levels],
   );
-  const generation = useMemo(
-    () => inspectTimetableGeneration(workspace, classes),
-    [workspace, classes],
+  const generationOptions = useMemo<TimetableGenerationOptions>(
+    () => ({ weekdays: weekdaysBetween(firstDay, lastDay), startsAt, endsAt }),
+    [firstDay, lastDay, startsAt, endsAt],
   );
+  const generation = useMemo(() => {
+    let previewIndex = 0;
+    const preview = buildPrimaryTimetableSetup(
+      workspace,
+      classes,
+      {
+        titularByClassId: titulars,
+        weeklyHoursBySubjectId: hours,
+        exceptions: exceptions.map(({ classId, subjectId, teacherId }) => ({
+          classId,
+          subjectId,
+          teacherId,
+        })),
+      },
+      {
+        now: workspace.updatedAt || "2026-08-30T00:00:00.000Z",
+        makeId: () => `preview-assignment-${previewIndex++}`,
+      },
+    );
+    if (!preview.ready) {
+      return {
+        ready: false,
+        blockers: preview.errors,
+        warnings: [] as string[],
+        classCount: classes.length,
+        assignmentCount: 0,
+        plannedPeriods: 0,
+      };
+    }
+    return inspectTimetableGeneration(preview.workspace, classes, generationOptions);
+  }, [workspace, classes, titulars, hours, exceptions, generationOptions]);
 
   function addException() {
     setExceptions((items) => [
@@ -180,11 +283,12 @@ export function PrimaryTimetableSetup() {
     setExceptions((items) => items.filter((item) => item.id !== id));
   }
 
-  async function saveAutomaticSetup() {
+  async function saveAndGenerate() {
     if (saving) return;
     setMessage("");
     setMessageKind("info");
-    const result = buildPrimaryTimetableSetup(workspace, classes, {
+
+    const setup = buildPrimaryTimetableSetup(workspace, classes, {
       titularByClassId: titulars,
       weeklyHoursBySubjectId: hours,
       exceptions: exceptions.map(({ classId, subjectId, teacherId }) => ({
@@ -193,22 +297,46 @@ export function PrimaryTimetableSetup() {
         teacherId,
       })),
     });
-    if (!result.ready) {
+    if (!setup.ready) {
       setMessageKind("error");
-      setMessage(result.errors.join("\n"));
+      setMessage(setup.errors.join("\n"));
+      return;
+    }
+
+    const check = inspectTimetableGeneration(setup.workspace, classes, generationOptions);
+    if (!check.ready) {
+      setMessageKind("error");
+      setMessage(check.blockers.join("\n"));
       return;
     }
 
     setSaving(true);
     try {
       await assertSubscriptionWriteAllowed(schoolId);
-      if (!result.metadata.length) {
-        setWorkspace(result.workspace);
-        setMessageKind("success");
-        setMessage("Le paramétrage est déjà à jour. Vous pouvez générer l’emploi du temps.");
-        return;
+      const generated = generateMissingTimetable(setup.workspace, classes, generationOptions);
+      const nextWorkspace: PlatformWorkspace = {
+        ...setup.workspace,
+        timetable: [...generated.slots, ...setup.workspace.timetable],
+      };
+      const operations: SyncOperationMetadata[] = [
+        ...setup.metadata,
+        ...generated.slots.map((slot) => ({
+          module: "timetables" as const,
+          operation: "create" as const,
+          entityId: slot.id,
+          payload: { slot },
+        })),
+      ];
+      if (!operations.length) {
+        operations.push({
+          module: "settings",
+          operation: "update",
+          entityId: schoolId || "edt-settings",
+          payload: { workspace: nextWorkspace },
+        });
       }
-      const saved = await savePlatformWorkspace(result.workspace, result.metadata);
+
+      const saved = await savePlatformWorkspace(nextWorkspace, operations);
       setWorkspace(saved.workspace);
       hydrateForm(saved.workspace, classes);
       if (saved.blocked) {
@@ -216,13 +344,31 @@ export function PrimaryTimetableSetup() {
         setMessage(saved.message);
         return;
       }
-      setMessageKind("success");
-      setMessage(
-        `Paramétrage enregistré : ${result.summary.classes} classe(s), ${result.summary.titularAssignments} affectation(s) de titulaire, ${result.summary.exceptions} exception(s). Vous pouvez maintenant utiliser « Générer automatiquement » ci-dessous.`,
-      );
+
+      writeGenerationPreferences(schoolId, {
+        firstDay,
+        lastDay,
+        startsAt,
+        endsAt,
+      });
+
+      if (generated.unscheduledHours > 0) {
+        setMessageKind("info");
+        setMessage(
+          `${generated.slots.length} créneau(x) placé(s) automatiquement. ${generated.unscheduledHours} créneau(x) restent à placer. ${generated.warnings.join(" ")}`.trim(),
+        );
+      } else if (generated.slots.length > 0) {
+        setMessageKind("success");
+        setMessage(
+          `Emploi du temps généré : ${generated.slots.length} créneau(x) ont été classés automatiquement du ${dayLabel(firstDay).toLowerCase()} au ${dayLabel(lastDay).toLowerCase()}.`,
+        );
+      } else {
+        setMessageKind("success");
+        setMessage("Le paramétrage est enregistré et l’emploi du temps couvre déjà tous les volumes horaires configurés.");
+      }
     } catch (error) {
       setMessageKind("error");
-      setMessage(error instanceof Error ? error.message : "Enregistrement du paramétrage impossible.");
+      setMessage(error instanceof Error ? error.message : "Génération automatique impossible.");
     } finally {
       setSaving(false);
     }
@@ -244,9 +390,9 @@ export function PrimaryTimetableSetup() {
           <span className={styles.kicker}>EDT · PRIMAIRE</span>
           <h1>Paramétrage automatique</h1>
           <p>
-            Le titulaire enseigne toutes les matières de sa classe par défaut. Vous ne définissez
-            séparément que les matières confiées à un enseignant spécialisé, comme le sport ou
-            l’informatique.
+            Le titulaire enseigne toutes les matières de sa classe par défaut. Vous choisissez la
+            semaine de travail et les volumes horaires ; seules les matières confiées à un
+            enseignant spécialisé sont déclarées comme exceptions.
           </p>
         </div>
         <div className={generation.ready ? styles.ready : styles.pending}>
@@ -254,7 +400,7 @@ export function PrimaryTimetableSetup() {
           <span>
             {generation.ready
               ? `${generation.plannedPeriods} créneau(x) prévu(s)`
-              : `${generation.blockers.length} point(s) bloquant(s)`}
+              : `${generation.blockers.length} point(s) à corriger`}
           </span>
         </div>
       </div>
@@ -270,11 +416,62 @@ export function PrimaryTimetableSetup() {
         </div>
       ) : null}
 
+      <article className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div>
+            <span>1</span>
+            <div>
+              <h2>Jours et horaires de fonctionnement</h2>
+              <p>Définissez la plage dans laquelle Gabon Éduc+ peut répartir automatiquement les cours.</p>
+            </div>
+          </div>
+        </div>
+        <div className={styles.scheduleFields}>
+          <label>
+            Du
+            <select
+              value={firstDay}
+              onChange={(event) => {
+                const value = Number(event.target.value) as DayNumber;
+                setFirstDay(value);
+                if (value > lastDay) setLastDay(value);
+              }}
+            >
+              {DAYS.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
+            </select>
+          </label>
+          <label>
+            Au
+            <select
+              value={lastDay}
+              onChange={(event) => {
+                const value = Number(event.target.value) as DayNumber;
+                setLastDay(value);
+                if (value < firstDay) setFirstDay(value);
+              }}
+            >
+              {DAYS.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
+            </select>
+          </label>
+          <label>
+            Début de journée
+            <input type="time" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+          </label>
+          <label>
+            Fin de journée
+            <input type="time" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
+          </label>
+        </div>
+        <p className={styles.scheduleHint}>
+          Plage actuelle : <b>{dayLabel(firstDay)} → {dayLabel(lastDay)}</b>, de <b>{startsAt}</b> à <b>{endsAt}</b>. Les matières seront distribuées uniquement dans cette plage.
+        </p>
+      </article>
+
       <div className={styles.grid}>
         <article className={styles.card}>
           <div className={styles.cardHeader}>
             <div>
-              <span>1</span>
+              <span>2</span>
               <div>
                 <h2>Volumes hebdomadaires</h2>
                 <p>Une seule saisie par matière, jamais créneau par créneau.</p>
@@ -312,7 +509,7 @@ export function PrimaryTimetableSetup() {
         <article className={styles.card}>
           <div className={styles.cardHeader}>
             <div>
-              <span>2</span>
+              <span>3</span>
               <div>
                 <h2>Titulaires des classes</h2>
                 <p>Le titulaire est automatiquement affecté à toutes les matières de sa classe.</p>
@@ -351,7 +548,7 @@ export function PrimaryTimetableSetup() {
       <article className={styles.card}>
         <div className={styles.cardHeader}>
           <div>
-            <span>3</span>
+            <span>4</span>
             <div>
               <h2>Exceptions par matière</h2>
               <p>
@@ -433,32 +630,32 @@ export function PrimaryTimetableSetup() {
         <div>
           <b>{classes.length} classe(s) · {subjects.length} matière(s) · {teachers.length} enseignant(s)</b>
           <small>
-            {exceptions.length
-              ? `${exceptions.length} exception(s) prévue(s)`
-              : "Aucune exception prévue"}
-            {generation.ready && generation.assignmentCount
-              ? ` · configuration actuelle : ${generation.assignmentCount} affectation(s)`
-              : ""}
+            {dayLabel(firstDay)}–{dayLabel(lastDay)} · {startsAt}–{endsAt}
+            {exceptions.length ? ` · ${exceptions.length} exception(s)` : " · aucune exception"}
           </small>
         </div>
         <button
           type="button"
           className={styles.primaryButton}
-          onClick={() => void saveAutomaticSetup()}
+          onClick={() => void saveAndGenerate()}
           disabled={saving}
         >
-          {saving ? "Enregistrement…" : "Enregistrer le paramétrage automatique"}
+          {saving ? "Génération en cours…" : "Enregistrer et générer l’EDT"}
         </button>
       </div>
 
       {generation.blockers.length ? (
         <details className={styles.diagnostics}>
-          <summary>Voir ce qui manque encore pour la génération</summary>
+          <summary>Voir ce qui manque encore pour une génération complète</summary>
           <ul>
             {generation.blockers.map((item) => <li key={item}>{item}</li>)}
           </ul>
         </details>
       ) : null}
+
+      <p className={styles.manualNote}>
+        <b>Important :</b> le formulaire « Ajouter un créneau » affiché plus bas sert uniquement aux retouches manuelles après génération. Il n’est pas nécessaire de choisir une matière ou un jour dans ce formulaire pour générer automatiquement l’emploi du temps.
+      </p>
 
       {exceptions.some((item) => item.teacherId && item.teacherId === titulars[item.classId]) ? (
         <p className={styles.note}>
@@ -474,8 +671,8 @@ export function PrimaryTimetableSetup() {
       ) : null}
       {subjects.some((item) => Number(hours[item.id] || 0) <= 0) ? (
         <p className={styles.note}>
-          Les matières à 0 h/semaine bloquent volontairement la génération : définissez leur
-          volume réel.
+          Les matières à 0 h/semaine ne peuvent pas être placées automatiquement : définissez leur
+          volume réel avant de générer.
         </p>
       ) : null}
     </section>
