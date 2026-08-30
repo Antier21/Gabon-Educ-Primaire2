@@ -210,12 +210,25 @@ export function buildPrimaryTimetableSetup(
     return updated;
   });
 
-  const classIds = new Set(schoolClasses.map((item) => item.id));
+  /*
+   * Le paramétrage automatique ne possède que les couples classe/matière qui
+   * correspondent réellement au programme de la classe. Une affectation hors
+   * de ce périmètre (ancienne donnée, module futur, autre niveau) doit rester
+   * intacte plutôt que disparaître silencieusement du workspace.
+   */
+  const managedPairs = new Set<string>();
+  const workspaceWithUpdatedSubjects = { ...workspace, subjects };
+  for (const schoolClass of schoolClasses) {
+    for (const subject of subjectsForPrimaryClass(workspaceWithUpdatedSubjects, schoolClass)) {
+      managedPairs.add(`${schoolClass.id}|${subject.id}`);
+    }
+  }
+
   const isCurrentManagedAssignment = (assignment: TeachingAssignment) =>
     assignment.active &&
     sameSchool(assignment.schoolId, schoolId) &&
-    classIds.has(assignment.classId) &&
-    assignment.academicYearId === year!.id;
+    assignment.academicYearId === year!.id &&
+    managedPairs.has(`${assignment.classId}|${assignment.subjectId}`);
 
   const untouched = workspace.assignments.filter((assignment) => !isCurrentManagedAssignment(assignment));
   const current = workspace.assignments.filter(isCurrentManagedAssignment);
@@ -224,7 +237,7 @@ export function buildPrimaryTimetableSetup(
 
   for (const schoolClass of schoolClasses) {
     const titularId = input.titularByClassId[schoolClass.id];
-    for (const subject of subjectsForPrimaryClass({ ...workspace, subjects }, schoolClass)) {
+    for (const subject of subjectsForPrimaryClass(workspaceWithUpdatedSubjects, schoolClass)) {
       const pair = `${schoolClass.id}|${subject.id}`;
       const existingTitulars = current.filter(
         (assignment) =>
