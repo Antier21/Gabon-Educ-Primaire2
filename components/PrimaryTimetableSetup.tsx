@@ -20,11 +20,6 @@ import styles from "./PrimaryTimetableSetup.module.css";
 
 type ExceptionRow = PrimaryTimetableExceptionInput & { id: string };
 
-function teacherName(workspace: PlatformWorkspace, teacherId: string) {
-  const teacher = workspace.users.find((item) => item.id === teacherId);
-  return teacher ? `${teacher.firstName} ${teacher.lastName}`.trim() : "";
-}
-
 export function PrimaryTimetableSetup() {
   const [workspace, setWorkspace] = useState<PlatformWorkspace>(defaultPlatformWorkspace);
   const [classes, setClasses] = useState<ClassRecord[]>([]);
@@ -65,18 +60,26 @@ export function PrimaryTimetableSetup() {
           assignment.headTeacher &&
           (!yearId || !assignment.academicYearId || assignment.academicYearId === yearId),
       );
-      const scopedTeacher = activeTeachers.find((teacher) => teacher.scopeClassIds?.includes(schoolClass.id));
+      const scopedTeacher = activeTeachers.find((teacher) =>
+        teacher.scopeClassIds?.includes(schoolClass.id),
+      );
       nextTitulars[schoolClass.id] = existing?.teacherId || scopedTeacher?.id || "";
     }
     setTitulars(nextTitulars);
 
+    // Seules les exceptions appartenant au programme réel de la classe sont
+    // pilotées ici. Une ancienne affectation hors périmètre reste intacte.
     const deduped = new Map<string, ExceptionRow>();
     for (const assignment of nextWorkspace.assignments) {
+      const schoolClass = nextClasses.find((item) => item.id === assignment.classId);
       if (
         !assignment.active ||
         assignment.headTeacher ||
-        !nextClasses.some((item) => item.id === assignment.classId) ||
-        (yearId && assignment.academicYearId && assignment.academicYearId !== yearId)
+        !schoolClass ||
+        (yearId && assignment.academicYearId && assignment.academicYearId !== yearId) ||
+        !subjectsForPrimaryClass(nextWorkspace, schoolClass).some(
+          (subject) => subject.id === assignment.subjectId,
+        )
       ) {
         continue;
       }
@@ -117,13 +120,26 @@ export function PrimaryTimetableSetup() {
   }, [reload]);
 
   const schoolId = workspace.school?.id || "";
-  const subjects = useMemo(
-    () =>
-      workspace.subjects.filter(
-        (subject) => subject.active && (!subject.schoolId || subject.schoolId === schoolId),
-      ),
-    [workspace.subjects, schoolId],
-  );
+  const subjects = useMemo(() => {
+    const byId = new Map<string, PlatformWorkspace["subjects"][number]>();
+    if (classes.length) {
+      for (const schoolClass of classes) {
+        for (const subject of subjectsForPrimaryClass(workspace, schoolClass)) {
+          byId.set(subject.id, subject);
+        }
+      }
+    } else {
+      for (const subject of workspace.subjects) {
+        if (subject.active && (!subject.schoolId || subject.schoolId === schoolId)) {
+          byId.set(subject.id, subject);
+        }
+      }
+    }
+    return [...byId.values()].sort(
+      (a, b) => a.bulletinOrder - b.bulletinOrder || a.label.localeCompare(b.label, "fr"),
+    );
+  }, [workspace, classes, schoolId]);
+
   const teachers = useMemo(
     () =>
       workspace.users
@@ -133,7 +149,9 @@ export function PrimaryTimetableSetup() {
             user.status === "active" &&
             ["teacher", "head_teacher"].includes(user.role),
         )
-        .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr")),
+        .sort((a, b) =>
+          `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr"),
+        ),
     [workspace.users, schoolId],
   );
   const levelById = useMemo(
@@ -153,7 +171,9 @@ export function PrimaryTimetableSetup() {
   }
 
   function updateException(id: string, patch: Partial<ExceptionRow>) {
-    setExceptions((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    setExceptions((items) =>
+      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
   }
 
   function removeException(id: string) {
@@ -209,7 +229,11 @@ export function PrimaryTimetableSetup() {
   }
 
   if (loading) {
-    return <section className={styles.shell}><div className={styles.card}>Chargement du paramétrage automatique…</div></section>;
+    return (
+      <section className={styles.shell}>
+        <div className={styles.card}>Chargement du paramétrage automatique…</div>
+      </section>
+    );
   }
   if (workspace.school?.schoolType !== "primary") return null;
 
@@ -227,32 +251,55 @@ export function PrimaryTimetableSetup() {
         </div>
         <div className={generation.ready ? styles.ready : styles.pending}>
           <strong>{generation.ready ? "Prêt à générer" : "À compléter"}</strong>
-          <span>{generation.ready ? `${generation.plannedPeriods} créneau(x) prévu(s)` : `${generation.blockers.length} point(s) bloquant(s)`}</span>
+          <span>
+            {generation.ready
+              ? `${generation.plannedPeriods} créneau(x) prévu(s)`
+              : `${generation.blockers.length} point(s) bloquant(s)`}
+          </span>
         </div>
       </div>
 
       {message ? (
-        <div className={`${styles.message} ${styles[messageKind]}`} role={messageKind === "error" ? "alert" : "status"}>
-          {message.split("\n").map((line) => <div key={line}>{line}</div>)}
+        <div
+          className={`${styles.message} ${styles[messageKind]}`}
+          role={messageKind === "error" ? "alert" : "status"}
+        >
+          {message.split("\n").map((line, index) => (
+            <div key={`${index}-${line}`}>{line}</div>
+          ))}
         </div>
       ) : null}
 
       <div className={styles.grid}>
         <article className={styles.card}>
           <div className={styles.cardHeader}>
-            <div><span>1</span><div><h2>Volumes hebdomadaires</h2><p>Une seule saisie par matière, jamais créneau par créneau.</p></div></div>
+            <div>
+              <span>1</span>
+              <div>
+                <h2>Volumes hebdomadaires</h2>
+                <p>Une seule saisie par matière, jamais créneau par créneau.</p>
+              </div>
+            </div>
           </div>
           <div className={styles.subjectList}>
             {subjects.map((subject) => (
               <label key={subject.id} className={styles.subjectRow}>
-                <span><b>{subject.label}</b><small>{levelById.get(subject.levelId) || "Tous niveaux"}</small></span>
+                <span>
+                  <b>{subject.label}</b>
+                  <small>{levelById.get(subject.levelId) || subject.category || "Primaire"}</small>
+                </span>
                 <span className={styles.hoursField}>
                   <input
                     type="number"
                     min="0"
                     step="1"
                     value={hours[subject.id] ?? 0}
-                    onChange={(event) => setHours((values) => ({ ...values, [subject.id]: Number(event.target.value) }))}
+                    onChange={(event) =>
+                      setHours((values) => ({
+                        ...values,
+                        [subject.id]: Number(event.target.value),
+                      }))
+                    }
                     aria-label={`Volume hebdomadaire de ${subject.label}`}
                   />
                   <small>h/sem.</small>
@@ -264,19 +311,35 @@ export function PrimaryTimetableSetup() {
 
         <article className={styles.card}>
           <div className={styles.cardHeader}>
-            <div><span>2</span><div><h2>Titulaires des classes</h2><p>Le titulaire est automatiquement affecté à toutes les matières de sa classe.</p></div></div>
+            <div>
+              <span>2</span>
+              <div>
+                <h2>Titulaires des classes</h2>
+                <p>Le titulaire est automatiquement affecté à toutes les matières de sa classe.</p>
+              </div>
+            </div>
           </div>
           <div className={styles.classList}>
             {classes.map((schoolClass) => (
               <label key={schoolClass.id} className={styles.classRow}>
-                <span><b>{schoolClass.name}</b><small>{schoolClass.level}</small></span>
+                <span>
+                  <b>{schoolClass.name}</b>
+                  <small>{schoolClass.level}</small>
+                </span>
                 <select
                   value={titulars[schoolClass.id] || ""}
-                  onChange={(event) => setTitulars((values) => ({ ...values, [schoolClass.id]: event.target.value }))}
+                  onChange={(event) =>
+                    setTitulars((values) => ({
+                      ...values,
+                      [schoolClass.id]: event.target.value,
+                    }))
+                  }
                 >
                   <option value="">Choisir le titulaire</option>
                   {teachers.map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>{teacher.firstName} {teacher.lastName}</option>
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.firstName} {teacher.lastName}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -287,11 +350,24 @@ export function PrimaryTimetableSetup() {
 
       <article className={styles.card}>
         <div className={styles.cardHeader}>
-          <div><span>3</span><div><h2>Exceptions par matière</h2><p>Ajoutez uniquement les cours assurés par un autre enseignant : sport, informatique, langue, etc.</p></div></div>
-          <button type="button" className={styles.secondaryButton} onClick={addException}>+ Ajouter une exception</button>
+          <div>
+            <span>3</span>
+            <div>
+              <h2>Exceptions par matière</h2>
+              <p>
+                Ajoutez uniquement les cours assurés par un autre enseignant : sport,
+                informatique, langue, etc.
+              </p>
+            </div>
+          </div>
+          <button type="button" className={styles.secondaryButton} onClick={addException}>
+            + Ajouter une exception
+          </button>
         </div>
         {!exceptions.length ? (
-          <div className={styles.empty}>Aucune exception : chaque titulaire garde toutes les matières de sa classe.</div>
+          <div className={styles.empty}>
+            Aucune exception : chaque titulaire garde toutes les matières de sa classe.
+          </div>
         ) : (
           <div className={styles.exceptionList}>
             {exceptions.map((exception) => {
@@ -301,19 +377,51 @@ export function PrimaryTimetableSetup() {
                 : subjects;
               return (
                 <div className={styles.exceptionRow} key={exception.id}>
-                  <select value={exception.classId} onChange={(event) => updateException(exception.id, { classId: event.target.value, subjectId: "" })}>
+                  <select
+                    value={exception.classId}
+                    onChange={(event) =>
+                      updateException(exception.id, {
+                        classId: event.target.value,
+                        subjectId: "",
+                      })
+                    }
+                  >
                     <option value="">Classe</option>
-                    {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    {classes.map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
                   </select>
-                  <select value={exception.subjectId} onChange={(event) => updateException(exception.id, { subjectId: event.target.value })}>
+                  <select
+                    value={exception.subjectId}
+                    onChange={(event) =>
+                      updateException(exception.id, { subjectId: event.target.value })
+                    }
+                  >
                     <option value="">Matière</option>
-                    {availableSubjects.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                    {availableSubjects.map((item) => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
                   </select>
-                  <select value={exception.teacherId} onChange={(event) => updateException(exception.id, { teacherId: event.target.value })}>
+                  <select
+                    value={exception.teacherId}
+                    onChange={(event) =>
+                      updateException(exception.id, { teacherId: event.target.value })
+                    }
+                  >
                     <option value="">Enseignant spécialisé</option>
-                    {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.firstName} {teacher.lastName}</option>)}
+                    {teachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.firstName} {teacher.lastName}
+                      </option>
+                    ))}
                   </select>
-                  <button type="button" className={styles.removeButton} onClick={() => removeException(exception.id)}>Retirer</button>
+                  <button
+                    type="button"
+                    className={styles.removeButton}
+                    onClick={() => removeException(exception.id)}
+                  >
+                    Retirer
+                  </button>
                 </div>
               );
             })}
@@ -333,7 +441,12 @@ export function PrimaryTimetableSetup() {
               : ""}
           </small>
         </div>
-        <button type="button" className={styles.primaryButton} onClick={() => void saveAutomaticSetup()} disabled={saving}>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={() => void saveAutomaticSetup()}
+          disabled={saving}
+        >
           {saving ? "Enregistrement…" : "Enregistrer le paramétrage automatique"}
         </button>
       </div>
@@ -341,18 +454,30 @@ export function PrimaryTimetableSetup() {
       {generation.blockers.length ? (
         <details className={styles.diagnostics}>
           <summary>Voir ce qui manque encore pour la génération</summary>
-          <ul>{generation.blockers.map((item) => <li key={item}>{item}</li>)}</ul>
+          <ul>
+            {generation.blockers.map((item) => <li key={item}>{item}</li>)}
+          </ul>
         </details>
       ) : null}
 
       {exceptions.some((item) => item.teacherId && item.teacherId === titulars[item.classId]) ? (
-        <p className={styles.note}>Une exception désigne actuellement le même enseignant que le titulaire ; elle est autorisée mais inutile.</p>
+        <p className={styles.note}>
+          Une exception désigne actuellement le même enseignant que le titulaire ; elle est
+          autorisée mais inutile.
+        </p>
       ) : null}
-
-      {teachers.length === 0 ? <p className={styles.note}>Créez d’abord au moins un profil enseignant pédagogique.</p> : null}
-      {classes.some((item) => !titulars[item.id]) ? <p className={styles.note}>Chaque classe doit avoir un titulaire avant la génération.</p> : null}
-      {subjects.some((item) => Number(hours[item.id] || 0) <= 0) ? <p className={styles.note}>Les matières à 0 h/semaine bloquent volontairement la génération : définissez leur volume réel.</p> : null}
-      {exceptions.filter((item) => item.teacherId).map((item) => teacherName(workspace, item.teacherId)).filter(Boolean).length ? null : null}
+      {teachers.length === 0 ? (
+        <p className={styles.note}>Créez d’abord au moins un profil enseignant pédagogique.</p>
+      ) : null}
+      {classes.some((item) => !titulars[item.id]) ? (
+        <p className={styles.note}>Chaque classe doit avoir un titulaire avant la génération.</p>
+      ) : null}
+      {subjects.some((item) => Number(hours[item.id] || 0) <= 0) ? (
+        <p className={styles.note}>
+          Les matières à 0 h/semaine bloquent volontairement la génération : définissez leur
+          volume réel.
+        </p>
+      ) : null}
     </section>
   );
 }
