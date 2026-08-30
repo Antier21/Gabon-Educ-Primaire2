@@ -7,6 +7,7 @@ import { PedagogyMegaNav } from "@/components/PedagogyNavigation";
 import { PrimaryTimetableSetup } from "@/components/PrimaryTimetableSetup";
 import { PlatformManager } from "@/components/platform/PlatformManager";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { hydrateEdtSubjectCatalog } from "@/lib/platform/edt-subject-catalog";
 import { readCachedPrimaryRole, resolveMyRoles } from "@/lib/roles/current-role";
 import type { SchoolRole } from "@/lib/platform/types";
 import { signOut } from "@/lib/profile-store";
@@ -21,6 +22,8 @@ export function TimetableWorkspacePage() {
   const router = useRouter();
   const [spaceRole, setSpaceRole] = useState<SchoolRole | null>(() => readCachedPrimaryRole());
   const [platformRevision, setPlatformRevision] = useState(0);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [catalogWarning, setCatalogWarning] = useState("");
   const subjectAssignmentsSnapshot = useRef<string | null>(
     typeof window === "undefined"
       ? null
@@ -39,6 +42,32 @@ export function TimetableWorkspacePage() {
         // de résolution, la navigation déjà en cache est conservée.
       }
     })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateEdtSubjectCatalog()
+      .then((result) => {
+        if (cancelled) return;
+        setCatalogWarning(result.warning);
+        subjectAssignmentsSnapshot.current = window.localStorage.getItem(
+          STORAGE_KEYS.subjectAssignments,
+        );
+        setCatalogReady(true);
+        setPlatformRevision((value) => value + 1);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setCatalogWarning(
+          error instanceof Error
+            ? `Chargement des matières impossible : ${error.message}`
+            : "Chargement des matières impossible.",
+        );
+        setCatalogReady(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -68,8 +97,6 @@ export function TimetableWorkspacePage() {
     };
 
     window.addEventListener("gabon-educ:storage", onStorage);
-    // Couvre aussi le cas où un composant enfant a terminé son chargement
-    // juste avant l'installation de cet écouteur.
     refreshIfSubjectsChanged();
     return () => window.removeEventListener("gabon-educ:storage", onStorage);
   }, []);
@@ -89,8 +116,34 @@ export function TimetableWorkspacePage() {
       ) : (
         <AdministrationMegaNav onLogout={() => void logout()} />
       )}
-      <PrimaryTimetableSetup />
-      <PlatformManager key={`timetable-${platformRevision}`} module="timetable" embedded />
+
+      {!catalogReady ? (
+        <div style={{ maxWidth: 1500, margin: "18px auto", padding: "16px 24px" }}>
+          Chargement du catalogue des matières…
+        </div>
+      ) : (
+        <>
+          {catalogWarning ? (
+            <div
+              role="alert"
+              style={{
+                maxWidth: 1450,
+                margin: "18px auto 0",
+                padding: "12px 16px",
+                border: "1px solid #e5b85c",
+                borderRadius: 10,
+                background: "#fff8e6",
+                color: "#6b4f12",
+                fontWeight: 700,
+              }}
+            >
+              {catalogWarning}
+            </div>
+          ) : null}
+          <PrimaryTimetableSetup />
+          <PlatformManager key={`timetable-${platformRevision}`} module="timetable" embedded />
+        </>
+      )}
     </>
   );
 }
