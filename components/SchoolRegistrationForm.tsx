@@ -1,11 +1,15 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Building2, CheckCircle2, LoaderCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { STORAGE_KEYS, writeLocal } from "@/lib/storage-mode";
+import {
+  clearSchoolRegistrationAuthorization,
+  readSchoolRegistrationAuthorization,
+} from "@/lib/school-registration-authorization";
 import {
   formatSchoolProfile,
   getDefaultLevelsForSchoolType,
@@ -40,8 +44,47 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
   const [message, setMessage] = useState("");
   const [messageErreur, setMessageErreur] = useState(false);
   const [sessionManquante, setSessionManquante] = useState(false);
+  const [authorizationReady, setAuthorizationReady] = useState(false);
+  const [registrationToken, setRegistrationToken] = useState("");
+  const [authorizedSchoolName, setAuthorizedSchoolName] = useState("");
   const levels = useMemo(() => getDefaultLevelsForSchoolType(schoolType), [schoolType]);
   const profileLabel = formatSchoolProfile(schoolType, schoolSector);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyAuthorization() {
+      const authorization = readSchoolRegistrationAuthorization();
+      if (!authorization || authorization.profileKey !== profile.key || Date.parse(authorization.expiresAt) <= Date.now()) {
+        clearSchoolRegistrationAuthorization();
+        router.replace(`/gabon-educ/activation-etablissement?profile=${encodeURIComponent(profile.key)}&expired=1`);
+        return;
+      }
+
+      const { data, error } = await createClient().rpc("check_school_registration_authorization", {
+        p_registration_token: authorization.token,
+        p_edition: "primary",
+      });
+      const row = Array.isArray(data) ? data[0] : data;
+
+      if (error || !row?.is_valid) {
+        clearSchoolRegistrationAuthorization();
+        router.replace(`/gabon-educ/activation-etablissement?profile=${encodeURIComponent(profile.key)}&expired=1`);
+        return;
+      }
+
+      if (!cancelled) {
+        setRegistrationToken(authorization.token);
+        setAuthorizedSchoolName(String(row.school_name || authorization.schoolName));
+        setAuthorizationReady(true);
+      }
+    }
+
+    void verifyAuthorization();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.key, router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +101,13 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
     const normalizedSector = normalizeSchoolSector(schoolSector);
     const academicYear = String(data.get("academicYear") || "2026-2027").trim() || "2026-2027";
 
+    if (!registrationToken || !authorizationReady) {
+      setMessageErreur(true);
+      setMessage("Autorisation GEPS absente ou expirée. Revenez à la page d’activation.");
+      setSaving(false);
+      return;
+    }
+
     let cloudSchoolId = "";
     const cloudConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
     try {
@@ -65,8 +115,6 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
         const supabase = createClient();
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) {
-          // Sans session ouverte, la fonction Supabase refuserait l'appel.
-          // On le dit clairement plutôt que de laisser croire à une panne.
           setSessionManquante(true);
           setMessageErreur(true);
           setMessage("Vous n’êtes pas connecté. L’enregistrement d’un établissement exige une session ouverte : créez le compte responsable ou connectez-vous, puis revenez à ce formulaire.");
@@ -74,7 +122,8 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
           return;
         }
         {
-          const { data: createdSchoolId, error } = await supabase.rpc("register_school_from_onboarding", {
+          const { data: createdSchoolId, error } = await supabase.rpc("register_school_from_activation", {
+            p_registration_token: registrationToken,
             school_name: name,
             requested_school_type: normalizedType,
             requested_school_sector: normalizedSector,
@@ -88,7 +137,7 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
           });
           if (error) {
             if (error.code === "PGRST202") {
-              throw new Error("La fonction Supabase register_school_from_onboarding est absente. Exécutez la migration 047_v01098_restore_onboarding_rpc.sql dans Supabase.");
+              throw new Error("La fonction Supabase register_school_from_activation est absente. Exécutez la migration 106_school_registration_authorization.sql dans Supabase.");
             }
             throw error;
           }
@@ -186,6 +235,7 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
       updatedAt: now,
     });
     localStorage.setItem("gabon-educ-plus:registration-summary", JSON.stringify({ profile: profileLabel, schoolName: name, savedAt: now }));
+    clearSchoolRegistrationAuthorization();
 
     setMessage("Établissement enregistré. Redirection vers la page de connexion…");
     setTimeout(() => {
@@ -193,6 +243,14 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
       router.refresh();
     }, 650);
     setSaving(false);
+  }
+
+  if (!authorizationReady) {
+    return (
+      <div className="school-registration-form" aria-live="polite">
+        <p className="form-message"><LoaderCircle className="spin-icon" aria-hidden="true" /> Vérification de l’autorisation GEPS…</p>
+      </div>
+    );
   }
 
   return (
@@ -209,7 +267,7 @@ export function SchoolRegistrationForm({ profileKey }: { profileKey?: string }) 
         <div>{levels.map((level) => <b key={level}>{level}</b>)}</div>
       </div>
       <div className="form-row">
-        <label>Nom de l’établissement<input name="name" required placeholder="Ex. Établissement Mbélé" /></label>
+        <label>Nom de l’établissement<input name="name" required value={authorizedSchoolName} readOnly /></label>
         <label>Sigle <span>(facultatif)</span><input name="acronym" placeholder="EM" /></label>
       </div>
       <div className="form-row">
