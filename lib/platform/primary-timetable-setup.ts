@@ -1,6 +1,11 @@
 import type { ClassRecord } from "@/lib/class-store";
 import type { PlatformWorkspace, TeachingAssignment } from "@/lib/platform/types";
 import type { SyncOperationMetadata } from "@/lib/sync/types";
+import {
+  getDefaultSubjectsForLevel,
+  getDefaultSubjectsForSchoolType,
+  normalizeSchoolLevel,
+} from "@/lib/school-profiles";
 
 export type PrimaryTimetableExceptionInput = {
   classId: string;
@@ -37,7 +42,7 @@ function sameSchool(id: string | undefined, schoolId: string) {
   return !id || id === schoolId;
 }
 
-function normalizeLevel(value: string) {
+function normalizeLabel(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -53,6 +58,15 @@ function activeYear(workspace: PlatformWorkspace) {
   );
 }
 
+/**
+ * Matières réellement enseignées dans une classe primaire.
+ *
+ * Le catalogue de l'édition Primaire contient à la fois les domaines de
+ * maternelle et les matières élémentaires. On s'appuie donc d'abord sur le
+ * profil officiel du niveau de la classe. Une matière personnalisée reste
+ * possible : elle est conservée si son levelId vise explicitement ce niveau,
+ * ou globalement lorsque le niveau n'a pas pu être résolu.
+ */
 export function subjectsForPrimaryClass(
   workspace: PlatformWorkspace,
   schoolClass: ClassRecord,
@@ -61,15 +75,30 @@ export function subjectsForPrimaryClass(
   const activeSubjects = workspace.subjects.filter(
     (subject) => subject.active && sameSchool(subject.schoolId, schoolId),
   );
-  const classLevel = normalizeLevel(schoolClass.level);
+  const expectedLabels = new Set(
+    getDefaultSubjectsForLevel(schoolClass.level).map(normalizeLabel),
+  );
+  const knownPrimaryLabels = new Set(
+    getDefaultSubjectsForSchoolType("primary").map(normalizeLabel),
+  );
+  const normalizedClassLevel = normalizeSchoolLevel(schoolClass.level);
   const level = workspace.levels.find(
     (item) =>
       item.active &&
-      (normalizeLevel(item.code) === classLevel || normalizeLevel(item.label) === classLevel),
+      (normalizeSchoolLevel(item.code) === normalizedClassLevel ||
+        normalizeSchoolLevel(item.label) === normalizedClassLevel),
   );
-  if (!level) return activeSubjects;
-  const levelSubjects = activeSubjects.filter((subject) => subject.levelId === level.id);
-  return levelSubjects.length ? levelSubjects : activeSubjects;
+
+  const selected = activeSubjects.filter((subject) => {
+    const label = normalizeLabel(subject.label);
+    if (expectedLabels.has(label)) return true;
+    if (knownPrimaryLabels.has(label)) return false;
+    return level ? subject.levelId === level.id : true;
+  });
+
+  // Compatibilité avec les anciens catalogues entièrement personnalisés : ne
+  // jamais rendre une classe vide si aucun libellé standard n'est reconnu.
+  return selected.length ? selected : activeSubjects;
 }
 
 function makeAssignment(
@@ -125,6 +154,17 @@ export function buildPrimaryTimetableSetup(
   );
   if (!activeSubjects.length) errors.push("Aucune matière active n’est configurée.");
 
+  const managedSubjectMap = new Map<string, (typeof workspace.subjects)[number]>();
+  for (const schoolClass of schoolClasses) {
+    for (const subject of subjectsForPrimaryClass(workspace, schoolClass)) {
+      managedSubjectMap.set(subject.id, subject);
+    }
+  }
+  const managedSubjects = [...managedSubjectMap.values()];
+  if (schoolClasses.length && activeSubjects.length && !managedSubjects.length) {
+    errors.push("Aucune matière ne correspond aux niveaux des classes de l’établissement.");
+  }
+
   const activeTeachers = new Set(
     workspace.users
       .filter(
@@ -145,7 +185,7 @@ export function buildPrimaryTimetableSetup(
     }
   }
 
-  for (const subject of activeSubjects) {
+  for (const subject of managedSubjects) {
     const hours = Number(input.weeklyHoursBySubjectId[subject.id] ?? subject.weeklyHours ?? 0);
     if (!Number.isFinite(hours) || hours <= 0) {
       errors.push(`${subject.label} : indiquez un volume hebdomadaire supérieur à 0.`);
@@ -184,7 +224,7 @@ export function buildPrimaryTimetableSetup(
       metadata: [],
       summary: {
         classes: schoolClasses.length,
-        subjects: activeSubjects.length,
+        subjects: managedSubjects.length,
         titularAssignments: 0,
         exceptions: desiredExceptionByPair.size,
         updatedVolumes: 0,
@@ -196,8 +236,9 @@ export function buildPrimaryTimetableSetup(
   let updatedVolumes = 0;
   const subjects = workspace.subjects.map((subject) => {
     if (!activeSubjects.some((item) => item.id === subject.id)) return subject;
-    const weeklyHours = Number(input.weeklyHoursBySubjectId[subject.id] ?? subject.weeklyHours);
-    if (Number(subject.weeklyHours) === weeklyHours) return subject;
+    if (!(subject.id in input.weeklyHoursBySubjectId)) return subject;
+    const weeklyHours = Number(input.weeklyHoursBySubjectId[subject.id]);
+    if (!Number.isFinite(weeklyHours) || Number(subject.weeklyHours) === weeklyHours) return subject;
     const updated = { ...subject, weeklyHours, updatedAt: createdAt };
     metadata.push({
       module: "subjects",
@@ -361,7 +402,7 @@ export function buildPrimaryTimetableSetup(
     metadata,
     summary: {
       classes: schoolClasses.length,
-      subjects: activeSubjects.length,
+      subjects: managedSubjects.length,
       titularAssignments,
       exceptions: desiredExceptionByPair.size,
       updatedVolumes,
