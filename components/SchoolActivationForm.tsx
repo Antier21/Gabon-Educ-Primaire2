@@ -77,14 +77,14 @@ export function SchoolActivationForm({
           <input
             value={code}
             onChange={(event) => setCode(event.target.value.toUpperCase())}
-            placeholder="GEPS-P-XXXX-XXXX"
+            placeholder="GEPS-P-XXXX-XXXX-XXXX-XXXX"
             autoComplete="off"
             spellCheck={false}
             required
             autoFocus
           />
         </div>
-        <small>Utilisez exactement le code transmis par Gabon Éduc Plus Service.</small>
+        <small>Utilisez exactement le code transmis par Gabon Éduc Plus Service. Les codes déjà délivrés restent acceptés.</small>
       </label>
 
       {message && (
