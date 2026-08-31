@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { publishTimetableToCloud } from "@/lib/platform/timetable-cloud";
+import { removeLateTimetableSlotsFromCloud } from "@/lib/platform/timetable-cutoff-cloud";
+import { isTimetableSlotWithinDay } from "@/lib/platform/timetable-hours";
 import { readPlatformWorkspace } from "@/lib/platform/store";
 import { STORAGE_KEYS } from "@/lib/storage-mode";
 
@@ -15,8 +17,9 @@ type PublicationState =
  * Pont entre la copie locale de l'EDT et la table relationnelle Supabase.
  *
  * L'administration travaille avec un workspace local pour rester utilisable
- * sur un réseau instable. Les familles, elles, lisent `timetable_slots`.
- * Cette passerelle garantit que les deux mondes ne divergent plus.
+ * sur un réseau instable. Les espaces connectés lisent `timetable_slots`.
+ * Cette passerelle garantit que les deux mondes ne divergent plus et applique
+ * aussi la borne commune de 14 h 30 lors de la publication.
  */
 export function TimetableCloudPublisher() {
   const [state, setState] = useState<PublicationState>({ kind: "idle", message: "" });
@@ -31,8 +34,15 @@ export function TimetableCloudPublisher() {
     }
 
     const workspace = readPlatformWorkspace();
-    const slots = workspace.timetable;
-    if (!workspace.school?.id || workspace.school.id === "local" || !slots.length) {
+    const slots = workspace.timetable.filter((slot) =>
+      isTimetableSlotWithinDay(slot.startsAt, slot.endsAt),
+    );
+    const hasLateSlots = slots.length !== workspace.timetable.length;
+    if (
+      !workspace.school?.id ||
+      workspace.school.id === "local" ||
+      (!slots.length && !hasLateSlots)
+    ) {
       setState({ kind: "idle", message: "" });
       return;
     }
@@ -40,10 +50,15 @@ export function TimetableCloudPublisher() {
     running.current = true;
     setState({ kind: "syncing", message: "Publication de l’emploi du temps dans Supabase…" });
     try {
-      const count = await publishTimetableToCloud(workspace, slots);
+      const removed = hasLateSlots
+        ? await removeLateTimetableSlotsFromCloud(workspace)
+        : 0;
+      const count = slots.length
+        ? await publishTimetableToCloud(workspace, slots)
+        : 0;
       setState({
         kind: "success",
-        message: `${count} créneau(x) confirmé(s) dans Supabase. L’emploi du temps est disponible aux espaces connectés.`,
+        message: `${count} créneau(x) confirmé(s) dans Supabase${removed ? ` · ${removed} ancien(s) créneau(x) après 14 h 30 supprimé(s)` : ""}. L’emploi du temps est disponible aux espaces connectés.`,
       });
     } catch (error) {
       setState({
