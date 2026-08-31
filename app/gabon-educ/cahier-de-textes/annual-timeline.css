@@ -2,9 +2,8 @@
   position: relative;
 }
 
-/* L'ancienne navigation ne montrait qu'une semaine. La frise annuelle reprend
-   cette fonction ; on conserve seulement les actions Cette semaine et
-   Progression annuelle dans l'en-tête historique. */
+/* La frise annuelle reprend la navigation. On conserve seulement les actions
+   Cette semaine et Progression annuelle dans l'en-tête historique. */
 .lesson-book-annual-shell button[aria-label="Semaine précédente"],
 .lesson-book-annual-shell button[aria-label="Semaine suivante"],
 .lesson-book-annual-shell button[aria-label="Semaine précédente"] + span {
@@ -33,7 +32,7 @@
   gap: 18px;
   padding: 13px 16px 10px;
   border-bottom: 1px solid #e5e9e7;
-  background: #fafbfA;
+  background: #fafbfa;
 }
 
 .annual-lesson-timeline__header > div:first-child,
@@ -93,6 +92,11 @@
 .annual-lesson-timeline__legend .annual-lesson-timeline__legend-sunday {
   border-color: #d9b66e;
   background: #f7e6bd;
+}
+
+.annual-lesson-timeline__legend .annual-lesson-timeline__legend-current {
+  border-color: #9b7614;
+  background: #DAA520;
 }
 
 .annual-lesson-timeline__legend .annual-lesson-timeline__legend-outline {
@@ -169,7 +173,8 @@
   transform: translateY(-1px);
 }
 
-/* Seul le dernier jour de la semaine reçoit une couleur de fond distincte. */
+/* Le dimanche reste le seul jour ordinaire à recevoir une couleur de fond
+   distincte. Le jour civil courant constitue l'exception explicite demandée. */
 .annual-lesson-day.is-week-end {
   border-color: #d9b66e;
   background: #f7e6bd;
@@ -178,17 +183,18 @@
 
 .annual-lesson-day__month {
   min-width: 100%;
-  color: #7a8580;
+  color: inherit;
   font-size: 7px;
   font-weight: 900;
   line-height: 1;
+  opacity: .75;
 }
 
 .annual-lesson-day__weekday {
   color: inherit;
   font-size: 8px;
   font-weight: 800;
-  opacity: .75;
+  opacity: .78;
 }
 
 .annual-lesson-day strong {
@@ -197,19 +203,19 @@
   line-height: 1;
 }
 
+/* Aujourd'hui : couleur officielle demandée. */
 .annual-lesson-day.is-today {
-  outline: 2px solid #08734f;
-  outline-offset: 1px;
+  border-color: #9b7614;
+  background: #DAA520;
+  color: #fff;
 }
 
-.annual-lesson-day.is-today > i {
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #08734f;
+/* Jour actuellement ouvert dans l'éditeur : contour seulement afin de garder
+   la différence entre « aujourd'hui » et « date consultée ». */
+.annual-lesson-day.is-active {
+  outline: 2px solid #334b41;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .85) inset;
 }
 
 @media (max-width: 760px) {
