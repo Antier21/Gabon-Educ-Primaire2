@@ -1,132 +1,209 @@
 "use client";
 
-type AcademicWeekEntry = {
-  key: string;
-  label: string;
+import { useEffect, useMemo, useRef, useState } from "react";
+import { resolveActiveSchoolContext } from "@/lib/active-school";
+import { createClient } from "@/lib/supabase/client";
+import styles from "./AcademicWeekStrip.module.css";
+
+type DayEntry = {
+  iso: string;
+  date: Date;
+  week: number;
+  weekKey: string;
+  weekday: string;
+  dayNumber: number;
   month: string;
-  week?: number;
-  break?: boolean;
+  beginsMonth: boolean;
+  endsWeek: boolean;
+  today: boolean;
 };
 
-const ACADEMIC_WEEKS: AcademicWeekEntry[] = [
-  { key: "36", label: "36", month: "septembre", week: 36 },
-  { key: "37", label: "37", month: "septembre", week: 37 },
-  { key: "38", label: "38", month: "septembre", week: 38 },
-  { key: "39", label: "39", month: "septembre", week: 39 },
-  { key: "40", label: "40", month: "octobre", week: 40 },
-  { key: "41", label: "41", month: "octobre", week: 41 },
-  { key: "42", label: "42", month: "octobre", week: 42 },
-  { key: "43", label: "43", month: "octobre", week: 43 },
-  { key: "44", label: "44", month: "novembre", week: 44 },
-  { key: "45", label: "45", month: "novembre", week: 45 },
-  { key: "46", label: "46", month: "novembre", week: 46 },
-  { key: "break-1", label: "F", month: "novembre", break: true },
-  { key: "48", label: "48", month: "décembre", week: 48 },
-  { key: "49", label: "49", month: "décembre", week: 49 },
-  { key: "50", label: "50", month: "décembre", week: 50 },
-  { key: "51", label: "51", month: "décembre", week: 51 },
-  { key: "break-2", label: "F", month: "janvier", break: true },
-  { key: "1", label: "1", month: "janvier", week: 1 },
-  { key: "2", label: "2", month: "janvier", week: 2 },
-  { key: "3", label: "3", month: "janvier", week: 3 },
-  { key: "4", label: "4", month: "janvier", week: 4 },
-  { key: "5", label: "5", month: "février", week: 5 },
-  { key: "6", label: "6", month: "février", week: 6 },
-  { key: "7", label: "7", month: "février", week: 7 },
-  { key: "8", label: "8", month: "février", week: 8 },
-  { key: "break-3", label: "F", month: "mars", break: true },
-  { key: "9", label: "9", month: "mars", week: 9 },
-  { key: "10", label: "10", month: "mars", week: 10 },
-  { key: "11", label: "11", month: "mars", week: 11 },
-  { key: "12", label: "12", month: "mars", week: 12 },
-  { key: "13", label: "13", month: "avril", week: 13 },
-  { key: "14", label: "14", month: "avril", week: 14 },
-  { key: "break-4", label: "F", month: "avril", break: true },
-  { key: "15", label: "15", month: "avril", week: 15 },
-  { key: "16", label: "16", month: "avril", week: 16 },
-  { key: "17", label: "17", month: "mai", week: 17 },
-  { key: "18", label: "18", month: "mai", week: 18 },
-  { key: "19", label: "19", month: "mai", week: 19 },
-  { key: "20", label: "20", month: "mai", week: 20 },
-  { key: "21", label: "21", month: "mai", week: 21 },
-  { key: "22", label: "22", month: "juin", week: 22 },
-  { key: "23", label: "23", month: "juin", week: 23 },
-  { key: "24", label: "24", month: "juin", week: 24 },
-  { key: "25", label: "25", month: "juin", week: 25 },
-  { key: "26", label: "26", month: "juin", week: 26 },
-  { key: "27", label: "27", month: "juillet", week: 27 },
-  { key: "28", label: "28", month: "juillet", week: 28 },
-  { key: "29", label: "29", month: "juillet", week: 29 },
-  { key: "30", label: "30", month: "juillet", week: 30 },
-  { key: "31", label: "31", month: "juillet", week: 31 },
-];
+type WeekEntry = {
+  key: string;
+  week: number;
+  days: DayEntry[];
+};
 
-function fallbackCurrentAcademicWeek() {
-  const now = new Date();
-  const month = now.getMonth();
-  if (month === 8) return 37;
-  if (month === 9) return 41;
-  if (month === 10) return 45;
-  if (month === 11) return 50;
-  if (month === 0) return 3;
-  if (month === 1) return 7;
-  if (month === 2) return 11;
-  if (month === 3) return 15;
-  if (month === 4) return 19;
-  if (month === 5) return 23;
-  if (month === 6) return 28;
-  return 36;
+const YEAR_DAY_COUNT = 365;
+
+function localISO(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function fromISO(value: string) {
+  const [year, month, day] = String(value || "").split("-").map(Number);
+  return new Date(year || 1970, (month || 1) - 1, day || 1, 12, 0, 0, 0);
+}
+
+function addDays(date: Date, count: number) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + count, 12, 0, 0, 0);
+}
+
+function mondayOf(date: Date) {
+  const day = date.getDay();
+  const back = day === 0 ? 6 : day - 1;
+  return addDays(date, -back);
+}
+
+function isoWeekNumber(date: Date) {
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
+  const day = target.getDay() || 7;
+  target.setDate(target.getDate() + 4 - day);
+  const yearStart = new Date(target.getFullYear(), 0, 1, 12, 0, 0, 0);
+  return Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+function fallbackAcademicStart() {
+  const today = new Date();
+  const startYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
+  return new Date(startYear, 8, 1, 12, 0, 0, 0);
+}
+
+function shortWeekday(date: Date) {
+  return ["D", "L", "M", "M", "J", "V", "S"][date.getDay()];
+}
+
+function shortMonth(date: Date) {
+  return date.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "").toUpperCase();
 }
 
 export function AcademicWeekStrip({
   selectedWeek,
   onSelect,
   compact = false,
-  title = "Repère des semaines",
+  title = "Repère annuel",
 }: {
   selectedWeek?: number;
   onSelect?: (week: number) => void;
   compact?: boolean;
   title?: string;
 }) {
-  const activeWeek = selectedWeek || fallbackCurrentAcademicWeek();
+  const [academicStart, setAcademicStart] = useState<Date>(() => fallbackAcademicStart());
+  const [academicLabel, setAcademicLabel] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const todayISO = localISO(new Date());
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const context = await resolveActiveSchoolContext();
+        if (!context.school?.id || context.school.id === "local") return;
+        let query = createClient()
+          .from("academic_years")
+          .select("id,label,starts_on")
+          .eq("school_id", context.school.id);
+        if (context.school.activeAcademicYearId) {
+          query = query.eq("id", context.school.activeAcademicYearId);
+        } else {
+          query = query.order("is_current", { ascending: false }).order("starts_on", { ascending: false }).limit(1);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (error || !data || cancelled) return;
+        const row = data as unknown as { label?: string; starts_on?: string };
+        if (row.starts_on) setAcademicStart(fromISO(row.starts_on));
+        if (row.label) setAcademicLabel(row.label);
+      } catch {
+        // La frise reste utilisable avec la borne scolaire locale de secours.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const days = useMemo<DayEntry[]>(() =>
+    Array.from({ length: YEAR_DAY_COUNT }, (_, index) => {
+      const date = addDays(academicStart, index);
+      return {
+        iso: localISO(date),
+        date,
+        week: isoWeekNumber(date),
+        weekKey: localISO(mondayOf(date)),
+        weekday: shortWeekday(date),
+        dayNumber: date.getDate(),
+        month: shortMonth(date),
+        beginsMonth: index === 0 || date.getDate() === 1,
+        endsWeek: date.getDay() === 0,
+        today: localISO(date) === todayISO,
+      };
+    }), [academicStart, todayISO]);
+
+  const weeks = useMemo<WeekEntry[]>(() => {
+    const grouped = new Map<string, DayEntry[]>();
+    for (const day of days) {
+      const values = grouped.get(day.weekKey) || [];
+      values.push(day);
+      grouped.set(day.weekKey, values);
+    }
+    return Array.from(grouped.entries()).map(([key, values]) => ({
+      key,
+      week: values[0]?.week || 1,
+      days: values,
+    }));
+  }, [days]);
+
+  const activeWeek = selectedWeek || isoWeekNumber(new Date());
+
+  useEffect(() => {
+    const active = scrollRef.current?.querySelector<HTMLElement>(`[data-week="${activeWeek}"]`);
+    active?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeWeek, weeks]);
+
+  const end = addDays(academicStart, YEAR_DAY_COUNT - 1);
+  const label = academicLabel || `${academicStart.getFullYear()}-${end.getFullYear()}`;
 
   return (
-    <section className={`academic-week-strip ${compact ? "compact" : ""}`}>
-      <div className="academic-week-title">
-        <b>{title}</b>
-        <span>Année scolaire · semaines, mois et vacances</span>
+    <section className={`${styles.strip} ${compact ? styles.compact : ""}`}>
+      <div className={styles.header}>
+        <div>
+          <b>{title}</b>
+          <span>Année scolaire {label} · {YEAR_DAY_COUNT} jours · {weeks.length} semaines</span>
+        </div>
+        <small>Cliquer sur un jour pour positionner la semaine</small>
       </div>
-      <div className="academic-week-scroll" role="list" aria-label="Semaines de l’année scolaire">
-        {ACADEMIC_WEEKS.map((entry) => {
-          const active = entry.week === activeWeek;
-          const content = (
-            <>
-              <strong>{entry.label}</strong>
-              {!compact && <small>{entry.month}</small>}
-            </>
-          );
 
-          if (!entry.week || entry.break) {
-            return (
-              <span className="academic-week-cell break" key={entry.key} role="listitem" title="Vacances">
-                {content}
-              </span>
-            );
-          }
+      <div className={styles.legend} aria-hidden="true">
+        <span><i /> Jour</span>
+        <span><i className={styles.weekEndKey} /> Dimanche · fin de semaine</span>
+        <span><i className={styles.todayKey} /> Jour en cours</span>
+      </div>
 
-          return (
-            <button
-              className={`academic-week-cell ${active ? "active" : ""}`}
-              key={entry.key}
-              type="button"
-              onClick={() => onSelect?.(entry.week!)}
-              aria-pressed={active}
+      <div className={styles.scroll} ref={scrollRef}>
+        <div className={styles.weeks} role="list" aria-label="365 jours de l’année scolaire">
+          {weeks.map((week) => (
+            <div
+              key={week.key}
+              data-week={week.week}
+              className={`${styles.week} ${week.week === activeWeek ? styles.weekActive : ""}`}
             >
-              {content}
-            </button>
-          );
-        })}
+              <div className={styles.weekLabel}>S{week.week}</div>
+              <div className={styles.days}>
+                {week.days.map((day) => (
+                  <button
+                    key={day.iso}
+                    type="button"
+                    className={`${styles.day} ${day.endsWeek ? styles.weekEnd : ""} ${day.today ? styles.today : ""}`}
+                    onClick={() => onSelect?.(day.week)}
+                    title={`${day.date.toLocaleDateString("fr-FR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })} · semaine ${day.week}`}
+                    aria-label={`Semaine ${day.week}, ${day.date.toLocaleDateString("fr-FR")}`}
+                  >
+                    <span className={styles.month}>{day.beginsMonth ? day.month : ""}</span>
+                    <span className={styles.weekday}>{day.weekday}</span>
+                    <strong>{day.dayNumber}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
