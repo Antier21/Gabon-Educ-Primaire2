@@ -1,0 +1,251 @@
+/* Relevé de notes enseignant
+ *
+ * Le moteur du Gradebook construit déjà le relevé progressivement : chaque
+ * évaluation active de la période ajoute une colonne. Cette feuille ne change
+ * aucune donnée ni aucun calcul ; elle donne simplement à cette matrice l'allure
+ * d'un registre scolaire dense, lisible jusqu'à la fin du trimestre.
+ *
+ * Le sélecteur s'appuie sur le bouton stable des colonnes d'évaluation afin de
+ * ne toucher ni aux tableaux de saisie détaillée ni aux bulletins.
+ */
+
+.gradebook-print-page div:has(> table:has(button[title^="Sélectionner cette évaluation"])) {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid #b9c2bd;
+  border-radius: 3px;
+  background: #fff;
+  scrollbar-gutter: stable;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+  font-size: 11px;
+  background: #fff;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) th,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) td {
+  height: 34px;
+  padding: 5px 7px;
+  border-right: 1px solid #c5cbc8;
+  border-bottom: 1px solid #c5cbc8;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) th:last-child,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) td:last-child {
+  border-right: 0;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead th {
+  background: #f7f8f7;
+  color: #4c5652;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child th {
+  height: 43px;
+  vertical-align: bottom;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:nth-child(2) th {
+  height: 29px;
+  padding-top: 3px;
+  padding-bottom: 4px;
+  background: #fff;
+  color: #6f7975;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+/* Noms des élèves : première colonne fixe, comme dans un tableur. */
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:first-child,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:first-child,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  width: 230px;
+  min-width: 230px;
+  max-width: 230px;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 1px 0 0 #aeb8b3;
+}
+
+/* Moyenne : seconde colonne fixe. Elle reste visible pendant que les
+   évaluations défilent horizontalement. */
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(2),
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(2),
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(2) {
+  position: sticky;
+  left: 230px;
+  z-index: 4;
+  width: 82px;
+  min-width: 82px;
+  max-width: 82px;
+  box-shadow: 2px 0 0 #9eaaa4;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:first-child,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(2) {
+  z-index: 8;
+  background: #f3f5f4;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody tr:nth-child(odd) td {
+  background: #fff;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody tr:nth-child(even) td {
+  background: #f1f2f1;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody tr:hover td {
+  background: #edf7f2;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody td:first-child b {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* La moyenne n'est plus présentée comme un badge : elle devient une vraie
+   cellule du registre, à la manière de la référence fournie. */
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody td:nth-child(2) > span {
+  display: inline !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #27312d !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Une évaluation = une colonne compacte. Les titres peuvent tenir sur deux
+   lignes, mais les colonnes ne gonflent pas à mesure que le trimestre avance. */
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(n+3),
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(n+3),
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(n+3) {
+  width: 94px;
+  min-width: 94px;
+  max-width: 110px;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead button {
+  display: block;
+  width: 100%;
+  max-width: 104px;
+  margin: 0 auto;
+  padding: 2px 3px 5px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #4b5852;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-transform: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead button:hover,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead button:focus-visible {
+  color: #08734f;
+  border-bottom-color: #08734f;
+  outline: 0;
+}
+
+/* La matière reste discrète sous le titre quand le relevé réunit plusieurs
+   matières. */
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead button em {
+  display: block;
+  margin-top: 3px;
+  color: #7b8580;
+  font-size: 8.5px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+/* La note se saisit directement dans la cellule : pas de gros champ arrondi. */
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) input[aria-label^="Note de"] {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 28px;
+  padding: 2px 4px !important;
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: #24302b;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) input[aria-label^="Note de"]:hover:not(:disabled) {
+  border-color: #b9c8c1 !important;
+  background: #fff !important;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) input[aria-label^="Note de"]:focus {
+  border-color: #08734f !important;
+  background: #fff !important;
+  outline: 2px solid rgba(8, 115, 79, .13);
+  outline-offset: -1px;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) input[aria-label^="Note de"]:disabled {
+  opacity: 1;
+  color: #43504a;
+  cursor: default;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot td {
+  position: relative;
+  z-index: 1;
+  height: 36px;
+  background: #e6ebe8;
+  color: #34413b;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot td:first-child,
+.gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot td:nth-child(2) {
+  z-index: 6;
+  background: #e6ebe8;
+}
+
+@media (max-width: 760px) {
+  .gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:first-child,
+  .gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:first-child,
+  .gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:first-child {
+    width: 170px;
+    min-width: 170px;
+    max-width: 170px;
+  }
+
+  .gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(2),
+  .gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(2),
+  .gradebook-print-page table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(2) {
+    left: 170px;
+  }
+}
