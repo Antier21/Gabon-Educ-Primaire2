@@ -46,6 +46,13 @@ function fallbackAcademicStart() {
   return new Date(startYear, 8, 1, 12, 0, 0, 0);
 }
 
+function timelineStartContainingToday(configuredStart: Date) {
+  const today = atNoon(new Date());
+  const configuredEnd = addDays(configuredStart, YEAR_DAY_COUNT - 1);
+  if (today >= configuredStart && today <= configuredEnd) return configuredStart;
+  return fallbackAcademicStart();
+}
+
 function shortWeekday(date: Date) {
   return ["D", "L", "M", "M", "J", "V", "S"][date.getDay()];
 }
@@ -109,10 +116,18 @@ export function AnnualLessonBookTimeline() {
         const { data, error } = await query.maybeSingle();
         if (error || !data || cancelled) return;
         const row = data as unknown as { label?: string; starts_on?: string };
-        if (row.starts_on) setAcademicStart(atNoon(fromISODate(row.starts_on)));
-        if (row.label) setAcademicLabel(row.label);
+        if (row.starts_on) {
+          const configuredStart = atNoon(fromISODate(row.starts_on));
+          const resolvedStart = timelineStartContainingToday(configuredStart);
+          setAcademicStart(resolvedStart);
+          const usesConfiguredYear = toISODate(resolvedStart) === toISODate(configuredStart);
+          if (usesConfiguredYear && row.label) setAcademicLabel(row.label);
+          else setAcademicLabel("");
+        } else if (row.label) {
+          setAcademicLabel(row.label);
+        }
       } catch {
-        // La frise reste utilisable avec sa borne locale de secours.
+        // La frise reste utilisable avec la borne scolaire locale de secours.
       }
     })();
     return () => {
