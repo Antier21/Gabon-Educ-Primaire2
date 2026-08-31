@@ -167,11 +167,7 @@ export function AnnualLessonBookTimeline() {
     };
 
     document.addEventListener("change", handleDateChange, true);
-    document.addEventListener("input", handleDateChange, true);
-    return () => {
-      document.removeEventListener("change", handleDateChange, true);
-      document.removeEventListener("input", handleDateChange, true);
-    };
+    return () => document.removeEventListener("change", handleDateChange, true);
   }, []);
 
   useEffect(() => {
