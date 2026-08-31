@@ -1,6 +1,7 @@
 "use client";
 
-import { Printer } from "lucide-react";
+import Link from "next/link";
+import { Printer, Settings2 } from "lucide-react";
 import { useState } from "react";
 
 type PrintContext = {
@@ -68,6 +69,10 @@ export function NotesRegisterPrintButton() {
   return (
     <>
       <div className="notes-register-print-action">
+        <Link href="/gabon-educ/notes/parametres" title="Paramètres du relevé de notes">
+          <Settings2 aria-hidden="true" />
+          Paramètres
+        </Link>
         <button type="button" onClick={printRegister} title="Imprimer le relevé ou l’enregistrer au format PDF">
           <Printer aria-hidden="true" />
           Imprimer / PDF
