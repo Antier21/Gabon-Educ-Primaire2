@@ -197,7 +197,7 @@ export function isManagementRole(role: SchoolRole) {
 
 /** Page d'accueil correspondant à un rôle. */
 export function homeForRole(role: SchoolRole) {
-  if (role === "super_admin") return "/gabon-educ/service-abonnements";
+  if (role === "super_admin") return "/gabon-educ/super-admin";
   if (role === "secretary") return "/gabon-educ/secretariat";
   if (role === "academic_director") return "/gabon-educ/pedagogie";
   if (isManagementRole(role)) return "/gabon-educ/administration";

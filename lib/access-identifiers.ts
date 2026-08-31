@@ -1,7 +1,7 @@
 export const ACCESS_EMAIL_DOMAIN = process.env.NEXT_PUBLIC_ACCESS_EMAIL_DOMAIN || "access.gaboneducplus.app";
 
 export const ACCESS_ROLE_REDIRECTS: Record<string, string> = {
-  super_admin: "/gabon-educ/service-abonnements",
+  super_admin: "/gabon-educ/super-admin",
   school_admin: "/gabon-educ/administration",
   headmaster: "/gabon-educ/administration",
   academic_director: "/gabon-educ/pedagogie",
