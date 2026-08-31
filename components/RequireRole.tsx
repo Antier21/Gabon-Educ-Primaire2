@@ -198,7 +198,9 @@ export function RequireRole({
           {sansEtablissement ? (
             <Link href="/gabon-educ/service-abonnements">Choisir un établissement</Link>
           ) : (
-            <Link href={homeForRole(monRole || "teacher")}>Retourner à mon espace</Link>
+            <Link href={homeForRole(monRole || (superAdminOnly ? "super_admin" : "teacher"))}>
+              Retourner à mon espace
+            </Link>
           )}
         </div>
       </main>
