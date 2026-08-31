@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
-import { resolveActiveAcademicYear } from "@/lib/report-model/periods-store";
 import { createClient } from "@/lib/supabase/client";
 import {
   formatWeekRange,
@@ -48,8 +47,7 @@ function fallbackAcademicStart() {
 }
 
 function shortWeekday(date: Date) {
-  const labels = ["D", "L", "M", "M", "J", "V", "S"];
-  return labels[date.getDay()];
+  return ["D", "L", "M", "M", "J", "V", "S"][date.getDay()];
 }
 
 function shortMonth(date: Date) {
@@ -71,12 +69,27 @@ function findThisWeekButton() {
   ).find((button) => button.textContent?.trim() === "Cette semaine");
 }
 
+function findEditorDateInput() {
+  return document.querySelector<HTMLInputElement>(
+    '.lesson-book-annual-shell input[type="date"]',
+  );
+}
+
+function setNativeDate(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 export function AnnualLessonBookTimeline() {
   const [portalHost, setPortalHost] = useState<HTMLDivElement | null>(null);
   const [academicStart, setAcademicStart] = useState<Date>(() => fallbackAcademicStart());
   const [academicLabel, setAcademicLabel] = useState("");
-  const [selectedMonday, setSelectedMonday] = useState(() => toISODate(weekStart(new Date())));
+  const [selectedDate, setSelectedDate] = useState(() => toISODate(new Date()));
   const viewportRef = useRef<HTMLDivElement>(null);
+  const internalDateChange = useRef(false);
+  const internalWeekNavigation = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,20 +97,20 @@ export function AnnualLessonBookTimeline() {
       try {
         const context = await resolveActiveSchoolContext();
         if (!context.school?.id || context.school.id === "local") return;
-        const year = await resolveActiveAcademicYear(context.school.id);
-        if (!year || cancelled) return;
-
-        const { data } = await createClient()
+        let query = createClient()
           .from("academic_years")
-          .select("starts_on")
-          .eq("school_id", context.school.id)
-          .eq("id", year.id)
-          .maybeSingle();
-
-        if (cancelled) return;
-        const startsOn = String(data?.starts_on || "");
-        if (startsOn) setAcademicStart(atNoon(fromISODate(startsOn)));
-        setAcademicLabel(year.label || "");
+          .select("id,label,starts_on")
+          .eq("school_id", context.school.id);
+        if (context.school.activeAcademicYearId) {
+          query = query.eq("id", context.school.activeAcademicYearId);
+        } else {
+          query = query.order("is_current", { ascending: false }).order("starts_on", { ascending: false }).limit(1);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (error || !data || cancelled) return;
+        const row = data as unknown as { label?: string; starts_on?: string };
+        if (row.starts_on) setAcademicStart(atNoon(fromISODate(row.starts_on)));
+        if (row.label) setAcademicLabel(row.label);
       } catch {
         // La frise reste utilisable avec sa borne locale de secours.
       }
@@ -117,21 +130,72 @@ export function AnnualLessonBookTimeline() {
     topbar.insertAdjacentElement("afterend", slot);
     setPortalHost(slot);
 
+    const dateInput = findEditorDateInput();
+    if (dateInput?.value) setSelectedDate(dateInput.value);
+
     return () => {
       slot.remove();
       setPortalHost(null);
     };
   }, []);
 
+  function navigateWeek(targetMondayISO: string) {
+    const currentMonday = weekStart(new Date());
+    const target = fromISODate(targetMondayISO);
+    const difference = Math.round((target.getTime() - currentMonday.getTime()) / (DAY_MS * 7));
+
+    internalWeekNavigation.current = true;
+    findThisWeekButton()?.click();
+    const direction = difference < 0 ? "Semaine précédente" : "Semaine suivante";
+    const button = findWeekButton(direction);
+    for (let index = 0; index < Math.abs(difference); index += 1) button?.click();
+    queueMicrotask(() => {
+      internalWeekNavigation.current = false;
+    });
+  }
+
   useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      const button = (event.target as HTMLElement | null)?.closest("button");
-      if (button?.textContent?.trim() === "Cette semaine") {
-        setSelectedMonday(toISODate(weekStart(new Date())));
+    const handleDateChange = (event: Event) => {
+      const target = event.target;
+      const dateInput = findEditorDateInput();
+      if (!(target instanceof HTMLInputElement) || target !== dateInput || !target.value) return;
+      setSelectedDate(target.value);
+      if (!internalDateChange.current) {
+        navigateWeek(toISODate(weekStart(fromISODate(target.value))));
       }
+      internalDateChange.current = false;
     };
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
+
+    document.addEventListener("change", handleDateChange, true);
+    document.addEventListener("input", handleDateChange, true);
+    return () => {
+      document.removeEventListener("change", handleDateChange, true);
+      document.removeEventListener("input", handleDateChange, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const value = findEditorDateInput()?.value;
+      if (value && value !== selectedDate) setSelectedDate(value);
+    }, 180);
+    return () => window.clearInterval(timer);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      if (internalWeekNavigation.current) return;
+      const button = (event.target as HTMLElement | null)?.closest("button");
+      if (button?.textContent?.trim() !== "Cette semaine") return;
+      const today = toISODate(new Date());
+      setSelectedDate(today);
+      const input = findEditorDateInput();
+      if (!input) return;
+      internalDateChange.current = true;
+      setNativeDate(input, today);
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
   }, []);
 
   const days = useMemo<TimelineDay[]>(() => {
@@ -166,31 +230,27 @@ export function AnnualLessonBookTimeline() {
     }));
   }, [days]);
 
+  const selectedMonday = toISODate(weekStart(fromISODate(selectedDate)));
+
   useEffect(() => {
     if (!portalHost) return;
     const viewport = viewportRef.current;
-    const selected = viewport?.querySelector<HTMLElement>(
-      `[data-week-start="${selectedMonday}"]`,
-    );
+    const selected = viewport?.querySelector<HTMLElement>(`[data-date="${selectedDate}"]`);
     selected?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, [portalHost, selectedMonday, weeks]);
+  }, [portalHost, selectedDate, weeks]);
 
-  function openWeek(targetMonday: string) {
-    const currentMonday = weekStart(new Date());
-    const target = fromISODate(targetMonday);
-    const difference = Math.round((target.getTime() - currentMonday.getTime()) / (DAY_MS * 7));
-
-    findThisWeekButton()?.click();
-    const direction = difference < 0 ? "Semaine précédente" : "Semaine suivante";
-    const button = findWeekButton(direction);
-    for (let index = 0; index < Math.abs(difference); index += 1) button?.click();
-    setSelectedMonday(targetMonday);
+  function openDay(day: TimelineDay) {
+    setSelectedDate(day.iso);
+    navigateWeek(day.weekStart);
+    const input = findEditorDateInput();
+    if (!input) return;
+    internalDateChange.current = true;
+    setNativeDate(input, day.iso);
   }
 
   const selectedRange = formatWeekRange(fromISODate(selectedMonday));
   const endDate = addDays(academicStart, YEAR_DAY_COUNT - 1);
-  const resolvedLabel =
-    academicLabel || `${academicStart.getFullYear()}-${endDate.getFullYear()}`;
+  const resolvedLabel = academicLabel || `${academicStart.getFullYear()}-${endDate.getFullYear()}`;
 
   if (!portalHost) return null;
 
@@ -202,7 +262,7 @@ export function AnnualLessonBookTimeline() {
           <span>{YEAR_DAY_COUNT} jours · {weeks.length} semaines</span>
         </div>
         <div className="annual-lesson-timeline__selection">
-          <span>Semaine affichée</span>
+          <span>Jour affiché : {fromISODate(selectedDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</span>
           <strong>{selectedRange}</strong>
         </div>
       </header>
@@ -210,7 +270,8 @@ export function AnnualLessonBookTimeline() {
       <div className="annual-lesson-timeline__legend" aria-hidden="true">
         <span><i className="annual-lesson-timeline__legend-day" /> Jour</span>
         <span><i className="annual-lesson-timeline__legend-sunday" /> Dimanche · fin de semaine</span>
-        <span><i className="annual-lesson-timeline__legend-outline" /> Semaine sélectionnée</span>
+        <span><i className="annual-lesson-timeline__legend-current" /> Aujourd’hui</span>
+        <span><i className="annual-lesson-timeline__legend-outline" /> Jour affiché dans l’éditeur</span>
       </div>
 
       <div className="annual-lesson-timeline__viewport" ref={viewportRef}>
@@ -227,20 +288,21 @@ export function AnnualLessonBookTimeline() {
                   <button
                     key={day.iso}
                     type="button"
-                    className={`annual-lesson-day${day.endsWeek ? " is-week-end" : ""}${day.isToday ? " is-today" : ""}`}
-                    onClick={() => openWeek(day.weekStart)}
+                    data-date={day.iso}
+                    className={`annual-lesson-day${day.endsWeek ? " is-week-end" : ""}${day.isToday ? " is-today" : ""}${day.iso === selectedDate ? " is-active" : ""}`}
+                    onClick={() => openDay(day)}
                     title={`${day.date.toLocaleDateString("fr-FR", {
                       weekday: "long",
                       day: "numeric",
                       month: "long",
                       year: "numeric",
-                    })} — ouvrir cette semaine`}
-                    aria-label={`Ouvrir la semaine du ${day.date.toLocaleDateString("fr-FR")}`}
+                    })} — afficher ce jour dans le cahier`}
+                    aria-label={`Afficher le ${day.date.toLocaleDateString("fr-FR")} dans le cahier de textes`}
+                    aria-pressed={day.iso === selectedDate}
                   >
                     <span className="annual-lesson-day__month">{day.beginsMonth ? day.month : ""}</span>
                     <span className="annual-lesson-day__weekday">{day.weekday}</span>
                     <strong>{day.dayNumber}</strong>
-                    {day.isToday ? <i aria-label="Aujourd’hui" /> : null}
                   </button>
                 ))}
               </div>
