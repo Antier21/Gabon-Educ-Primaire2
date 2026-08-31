@@ -1,0 +1,242 @@
+.lesson-book-annual-shell {
+  position: relative;
+}
+
+/* La frise annuelle reprend la navigation. On conserve seulement les actions
+   Cette semaine et Progression annuelle dans l'en-tête historique. */
+.lesson-book-annual-shell button[aria-label="Semaine précédente"],
+.lesson-book-annual-shell button[aria-label="Semaine suivante"],
+.lesson-book-annual-shell button[aria-label="Semaine précédente"] + span {
+  display: none !important;
+}
+
+.annual-lesson-timeline-slot {
+  width: min(100%, 1500px);
+  margin: 0 auto 18px;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.annual-lesson-timeline {
+  overflow: hidden;
+  border: 1px solid #d9dfdc;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(32, 50, 43, .07);
+}
+
+.annual-lesson-timeline__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 16px 10px;
+  border-bottom: 1px solid #e5e9e7;
+  background: #fafbfa;
+}
+
+.annual-lesson-timeline__header > div:first-child,
+.annual-lesson-timeline__selection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.annual-lesson-timeline__header strong {
+  color: #1e3029;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.annual-lesson-timeline__header span {
+  color: #6d7773;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.annual-lesson-timeline__selection {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.annual-lesson-timeline__selection strong {
+  font-size: 12px;
+}
+
+.annual-lesson-timeline__legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 7px 16px;
+  border-bottom: 1px solid #edf0ee;
+  color: #68736e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.annual-lesson-timeline__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.annual-lesson-timeline__legend i {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid #d7ddda;
+  background: #fff;
+}
+
+.annual-lesson-timeline__legend .annual-lesson-timeline__legend-sunday {
+  border-color: #d9b66e;
+  background: #f7e6bd;
+}
+
+.annual-lesson-timeline__legend .annual-lesson-timeline__legend-current {
+  border-color: #9b7614;
+  background: #DAA520;
+}
+
+.annual-lesson-timeline__legend .annual-lesson-timeline__legend-outline {
+  border: 2px solid #334b41;
+  background: transparent;
+}
+
+.annual-lesson-timeline__viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 11px 12px 13px;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c3be transparent;
+  overscroll-behavior-inline: contain;
+}
+
+.annual-lesson-timeline__weeks {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: max-content;
+  min-width: 100%;
+}
+
+.annual-lesson-week {
+  flex: none;
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+}
+
+.annual-lesson-week.is-selected {
+  border-color: #334b41;
+}
+
+.annual-lesson-week__label {
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 3px;
+  color: #66716c;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+
+.annual-lesson-week__days {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.annual-lesson-day {
+  position: relative;
+  display: grid;
+  grid-template-rows: 12px 12px 20px;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 50px;
+  padding: 2px 1px;
+  border: 1px solid #dde2df;
+  border-radius: 5px;
+  background: #fff;
+  color: #27372f;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.annual-lesson-day:hover {
+  border-color: #899a92;
+  box-shadow: 0 2px 7px rgba(37, 59, 50, .13);
+  transform: translateY(-1px);
+}
+
+/* Le dimanche reste le seul jour ordinaire à recevoir une couleur de fond
+   distincte. Le jour civil courant constitue l'exception explicite demandée. */
+.annual-lesson-day.is-week-end {
+  border-color: #d9b66e;
+  background: #f7e6bd;
+  color: #5a4218;
+}
+
+.annual-lesson-day__month {
+  min-width: 100%;
+  color: inherit;
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+  opacity: .75;
+}
+
+.annual-lesson-day__weekday {
+  color: inherit;
+  font-size: 8px;
+  font-weight: 800;
+  opacity: .78;
+}
+
+.annual-lesson-day strong {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Aujourd'hui : couleur officielle demandée. L'important évite qu'une règle
+   générale de bouton ou la couleur du dimanche ne masque le fond or. */
+.annual-lesson-day.is-today,
+.annual-lesson-day.is-today.is-week-end {
+  border-color: #9b7614 !important;
+  background: #DAA520 !important;
+  color: #1f1a0a !important;
+}
+
+/* Jour actuellement ouvert dans l'éditeur : contour seulement afin de garder
+   la différence entre « aujourd'hui » et « date consultée ». */
+.annual-lesson-day.is-active {
+  outline: 2px solid #334b41;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .85) inset;
+}
+
+@media (max-width: 760px) {
+  .annual-lesson-timeline-slot {
+    padding: 0 12px;
+  }
+
+  .annual-lesson-timeline__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .annual-lesson-timeline__selection {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .annual-lesson-timeline__legend {
+    gap: 10px;
+  }
+}
