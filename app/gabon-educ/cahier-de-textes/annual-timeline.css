@@ -203,11 +203,13 @@
   line-height: 1;
 }
 
-/* Aujourd'hui : couleur officielle demandée. */
-.annual-lesson-day.is-today {
-  border-color: #9b7614;
-  background: #DAA520;
-  color: #fff;
+/* Aujourd'hui : couleur officielle demandée. L'important évite qu'une règle
+   générale de bouton ou la couleur du dimanche ne masque le fond or. */
+.annual-lesson-day.is-today,
+.annual-lesson-day.is-today.is-week-end {
+  border-color: #9b7614 !important;
+  background: #DAA520 !important;
+  color: #1f1a0a !important;
 }
 
 /* Jour actuellement ouvert dans l'éditeur : contour seulement afin de garder
