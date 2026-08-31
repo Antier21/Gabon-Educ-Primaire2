@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
 import {
   CheckCircle2,
   Crosshair,
   LocateFixed,
   MapPin,
-  Navigation,
+  Minus,
+  Plus,
   Trash2,
 } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./SchoolPilotageMap.module.css";
 
@@ -31,43 +41,45 @@ type LocationPatch = {
   locationUpdatedAt: string | null;
 };
 
-type MapEvent = { latlng?: { lat: number; lng: number } };
-type MarkerLike = {
-  addTo(target: unknown): MarkerLike;
-  bindPopup(html: string): MarkerLike;
-  on(event: string, handler: () => void): MarkerLike;
-  openPopup(): MarkerLike;
-  setLatLng(point: [number, number]): MarkerLike;
-};
-type LayerGroupLike = {
-  addTo(map: MapLike): LayerGroupLike;
-  clearLayers(): void;
-};
-type MapLike = {
-  setView(point: [number, number], zoom: number, options?: Record<string, unknown>): MapLike;
-  fitBounds(bounds: unknown, options?: Record<string, unknown>): MapLike;
-  on(event: string, handler: (event: MapEvent) => void): void;
-  off(event: string, handler: (event: MapEvent) => void): void;
-  invalidateSize(): void;
-  remove(): void;
-};
-type LeafletNamespace = {
-  map(element: HTMLElement, options?: Record<string, unknown>): MapLike;
-  tileLayer(url: string, options?: Record<string, unknown>): { addTo(map: MapLike): unknown };
-  marker(point: [number, number], options?: Record<string, unknown>): MarkerLike;
-  divIcon(options: Record<string, unknown>): unknown;
-  layerGroup(): LayerGroupLike;
-  latLngBounds(points: Array<[number, number]>): unknown;
+type MapPoint = {
+  point: [number, number];
+  precision: "exact" | "city" | "province";
 };
 
-declare global {
-  interface Window {
-    L?: LeafletNamespace;
-  }
-}
+type Viewport = {
+  latitude: number;
+  longitude: number;
+  zoom: number;
+};
 
+type MapSize = {
+  width: number;
+  height: number;
+};
+
+type DragState = {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startWorldX: number;
+  startWorldY: number;
+  zoom: number;
+  moved: boolean;
+};
+
+type Tile = {
+  key: string;
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+  url: string;
+};
+
+const TILE_SIZE = 256;
+const MIN_ZOOM = 5;
+const MAX_ZOOM = 18;
 const GABON_CENTER: [number, number] = [-0.62, 11.72];
-let leafletPromise: Promise<LeafletNamespace> | null = null;
 
 const CITY_POINTS: Record<string, [number, number]> = {
   libreville: [0.4162, 9.4673],
@@ -134,11 +146,11 @@ function finite(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function resolvePoint(school: PilotageMapSchool) {
+function resolvePoint(school: PilotageMapSchool): MapPoint | null {
   if (finite(school.latitude) && finite(school.longitude)) {
     return {
-      point: [school.latitude!, school.longitude!] as [number, number],
-      precision: "exact" as const,
+      point: [school.latitude!, school.longitude!],
+      precision: "exact",
     };
   }
 
@@ -146,8 +158,8 @@ function resolvePoint(school: PilotageMapSchool) {
   if (city) {
     const offset = jitter(school.id);
     return {
-      point: [city[0] + offset[0], city[1] + offset[1]] as [number, number],
-      precision: "city" as const,
+      point: [city[0] + offset[0], city[1] + offset[1]],
+      precision: "city",
     };
   }
 
@@ -155,8 +167,8 @@ function resolvePoint(school: PilotageMapSchool) {
   if (province) {
     const offset = jitter(school.id);
     return {
-      point: [province[0] + offset[0] * 2, province[1] + offset[1] * 2] as [number, number],
-      precision: "province" as const,
+      point: [province[0] + offset[0] * 2, province[1] + offset[1] * 2],
+      precision: "province",
     };
   }
 
@@ -182,68 +194,89 @@ function statusLabel(status: string) {
   return labels[status] || status;
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;",
-  })[character] || character);
-}
-
-function ensureLeaflet() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("Carte indisponible côté serveur."));
-  }
-  if (window.L) return Promise.resolve(window.L);
-  if (leafletPromise) return leafletPromise;
-
-  leafletPromise = new Promise<LeafletNamespace>((resolve, reject) => {
-    if (!document.getElementById("geps-leaflet-css")) {
-      const link = document.createElement("link");
-      link.id = "geps-leaflet-css";
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
-
-    const finish = () => {
-      if (window.L) resolve(window.L);
-      else reject(new Error("Leaflet non chargé."));
-    };
-
-    const existing = document.getElementById("geps-leaflet-js") as HTMLScriptElement | null;
-    if (existing) {
-      if (window.L) finish();
-      else {
-        existing.addEventListener("load", finish, { once: true });
-        existing.addEventListener(
-          "error",
-          () => reject(new Error("Impossible de charger le moteur cartographique.")),
-          { once: true },
-        );
-      }
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "geps-leaflet-js";
-    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.async = true;
-    script.onload = finish;
-    script.onerror = () => reject(new Error("Impossible de charger le moteur cartographique."));
-    document.body.appendChild(script);
-  });
-
-  return leafletPromise;
-}
-
 function numberFromInput(value: string) {
   const normalized = value.trim().replace(",", ".");
   if (!normalized) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function clampLatitude(latitude: number) {
+  return clamp(latitude, -85.05112878, 85.05112878);
+}
+
+function normalizeLongitude(longitude: number) {
+  let normalized = longitude;
+  while (normalized < -180) normalized += 360;
+  while (normalized >= 180) normalized -= 360;
+  return normalized;
+}
+
+function project(latitude: number, longitude: number, zoom: number) {
+  const safeLatitude = clampLatitude(latitude);
+  const scale = TILE_SIZE * 2 ** zoom;
+  const x = ((normalizeLongitude(longitude) + 180) / 360) * scale;
+  const sin = Math.sin((safeLatitude * Math.PI) / 180);
+  const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale;
+  return { x, y };
+}
+
+function unproject(x: number, y: number, zoom: number) {
+  const scale = TILE_SIZE * 2 ** zoom;
+  const longitude = normalizeLongitude((x / scale) * 360 - 180);
+  const mercator = Math.PI - (2 * Math.PI * y) / scale;
+  const latitude = (180 / Math.PI) * Math.atan(Math.sinh(mercator));
+  return {
+    latitude: clampLatitude(latitude),
+    longitude,
+  };
+}
+
+function tilesFor(view: Viewport, size: MapSize): Tile[] {
+  if (size.width <= 0 || size.height <= 0) return [];
+  const center = project(view.latitude, view.longitude, view.zoom);
+  const leftWorld = center.x - size.width / 2;
+  const topWorld = center.y - size.height / 2;
+  const minTileX = Math.floor(leftWorld / TILE_SIZE) - 1;
+  const maxTileX = Math.floor((leftWorld + size.width) / TILE_SIZE) + 1;
+  const minTileY = Math.floor(topWorld / TILE_SIZE) - 1;
+  const maxTileY = Math.floor((topWorld + size.height) / TILE_SIZE) + 1;
+  const tileCount = 2 ** view.zoom;
+  const tiles: Tile[] = [];
+
+  for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
+    if (tileY < 0 || tileY >= tileCount) continue;
+    for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+      const wrappedX = ((tileX % tileCount) + tileCount) % tileCount;
+      tiles.push({
+        key: `${view.zoom}:${tileX}:${tileY}`,
+        x: tileX,
+        y: tileY,
+        left: tileX * TILE_SIZE - leftWorld,
+        top: tileY * TILE_SIZE - topWorld,
+        url: `https://tile.openstreetmap.org/${view.zoom}/${wrappedX}/${tileY}.png`,
+      });
+    }
+  }
+
+  return tiles;
+}
+
+function pointOnScreen(
+  point: [number, number],
+  view: Viewport,
+  size: MapSize,
+) {
+  const center = project(view.latitude, view.longitude, view.zoom);
+  const projected = project(point[0], point[1], view.zoom);
+  return {
+    left: projected.x - center.x + size.width / 2,
+    top: projected.y - center.y + size.height / 2,
+  };
 }
 
 export function SchoolPilotageMap({
@@ -260,18 +293,21 @@ export function SchoolPilotageMap({
   locationStorageReady: boolean;
 }) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<MapLike | null>(null);
-  const leafletRef = useRef<LeafletNamespace | null>(null);
-  const markerLayerRef = useRef<LayerGroupLike | null>(null);
-  const markerRefs = useRef<Map<string, MarkerLike>>(new Map());
-  const [mapReady, setMapReady] = useState(false);
-  const [mapError, setMapError] = useState("");
+  const dragRef = useRef<DragState | null>(null);
+  const viewRef = useRef<Viewport>({
+    latitude: GABON_CENTER[0],
+    longitude: GABON_CENTER[1],
+    zoom: 6,
+  });
+  const [view, setView] = useState<Viewport>(viewRef.current);
+  const [mapSize, setMapSize] = useState<MapSize>({ width: 0, height: 0 });
   const [placing, setPlacing] = useState(false);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [tileWarning, setTileWarning] = useState(false);
 
   const selected = useMemo(
     () => schools.find((school) => school.id === selectedSchoolId) || null,
@@ -280,7 +316,7 @@ export function SchoolPilotageMap({
   const located = useMemo(
     () => schools
       .map((school) => ({ school, resolved: resolvePoint(school) }))
-      .filter((item) => item.resolved),
+      .filter((item): item is { school: PilotageMapSchool; resolved: MapPoint } => Boolean(item.resolved)),
     [schools],
   );
   const exactCount = schools.filter(
@@ -288,6 +324,45 @@ export function SchoolPilotageMap({
   ).length;
   const approxCount = located.length - exactCount;
   const missingCount = schools.length - located.length;
+  const selectedResolved = selected ? resolvePoint(selected) : null;
+  const exactSelected = Boolean(
+    selected && finite(selected.latitude) && finite(selected.longitude),
+  );
+  const mapReady = mapSize.width > 0 && mapSize.height > 0;
+  const tiles = useMemo(() => tilesFor(view, mapSize), [mapSize, view]);
+
+  function updateView(next: Viewport) {
+    const normalized = {
+      latitude: clampLatitude(next.latitude),
+      longitude: normalizeLongitude(next.longitude),
+      zoom: clamp(Math.round(next.zoom), MIN_ZOOM, MAX_ZOOM),
+    };
+    viewRef.current = normalized;
+    setView(normalized);
+  }
+
+  useEffect(() => {
+    const element = mapElementRef.current;
+    if (!element) return;
+
+    const measure = () => {
+      const rect = element.getBoundingClientRect();
+      setMapSize({
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+      });
+    };
+
+    measure();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(measure);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   useEffect(() => {
     if (!selected) {
@@ -297,128 +372,90 @@ export function SchoolPilotageMap({
       setPlacing(false);
       return;
     }
+
     setLatitude(finite(selected.latitude) ? selected.latitude!.toFixed(6) : "");
     setLongitude(finite(selected.longitude) ? selected.longitude!.toFixed(6) : "");
     setMessage("");
     setSuccess(false);
     setPlacing(false);
+
+    const resolved = resolvePoint(selected);
+    if (resolved) {
+      updateView({
+        latitude: resolved.point[0],
+        longitude: resolved.point[1],
+        zoom: resolved.precision === "exact" ? 15 : 12,
+      });
+    }
   }, [selected]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let createdMap: MapLike | null = null;
+  function changeZoom(delta: number) {
+    updateView({ ...viewRef.current, zoom: viewRef.current.zoom + delta });
+  }
 
-    void ensureLeaflet()
-      .then((leaflet) => {
-        if (cancelled || !mapElementRef.current || mapRef.current) return;
-        leafletRef.current = leaflet;
-        createdMap = leaflet
-          .map(mapElementRef.current, { zoomControl: true, minZoom: 5, maxZoom: 18 })
-          .setView(GABON_CENTER, 6);
-        leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 19,
-        }).addTo(createdMap);
-        mapRef.current = createdMap;
-        markerLayerRef.current = leaflet.layerGroup().addTo(createdMap);
-        setMapReady(true);
-        window.setTimeout(() => createdMap?.invalidateSize(), 80);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setMapError(error instanceof Error ? error.message : "Carte indisponible.");
-        }
-      });
+  function onWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (Math.abs(event.deltaY) < 4) return;
+    changeZoom(event.deltaY < 0 ? 1 : -1);
+  }
 
-    return () => {
-      cancelled = true;
-      if (createdMap) createdMap.remove();
-      if (mapRef.current === createdMap) mapRef.current = null;
-      markerLayerRef.current = null;
-      markerRefs.current.clear();
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    const currentView = viewRef.current;
+    const center = project(currentView.latitude, currentView.longitude, currentView.zoom);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startWorldX: center.x,
+      startWorldY: center.y,
+      zoom: currentView.zoom,
+      moved: false,
     };
-  }, []);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const leaflet = leafletRef.current;
-    const layer = markerLayerRef.current;
-    if (!mapReady || !map || !leaflet || !layer) return;
+  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startClientX;
+    const deltaY = event.clientY - drag.startClientY;
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 4) drag.moved = true;
+    if (!drag.moved) return;
 
-    layer.clearLayers();
-    markerRefs.current.clear();
-    const points: Array<[number, number]> = [];
+    const next = unproject(
+      drag.startWorldX - deltaX,
+      drag.startWorldY - deltaY,
+      drag.zoom,
+    );
+    updateView({ ...next, zoom: drag.zoom });
+  }
 
-    for (const item of located) {
-      if (!item.resolved) continue;
-      const { school } = item;
-      const { point, precision } = item.resolved;
-      points.push(point);
-      const markerClasses = [
-        styles.marker,
-        precision !== "exact" ? styles.markerApprox : "",
-        school.id === selectedSchoolId ? styles.markerSelected : "",
-      ].filter(Boolean).join(" ");
-      const icon = leaflet.divIcon({
-        className: styles.markerHost,
-        html: `<span class="${markerClasses}" style="background:${statusColor(school.status)}"></span>`,
-        iconSize: school.id === selectedSchoolId ? [30, 30] : [24, 24],
-        iconAnchor: school.id === selectedSchoolId ? [15, 28] : [12, 23],
-        popupAnchor: [0, -24],
-      });
-      const precisionText = precision === "city"
-        ? "Position approximative · ville"
-        : "Position approximative · province";
-      const locationText = [school.city, school.province].filter(Boolean).join(", ") || "Localisation à préciser";
-      const marker = leaflet.marker(point, { icon })
-        .addTo(layer)
-        .bindPopup(
-          `<div class="${styles.leafletPopup}"><strong>${escapeHtml(school.name)}</strong>` +
-          `<small>${escapeHtml(locationText)}</small><small>${escapeHtml(statusLabel(school.status))}</small>` +
-          `${precision === "exact" ? "" : `<em>${precisionText}</em>`}</div>`,
-        )
-        .on("click", () => onSelectSchool(school.id));
-      markerRefs.current.set(school.id, marker);
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
-    if (points.length === 1) map.setView(points[0], 12);
-    else if (points.length > 1) {
-      map.fitBounds(leaflet.latLngBounds(points), { padding: [38, 38], maxZoom: 11 });
-    } else {
-      map.setView(GABON_CENTER, 6);
-    }
-  }, [located, mapReady, onSelectSchool, selectedSchoolId]);
+    if (!placing || drag.moved) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const currentView = viewRef.current;
+    const center = project(currentView.latitude, currentView.longitude, currentView.zoom);
+    const worldX = center.x + (event.clientX - rect.left - rect.width / 2);
+    const worldY = center.y + (event.clientY - rect.top - rect.height / 2);
+    const chosen = unproject(worldX, worldY, currentView.zoom);
+    setLatitude(chosen.latitude.toFixed(6));
+    setLongitude(chosen.longitude.toFixed(6));
+    setPlacing(false);
+    setMessage("Position choisie. Clique sur « Enregistrer la position » pour la confirmer.");
+    setSuccess(false);
+  }
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!mapReady || !map || !selected) return;
-    const resolved = resolvePoint(selected);
-    if (!resolved) return;
-    map.setView(resolved.point, resolved.precision === "exact" ? 14 : 10, { animate: true });
-    markerRefs.current.get(selected.id)?.openPopup();
-  }, [mapReady, selected]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !placing || !selected) return;
-
-    const handleMapClick = (event: MapEvent) => {
-      if (!event.latlng) return;
-      const nextLat = event.latlng.lat;
-      const nextLng = event.latlng.lng;
-      setLatitude(nextLat.toFixed(6));
-      setLongitude(nextLng.toFixed(6));
-      markerRefs.current.get(selected.id)?.setLatLng([nextLat, nextLng]);
-      setPlacing(false);
-      setMessage("Position choisie. Clique sur « Enregistrer la position » pour la confirmer.");
-      setSuccess(false);
-    };
-
-    map.on("click", handleMapClick);
-    return () => {
-      map.off("click", handleMapClick);
-    };
-  }, [placing, selected]);
+  function cancelPointer(event: ReactPointerEvent<HTMLDivElement>) {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+  }
 
   async function saveLocation() {
     if (!selected || !locationStorageReady) return;
@@ -501,16 +538,15 @@ export function SchoolPilotageMap({
     }
     setLatitude(resolved.point[0].toFixed(6));
     setLongitude(resolved.point[1].toFixed(6));
-    markerRefs.current.get(selected.id)?.setLatLng(resolved.point);
-    mapRef.current?.setView(resolved.point, 11, { animate: true });
-    setMessage("Repère approximatif chargé. Tu peux cliquer sur la carte pour l’ajuster avant d’enregistrer.");
+    updateView({
+      latitude: resolved.point[0],
+      longitude: resolved.point[1],
+      zoom: 12,
+    });
+    setMessage("Repère approximatif chargé. Tu peux cliquer sur « Placer précisément sur la carte » puis sur le bâtiment avant d’enregistrer.");
     setSuccess(false);
   }
 
-  const selectedResolved = selected ? resolvePoint(selected) : null;
-  const exactSelected = Boolean(
-    selected && finite(selected.latitude) && finite(selected.longitude),
-  );
   const selectedStatusClass = selected?.status === "active" || selected?.status === "trial"
     ? styles.statusActive
     : selected?.status === "grace_period"
@@ -538,15 +574,77 @@ export function SchoolPilotageMap({
 
       <div className={styles.layout}>
         <div className={styles.mapShell}>
-          <div ref={mapElementRef} className={styles.map} />
-          {!mapReady && (
-            <div className={styles.mapPlaceholder}>
-              <div><Navigation /><b>{mapError || "Chargement de la carte du Gabon…"}</b></div>
-            </div>
-          )}
+          <div
+            ref={mapElementRef}
+            className={`${styles.map} ${styles.nativeMap} ${placing ? styles.mapCrosshair : ""}`}
+            onWheel={onWheel}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={cancelPointer}
+            onLostPointerCapture={cancelPointer}
+            role="application"
+            aria-label="Carte interactive des établissements Gabon Éduc+"
+          >
+            {tiles.map((tile) => (
+              <img
+                key={tile.key}
+                className={styles.mapTile}
+                src={tile.url}
+                alt=""
+                draggable={false}
+                style={{ left: tile.left, top: tile.top }}
+                onLoad={() => setTileWarning(false)}
+                onError={() => setTileWarning(true)}
+              />
+            ))}
+
+            {mapReady && located.map(({ school, resolved }) => {
+              const screen = pointOnScreen(resolved.point, view, mapSize);
+              if (
+                screen.left < -40 ||
+                screen.top < -40 ||
+                screen.left > mapSize.width + 40 ||
+                screen.top > mapSize.height + 40
+              ) return null;
+              const markerClasses = [
+                styles.marker,
+                resolved.precision !== "exact" ? styles.markerApprox : "",
+                school.id === selectedSchoolId ? styles.markerSelected : "",
+              ].filter(Boolean).join(" ");
+              return (
+                <button
+                  key={school.id}
+                  type="button"
+                  className={styles.nativeMarkerButton}
+                  style={{ left: screen.left, top: screen.top }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectSchool(school.id);
+                  }}
+                  title={`${school.name} — ${resolved.precision === "exact" ? "position exacte" : "position approximative"}`}
+                  aria-label={`${school.name}, ${statusLabel(school.status)}`}
+                >
+                  <span className={markerClasses} style={{ background: statusColor(school.status) }} />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={styles.zoomControls} aria-label="Contrôles de zoom">
+            <button type="button" onClick={() => changeZoom(1)} disabled={view.zoom >= MAX_ZOOM} aria-label="Zoomer"><Plus /></button>
+            <button type="button" onClick={() => changeZoom(-1)} disabled={view.zoom <= MIN_ZOOM} aria-label="Dézoomer"><Minus /></button>
+          </div>
+
           {placing && (
             <div className={styles.placeMode}>Clique sur la carte à l’emplacement exact de l’établissement</div>
           )}
+          {tileWarning && (
+            <div className={styles.tileWarning}>Le fond OpenStreetMap répond mal. Les repères et le positionnement restent utilisables.</div>
+          )}
+          <div className={styles.attribution}>
+            © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+          </div>
           <div className={styles.legend}>
             <span><i className={styles.active} />Actif / essai</span>
             <span><i className={styles.grace} />Délai</span>
@@ -606,7 +704,7 @@ export function SchoolPilotageMap({
                 <button
                   type="button"
                   className={styles.secondary}
-                  onClick={() => { setPlacing(true); setMessage(""); }}
+                  onClick={() => { setPlacing(true); setMessage(""); setSuccess(false); }}
                   disabled={!mapReady}
                 >
                   <Crosshair />Placer précisément sur la carte
