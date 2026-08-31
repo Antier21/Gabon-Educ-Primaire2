@@ -16,6 +16,11 @@ export const ACCESS_ROLE_REDIRECTS: Record<string, string> = {
   student: "/gabon-educ/espace-eleve",
 };
 
+const SUPER_ADMIN_RETURN_PATHS = new Set([
+  "/gabon-educ/super-admin",
+  "/gabon-educ/centre-pilotage",
+]);
+
 export function normalizeAccessIdentifier(value: string) {
   return value
     .normalize("NFD")
@@ -45,5 +50,6 @@ export function suggestAccessIdentifier(firstName: string, lastName: string, suf
 
 export function roleRedirect(role: string | null | undefined, fallback: string) {
   if (!role) return fallback;
+  if (role === "super_admin" && SUPER_ADMIN_RETURN_PATHS.has(fallback)) return fallback;
   return ACCESS_ROLE_REDIRECTS[role] || fallback;
 }

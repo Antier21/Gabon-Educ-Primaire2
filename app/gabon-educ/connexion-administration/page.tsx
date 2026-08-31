@@ -3,10 +3,20 @@ import Link from "next/link";
 import { Info } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 
-type Props = { searchParams: Promise<{ registered?: string }> };
+type Props = { searchParams: Promise<{ registered?: string; retour?: string }> };
+
+const PLATFORM_RETURN_PATHS = new Set([
+  "/gabon-educ/super-admin",
+  "/gabon-educ/centre-pilotage",
+]);
 
 export default async function AdminLogin({ searchParams }: Props) {
   const params = await searchParams;
+  const redirectTo =
+    params?.retour && PLATFORM_RETURN_PATHS.has(params.retour)
+      ? params.retour
+      : "/gabon-educ/administration";
+
   return (
     <main className="admin-login-page">
       <header className="admin-login-header">
@@ -36,7 +46,7 @@ export default async function AdminLogin({ searchParams }: Props) {
             <Info aria-hidden="true"/>
           </div>
           <p className="admin-login-required">* Champs obligatoires</p>
-          <AuthForm mode="login" redirectTo="/gabon-educ/administration" demoRole="school_admin" demoName="Administration Démo" />
+          <AuthForm mode="login" redirectTo={redirectTo} demoRole="school_admin" demoName="Administration Démo" />
           <Link className="admin-back-teacher" href="/gabon-educ/connexion">Accéder plutôt à l’espace Enseignants</Link>
         </div>
       </section>

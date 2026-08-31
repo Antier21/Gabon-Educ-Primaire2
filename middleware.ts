@@ -16,6 +16,9 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
  * panne.
  */
 const protectedPrefixes = [
+  // Éditeur de la plateforme
+  "/gabon-educ/super-admin",
+  "/gabon-educ/centre-pilotage",
   // Espace enseignant
   "/gabon-educ/tableau-de-bord",
   "/gabon-educ/mes-fiches",

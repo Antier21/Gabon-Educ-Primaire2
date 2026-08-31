@@ -9,10 +9,12 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { SubscriptionStatus } from "@/lib/subscriptions/types";
+import { SchoolPilotageMap, type PilotageMapSchool } from "./SchoolPilotageMap";
 
 type School = {
   id: string; name: string; school_type: string | null; school_sector: string | null; province: string | null;
   city: string | null; phone: string | null; email: string | null; created_at: string;
+  latitude?: number | null; longitude?: number | null; location_source?: string | null; location_updated_at?: string | null;
 };
 type Subscription = {
   id: string; school_id: string; plan_code: string; status: SubscriptionStatus;
@@ -25,7 +27,7 @@ type Payment = {
 };
 type StatusLog = { id: string; school_id: string; previous_status: SubscriptionStatus | null; new_status: SubscriptionStatus; reason: string | null; changed_at: string };
 type Usage = { students: number; teachers: number; classes: number };
-
+type LocationPatch = { latitude: number | null; longitude: number | null; locationSource: string | null; locationUpdatedAt: string | null };
 
 function schoolTypeLabel(value?: string | null) {
   return value === "primary" ? "Primaire" : "Secondaire";
@@ -37,6 +39,12 @@ const labels: Record<SubscriptionStatus, string> = {
 
 function money(value: number) { return new Intl.NumberFormat("fr-FR").format(value) + " FCFA"; }
 function date(value?: string | null) { return value ? new Date(value).toLocaleDateString("fr-FR") : "—"; }
+function missingLocationSchema(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const raw = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+  const text = [raw.message, raw.details, raw.hint, raw.code].filter(Boolean).join(" ").toLowerCase();
+  return /latitude|longitude|location_source|location_updated_at|schema cache|42703|pgrst/.test(text);
+}
 
 export function ServiceControlCenterPage() {
   const [rows, setRows] = useState<Subscription[]>([]);
@@ -51,24 +59,43 @@ export function ServiceControlCenterPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Virement bancaire");
   const [paymentReference, setPaymentReference] = useState("");
+  const [locationStorageReady, setLocationStorageReady] = useState(true);
 
   const load = useCallback(async (confirm = false) => {
     setLoading(true); setMessage("");
     const supabase = createClient();
-    const [subscriptionsResult, paymentsResult, logsResult] = await Promise.all([
-      supabase.from("school_subscriptions").select("id,school_id,plan_code,status,starts_at,expires_at,grace_period_ends_at,last_payment_at,schools(id,name,school_type,school_sector,province,city,phone,email,created_at)").order("expires_at"),
+
+    const [paymentsResult, logsResult] = await Promise.all([
       supabase.from("subscription_payments").select("id,school_id,amount,currency,payment_method,payment_reference,payment_status,paid_at,created_at").order("created_at", { ascending: false }).limit(200),
       supabase.from("subscription_status_logs").select("id,school_id,previous_status,new_status,reason,changed_at").order("changed_at", { ascending: false }).limit(200),
     ]);
-    if (subscriptionsResult.error) {
+
+    const locationSelect = "id,school_id,plan_code,status,starts_at,expires_at,grace_period_ends_at,last_payment_at,schools(id,name,school_type,school_sector,province,city,phone,email,created_at,latitude,longitude,location_source,location_updated_at)";
+    const legacySelect = "id,school_id,plan_code,status,starts_at,expires_at,grace_period_ends_at,last_payment_at,schools(id,name,school_type,school_sector,province,city,phone,email,created_at)";
+    const enriched = await supabase.from("school_subscriptions").select(locationSelect).order("expires_at");
+
+    let subscriptionData: unknown[] = [];
+    let subscriptionError: unknown = enriched.error;
+    if (!enriched.error) {
+      subscriptionData = (enriched.data || []) as unknown[];
+      setLocationStorageReady(true);
+    } else if (missingLocationSchema(enriched.error)) {
+      const fallback = await supabase.from("school_subscriptions").select(legacySelect).order("expires_at");
+      subscriptionData = (fallback.data || []) as unknown[];
+      subscriptionError = fallback.error;
+      setLocationStorageReady(false);
+    }
+
+    if (subscriptionError) {
       setMessage("Accès refusé : ce centre est réservé aux comptes autorisés de GABON EDUC+ SERVICE.");
       setRows([]); setLoading(false); return;
     }
-    const nextRows = (subscriptionsResult.data || []) as unknown as Subscription[];
+
+    const nextRows = subscriptionData as unknown as Subscription[];
     setRows(nextRows);
     setPayments((paymentsResult.data || []) as unknown as Payment[]);
     setLogs((logsResult.data || []) as unknown as StatusLog[]);
-    setSelectedId(current => current || nextRows[0]?.school_id || "");
+    setSelectedId(current => nextRows.some(row => row.school_id === current) ? current : (nextRows[0]?.school_id || ""));
 
     const usageEntries = await Promise.all(nextRows.map(async row => {
       const [students, memberships, classes] = await Promise.all([
@@ -105,9 +132,34 @@ export function ServiceControlCenterPage() {
     return haystack.includes(query.toLowerCase()) && (statusFilter === "all" || row.status === statusFilter);
   }), [rows, query, statusFilter]);
 
+  const mapSchools = useMemo<PilotageMapSchool[]>(() => rows.flatMap(row => row.schools ? [{
+    id: row.school_id,
+    name: row.schools.name || row.school_id,
+    city: row.schools.city,
+    province: row.schools.province,
+    status: row.status,
+    latitude: typeof row.schools.latitude === "number" ? row.schools.latitude : null,
+    longitude: typeof row.schools.longitude === "number" ? row.schools.longitude : null,
+    locationSource: row.schools.location_source || null,
+    locationUpdatedAt: row.schools.location_updated_at || null,
+  }] : []), [rows]);
+
   const selected = rows.find(row => row.school_id === selectedId) || null;
   const selectedPayments = payments.filter(p => p.school_id === selectedId);
   const selectedLogs = logs.filter(l => l.school_id === selectedId).slice(0, 8);
+
+  function updateSchoolLocation(schoolId: string, patch: LocationPatch) {
+    setRows(current => current.map(row => row.school_id === schoolId && row.schools ? {
+      ...row,
+      schools: {
+        ...row.schools,
+        latitude: patch.latitude,
+        longitude: patch.longitude,
+        location_source: patch.locationSource,
+        location_updated_at: patch.locationUpdatedAt,
+      },
+    } : row));
+  }
 
   async function changeStatus(row: Subscription, status: SubscriptionStatus) {
     const expires = new Date(); expires.setDate(expires.getDate() + (status === "active" ? 30 : 0));
@@ -151,6 +203,14 @@ export function ServiceControlCenterPage() {
       <article className="money"><Banknote/><div><span>Revenus du mois</span><strong>{money(summary.revenue)}</strong></div></article>
     </section>
 
+    <SchoolPilotageMap
+      schools={mapSchools}
+      selectedSchoolId={selectedId}
+      onSelectSchool={setSelectedId}
+      onLocationSaved={updateSchoolLocation}
+      locationStorageReady={locationStorageReady}
+    />
+
     <section className="ges-main-grid">
       <div className="ges-panel ges-schools-panel">
         <div className="ges-panel-title"><div><LayoutDashboard/><h2>Établissements clients</h2></div><span>{filtered.length} résultat(s)</span></div>
@@ -169,7 +229,7 @@ export function ServiceControlCenterPage() {
     {selected && <section className="ges-panel ges-school-detail">
       <div className="ges-detail-head"><div><span className="ges-school-icon"><GraduationCap/></span><div><p>Fiche établissement</p><h2>{selected.schools?.name}</h2><small>{[selected.schools?.city, selected.schools?.province].filter(Boolean).join(", ") || "Localisation non renseignée"}</small></div></div><i className={`ges-status ${selected.status}`}>{labels[selected.status]}</i></div>
       <div className="ges-detail-grid">
-        <article><h3>Identité et activité</h3><dl><div><dt>Téléphone</dt><dd>{selected.schools?.phone || "—"}</dd></div><div><dt>E-mail</dt><dd>{selected.schools?.email || "—"}</dd></div><div><dt>Client depuis</dt><dd>{date(selected.schools?.created_at)}</dd></div></dl><div className="ges-usage"><span><Users/><b>{usage[selected.school_id]?.students || 0}</b><small>Élèves</small></span><span><Users/><b>{usage[selected.school_id]?.teachers || 0}</b><small>Enseignants</small></span><span><Building2/><b>{usage[selected.school_id]?.classes || 0}</b><small>Classes</small></span></div></article>
+        <article><h3>Identité et activité</h3><dl><div><dt>Téléphone</dt><dd>{selected.schools?.phone || "—"}</dd></div><div><dt>E-mail</dt><dd>{selected.schools?.email || "—"}</dd></div><div><dt>Client depuis</dt><dd>{date(selected.schools?.created_at)}</dd></div><div><dt>Position GPS</dt><dd>{typeof selected.schools?.latitude === "number" && typeof selected.schools?.longitude === "number" ? `${selected.schools.latitude.toFixed(5)}, ${selected.schools.longitude.toFixed(5)}` : "À préciser sur la carte"}</dd></div></dl><div className="ges-usage"><span><Users/><b>{usage[selected.school_id]?.students || 0}</b><small>Élèves</small></span><span><Users/><b>{usage[selected.school_id]?.teachers || 0}</b><small>Enseignants</small></span><span><Building2/><b>{usage[selected.school_id]?.classes || 0}</b><small>Classes</small></span></div></article>
         <article><h3>Abonnement</h3><dl><div><dt>Formule</dt><dd>{selected.plan_code}</dd></div><div><dt>Début</dt><dd>{date(selected.starts_at)}</dd></div><div><dt>Échéance</dt><dd>{date(selected.expires_at)}</dd></div><div><dt>Fin du délai</dt><dd>{date(selected.grace_period_ends_at)}</dd></div></dl><div className="ges-actions"><button onClick={() => void changeStatus(selected,"active")}>Activer 30 jours</button><button onClick={() => void changeStatus(selected,"grace_period")}>Accorder un délai</button><button className="danger" onClick={() => void changeStatus(selected,"suspended")}>Suspendre</button></div></article>
         <article><h3>Enregistrer un paiement</h3><label>Montant (FCFA)<input type="number" min="0" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="Ex. 150000"/></label><label>Moyen de paiement<select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}><option>Virement bancaire</option><option>Airtel Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label><label>Référence<input value={paymentReference} onChange={e => setPaymentReference(e.target.value)} placeholder="Référence facultative"/></label><button className="primary" onClick={() => void registerPayment()}>Confirmer le paiement</button></article>
       </div>

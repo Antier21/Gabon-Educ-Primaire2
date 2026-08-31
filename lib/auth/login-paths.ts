@@ -15,6 +15,9 @@
  * enseignants. Cette erreur a déjà été commise.
  */
 export const LOGIN_BY_PREFIX: ReadonlyArray<readonly [string, string]> = [
+  // Éditeur de la plateforme
+  ["/gabon-educ/centre-pilotage", "/gabon-educ/connexion-administration"],
+  ["/gabon-educ/super-admin", "/gabon-educ/connexion-administration"],
   // Direction, secrétariat et service
   ["/gabon-educ/administration", "/gabon-educ/connexion-administration"],
   ["/gabon-educ/secretariat", "/gabon-educ/connexion-administration"],
