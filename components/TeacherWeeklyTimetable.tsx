@@ -2,25 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { TIMETABLE_PERIODS } from "@/lib/platform/timetable-hours";
 import {
   loadCurrentTeacherTimetable,
   type TeacherTimetableSlot,
 } from "@/lib/teacher-timetable";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-const TIME_ROWS = [
-  { start: "07:30", end: "08:25", label: "07h30" },
-  { start: "08:25", end: "09:20", label: "08h25" },
-  { start: "09:30", end: "10:25", label: "09h30" },
-  { start: "10:25", end: "11:20", label: "10h25" },
-  { start: "11:30", end: "12:25", label: "11h30" },
-  { start: "12:25", end: "13:15", label: "12h25" },
-  { start: "13:15", end: "14:10", label: "13h15" },
-  { start: "14:25", end: "15:20", label: "14h25" },
-  { start: "15:20", end: "16:10", label: "15h20" },
-  { start: "16:10", end: "16:55", label: "16h10" },
-  { start: "16:55", end: "17:40", label: "16h55" },
-];
 
 function slotMatchesClass(slot: TeacherTimetableSlot, classGroup?: string) {
   if (!classGroup?.trim()) return true;
@@ -101,8 +89,8 @@ export function TeacherWeeklyTimetable({
           {loading
             ? "Chargement du planning publié…"
             : classFilterApplied
-              ? `Filtré sur ${classGroup}`
-              : "Planning publié par l’établissement"}
+              ? `Filtré sur ${classGroup} · jusqu’à 14 h 30`
+              : "Planning publié par l’établissement · jusqu’à 14 h 30"}
         </p>
         {warning ? <small role="alert">{warning}</small> : null}
       </header>
@@ -114,7 +102,7 @@ export function TeacherWeeklyTimetable({
             <b key={day}>{day}</b>
           ))}
         </div>
-        {TIME_ROWS.map((row) => (
+        {TIMETABLE_PERIODS.map((row) => (
           <div className="teacher-week-board-row" role="row" key={row.start}>
             <small>{row.label}</small>
             {DAYS.map((day, index) => {
