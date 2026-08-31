@@ -5,15 +5,18 @@ import type { SchoolRole } from "@/lib/platform/types";
 import { FINANCE_MODULE_ROLES } from "@/lib/finance/policy";
 import {
   BULLETIN_PRINT_ROLES,
+  ACADEMIC_ORGANIZATION_ROLES,
   COMMUNICATION_ROLES,
   DIRECTION_ROLES,
   PARENT_SPACE_ROLES,
+  PEDAGOGICAL_LEAD_ROLES,
   PEDAGOGY_ROLES,
   policyAllowsRole,
   SCHOOL_LIFE_ROLES,
   SECRETARIAT_ROLES,
   SHARED_DOCUMENT_ROLES,
   STUDENT_SPACE_ROLES,
+  TEACHER_DASHBOARD_ROLES,
 } from "./page-policies";
 
 const app = resolve(process.cwd(), "app/gabon-educ");
@@ -48,17 +51,19 @@ function expectRoles(
 }
 
 const direction = [
-  "administration", "etablissement", "utilisateurs", "creer-enseignant",
-  "matieres", "emplois-du-temps", "notes-bulletins", "modele-bulletin",
-  "bulletins-publication", "journal-audit", "import-export", "synchronisation",
+  "administration", "etablissement", "utilisateurs",
+  "journal-audit", "import-export", "synchronisation",
   "diagnostic", "modules-a-venir", "abonnement",
 ] as const;
+const pedagogicalLead = ["pedagogie", "pedagogie/cahiers-de-textes", "creer-enseignant", "matieres", "emplois-du-temps", "notes-bulletins", "modele-bulletin", "bulletins-publication"] as const;
+const teacherDashboard = ["tableau-de-bord"] as const;
+const academicOrganization = ["classes"] as const;
 const secretariat = [
-  "secretariat", "eleves", "parents", "inscription", "inscriptions", "classes", "personnel",
+  "secretariat", "eleves", "parents", "inscription", "inscriptions", "personnel",
 ] as const;
 const communication = ["communication", "annonces", "notifications"] as const;
 const pedagogy = [
-  "tableau-de-bord", "mes-classes", "mes-fiches", "cahier-de-textes",
+  "mes-classes", "mes-fiches", "cahier-de-textes",
   "cahier-de-textes/progression", "preparer-un-cours", "generateur-ia",
   "programmes-apc", "evaluations", "notes", "bulletins", "saisie-bulletin",
   "parametres", "modules/[slug]",
@@ -89,8 +94,26 @@ describe("pages direction", () => {
   it("utilise une garde locale unique", () => expectLocalGuard(direction, "DIRECTION_ROLES"));
   it("applique les rôles de direction", () => expectRoles(
     DIRECTION_ROLES,
-    ["school_admin", "headmaster", "academic_director", "super_admin"],
+    ["school_admin", "headmaster", "super_admin"],
+    ["academic_director", "secretary", "teacher", "head_teacher", "supervisor", "guardian", "student"],
+  ));
+});
+
+describe("pilotage pédagogique", () => {
+  it("utilise une garde dédiée", () => expectLocalGuard(pedagogicalLead, "PEDAGOGICAL_LEAD_ROLES"));
+  it("autorise Pédagogie sans ouvrir la direction", () => expectRoles(
+    PEDAGOGICAL_LEAD_ROLES,
+    ["academic_director", "school_admin", "headmaster", "super_admin"],
     ["secretary", "teacher", "head_teacher", "supervisor", "guardian", "student"],
+  ));
+});
+
+describe("organisation académique partagée", () => {
+  it("utilise une garde dédiée", () => expectLocalGuard(academicOrganization, "ACADEMIC_ORGANIZATION_ROLES"));
+  it("autorise Pédagogie et le secrétariat sans ouvrir d'autres rôles", () => expectRoles(
+    ACADEMIC_ORGANIZATION_ROLES,
+    ["academic_director", "secretary", "school_admin", "headmaster", "super_admin"],
+    ["teacher", "head_teacher", "supervisor", "guardian", "student"],
   ));
 });
 
@@ -125,6 +148,15 @@ describe("pages pédagogiques", () => {
     expect(source("modules/[slug]")).toContain("allow={PEDAGOGY_ROLES}");
     expect("/gabon-educ/modules/exemple".startsWith("/gabon-educ/modules/")).toBe(true);
   });
+});
+
+describe("tableau de bord enseignant", () => {
+  it("utilise une garde qui exclut Pédagogie", () => expectLocalGuard(teacherDashboard, "TEACHER_DASHBOARD_ROLES"));
+  it("n'autorise que teacher et head_teacher", () => expectRoles(
+    TEACHER_DASHBOARD_ROLES,
+    ["teacher", "head_teacher", "super_admin"],
+    ["academic_director", "school_admin", "headmaster", "secretary", "supervisor", "guardian", "student"],
+  ));
 });
 
 describe("impression des bulletins", () => {
@@ -183,9 +215,12 @@ describe("routes publiques et noms voisins", () => {
     const classified = [
       ...publicRoutes,
       ...direction,
+      ...pedagogicalLead,
+      ...academicOrganization,
       ...secretariat,
       ...communication,
       ...pedagogy,
+      ...teacherDashboard,
       "impression-bulletins",
       "documents",
       "assiduite",

@@ -3,7 +3,22 @@ import type { SchoolRole } from "@/lib/platform/types";
 export const DIRECTION_ROLES: readonly SchoolRole[] = [
   "school_admin",
   "headmaster",
+];
+
+export const PEDAGOGICAL_LEAD_ROLES: readonly SchoolRole[] = [
+  "school_admin",
+  "headmaster",
   "academic_director",
+];
+
+export const TEACHER_DASHBOARD_ROLES: readonly SchoolRole[] = [
+  "teacher",
+  "head_teacher",
+];
+
+export const ACADEMIC_ORGANIZATION_ROLES: readonly SchoolRole[] = [
+  ...PEDAGOGICAL_LEAD_ROLES,
+  "secretary",
 ];
 
 export const SECRETARIAT_ROLES: readonly SchoolRole[] = [

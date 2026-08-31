@@ -187,7 +187,6 @@ export const MANAGEMENT_ROLES: SchoolRole[] = [
   "super_admin",
   "school_admin",
   "headmaster",
-  "academic_director",
   "secretary",
 ];
 
@@ -199,6 +198,7 @@ export function isManagementRole(role: SchoolRole) {
 export function homeForRole(role: SchoolRole) {
   if (role === "super_admin") return "/gabon-educ/service-abonnements";
   if (role === "secretary") return "/gabon-educ/secretariat";
+  if (role === "academic_director") return "/gabon-educ/pedagogie";
   if (isManagementRole(role)) return "/gabon-educ/administration";
   if (role === "supervisor") return "/gabon-educ/assiduite";
   if (role === "guardian") return "/gabon-educ/espace-parent";

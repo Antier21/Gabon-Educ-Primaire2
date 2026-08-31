@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { buildAccessEmail, normalizeAccessIdentifier } from "@/lib/access-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-
-const allowedCreatorRoles = ["super_admin", "school_admin", "headmaster", "secretary"];
+import { canCreateRole } from "@/lib/roles/access-management";
 
 type CreateAccessPayload = {
   schoolId?: string;
@@ -83,14 +82,15 @@ export async function POST(request: Request) {
       .eq("status", "active");
     if (authorizationError) throw authorizationError;
 
-    const canCreate =
-      authorization?.some((item: { role?: string }) => allowedCreatorRoles.includes(String(item.role))) ||
-      (await admin
+    const actorRoles = (authorization || []).map((item: { role?: string }) => String(item.role));
+    const isSuperAdmin = (await admin
         .from("user_roles")
         .select("role")
         .eq("user_id", userData.user.id)
         .eq("role", "super_admin")
         .maybeSingle()).data?.role === "super_admin";
+    if (isSuperAdmin) actorRoles.push("super_admin");
+    const canCreate = canCreateRole(actorRoles, role);
 
     if (!canCreate) {
       return NextResponse.json({ error: "Vous n’êtes pas autorisé à créer des accès." }, { status: 403 });
@@ -103,26 +103,22 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (credentialReadError) throw credentialReadError;
 
-    const authEmail = String(existingCredential?.auth_email || buildAccessEmail(identifier));
-    let authUserId = existingCredential?.auth_user_id ? String(existingCredential.auth_user_id) : "";
+    if (existingCredential) {
+      return NextResponse.json(
+        { error: "Cet identifiant existe déjà. Utilisez la gestion explicite du compte ou une conversion de rôle." },
+        { status: 409 },
+      );
+    }
 
-    if (authUserId) {
-      const { error: updateUserError } = await admin.auth.admin.updateUserById(authUserId, {
-        password,
-        email_confirm: true,
-        user_metadata: { first_name: firstName, last_name: lastName, role, access_identifier: identifier, school_id: schoolId },
-      });
-      if (updateUserError) throw updateUserError;
-    } else {
-      const { data: createdUser, error: createUserError } = await admin.auth.admin.createUser({
+    const authEmail = buildAccessEmail(identifier);
+    const { data: createdUser, error: createUserError } = await admin.auth.admin.createUser({
         email: authEmail,
         password,
         email_confirm: true,
         user_metadata: { first_name: firstName, last_name: lastName, role, access_identifier: identifier, school_id: schoolId },
-      });
-      if (createUserError) throw createUserError;
-      authUserId = createdUser.user.id;
-    }
+    });
+    if (createUserError) throw createUserError;
+    const authUserId = createdUser.user.id;
 
     const displayName = `${firstName} ${lastName}`.trim();
 

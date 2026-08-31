@@ -136,7 +136,7 @@ const roleLabels: Record<SchoolRole, string> = {
   super_admin: "Super administrateur",
   school_admin: "Administration",
   headmaster: "Chef d’établissement",
-  academic_director: "Direction des études",
+  academic_director: "Pédagogie",
   supervisor: "Vie scolaire",
   secretary: "Secrétariat",
   head_teacher: "Enseignant principal",
@@ -358,11 +358,13 @@ export function PlatformManager({ module, embedded = false }: { module: Platform
   // de pilotage de la direction : ces deux entrées disparaissent de sa
   // navigation, comme elles ont déjà disparu du menu principal.
   const hiddenFromSecretary: PlatformModule[] = ["administration", "users"];
+  const pedagogyModules: PlatformModule[] = ["subjects", "timetable", "attendance", "announcements", "documents"];
   const visibleNav: typeof nav = nav
     .map(([group, items]) => [
       group,
       items.filter(
-        ([key]) => !(spaceRole === "secretary" && hiddenFromSecretary.includes(key)),
+        ([key]) => !(spaceRole === "secretary" && hiddenFromSecretary.includes(key)) &&
+          (spaceRole !== "academic_director" || pedagogyModules.includes(key)),
       ),
     ] as (typeof nav)[number])
     .filter(([group, items]) => items.length > 0 || group === "SCOLARITÉ");
@@ -1130,7 +1132,7 @@ function UsersView({ workspace, persist }: ViewProps) {
           <label>
             Rôle
             <select name="role">
-              {Object.entries(roleLabels).map(([value, label]) => (
+              {Object.entries(roleLabels).filter(([value]) => value !== "super_admin").map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>

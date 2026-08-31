@@ -21,7 +21,7 @@ describe("homeForRole", () => {
     expect(homeForRole("secretary")).toBe("/gabon-educ/secretariat");
     expect(homeForRole("headmaster")).toBe("/gabon-educ/administration");
     expect(homeForRole("school_admin")).toBe("/gabon-educ/administration");
-    expect(homeForRole("academic_director")).toBe("/gabon-educ/administration");
+    expect(homeForRole("academic_director")).toBe("/gabon-educ/pedagogie");
     expect(homeForRole("teacher")).toBe("/gabon-educ/tableau-de-bord");
     expect(homeForRole("guardian")).toBe("/gabon-educ/espace-parent");
   });

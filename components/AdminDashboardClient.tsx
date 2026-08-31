@@ -26,7 +26,7 @@ const roleLabels: Record<SchoolRole, string> = {
   super_admin: "Super administrateur",
   school_admin: "Administrateur scolaire",
   headmaster: "Chef d’établissement",
-  academic_director: "Directeur des études",
+  academic_director: "Pédagogie",
   supervisor: "Responsable vie scolaire",
   secretary: "Secrétaire / scolarité",
   head_teacher: "Enseignant principal",

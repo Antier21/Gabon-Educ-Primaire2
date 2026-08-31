@@ -18,6 +18,7 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
 const protectedPrefixes = [
   // Espace enseignant
   "/gabon-educ/tableau-de-bord",
+  "/gabon-educ/pedagogie",
   "/gabon-educ/mes-fiches",
   "/gabon-educ/cahier-de-textes",
   "/gabon-educ/mes-classes",

@@ -35,6 +35,7 @@ export function TeacherCreationManager() {
   const [msgKind, setMsgKind] = useState<"success" | "error">("success");
   const [saving, setSaving] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [teachingRoles, setTeachingRoles] = useState<Record<string, "teacher" | "head_teacher">>({});
 
   async function reloadStaff(id: string) {
     const { data, error } = await client
@@ -64,6 +65,29 @@ export function TeacherCreationManager() {
     });
     setClasses(classResult.items);
     await reloadStaff(id);
+    const accessUsers = await client.rpc("list_school_access_users", { p_school_id: id });
+    if (!accessUsers.error) {
+      const roles: Record<string, "teacher" | "head_teacher"> = {};
+      for (const row of (accessUsers.data || []) as Array<{ id?: string; role?: string }>) {
+        if (row.id && (row.role === "teacher" || row.role === "head_teacher")) roles[row.id] = row.role;
+      }
+      setTeachingRoles(roles);
+    }
+  }
+
+  async function convertTeachingRole(userId: string, role: "teacher" | "head_teacher") {
+    if (!schoolId || saving) return;
+    setSaving(true); setMsg("");
+    try {
+      const response = await fetch("/api/gabon-educ/access/manage", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "role", schoolId, userId, role }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      setMsgKind(response.ok ? "success" : "error");
+      setMsg(payload.message || payload.error || "Conversion impossible.");
+      if (response.ok) await reloadAll();
+    } finally { setSaving(false); }
   }
 
   useEffect(() => {
@@ -249,6 +273,15 @@ export function TeacherCreationManager() {
           <label className={styles.field}>Mot de passe provisoire<input name="password" type="password" minLength={8} required autoComplete="new-password" /></label>
           <div className={styles.actions}><button className={styles.button} disabled={saving || !schoolId || !availableStaff.length}>{saving ? "Création…" : "Créer le profil enseignant"}</button></div>
         </form>
+      </section>
+
+      <section className={styles.card}>
+        <div className={styles.cardHeader}><h2>Conversion enseignant / titulaire</h2><p>Cette action remplace le rôle actuel ; elle ne cumule jamais les deux rôles.</p></div>
+        <div className={styles.assignmentGrid}>{pedagogicalStaff.map(person => {
+          const userId=person.pedagogical_user_id||""; const current=teachingRoles[userId]||"teacher";
+          const next=current==="teacher"?"head_teacher":"teacher";
+          return <div key={person.id} className={styles.assignmentForm}><strong>{person.first_name} {person.last_name}</strong><span>{current==="head_teacher"?"Titulaire":"Enseignant"}</span><button type="button" className={styles.secondaryButton} disabled={saving||!userId} onClick={()=>void convertTeachingRole(userId,next)}>Convertir en {next==="head_teacher"?"titulaire":"enseignant"}</button></div>;
+        })}</div>
       </section>
 
       <section className={styles.card}>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { buildAccessEmail, normalizeAccessIdentifier } from "@/lib/access-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { canConvertTeachingRole, canManageRole } from "@/lib/roles/access-management";
 
 /**
  * Gestion des comptes d'accès existants : correction, suspension, suppression.
@@ -15,10 +16,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  * n'est pas supprimé ; l'application dit précisément ce qui bloque.
  */
 
-const allowedManagerRoles = ["super_admin", "school_admin", "headmaster", "secretary"];
-
 type ManagePayload = {
-  action?: "update" | "status" | "delete";
+  action?: "update" | "status" | "delete" | "role";
   schoolId?: string;
   userId?: string;
   firstName?: string;
@@ -26,6 +25,7 @@ type ManagePayload = {
   phone?: string;
   identifier?: string;
   status?: "active" | "suspended";
+  role?: "teacher" | "head_teacher";
 };
 
 function clean(value: unknown) {
@@ -76,11 +76,13 @@ export async function POST(request: Request) {
           .eq("role", "super_admin")
           .maybeSingle()
       ).data?.role === "super_admin";
-    const allowed =
-      isSuperAdmin ||
-      (authorization || []).some((item: { role?: string }) =>
-        allowedManagerRoles.includes(String(item.role)),
-      );
+    const actorRoles = (authorization || []).map((item: { role?: string }) => String(item.role));
+    if (isSuperAdmin) actorRoles.push("super_admin");
+    const targetMemberships = await admin.from("school_memberships").select("role")
+      .eq("school_id", schoolId).eq("user_id", userId);
+    if (targetMemberships.error) throw targetMemberships.error;
+    const targetRoles = (targetMemberships.data || []).map((item: { role?: string }) => String(item.role));
+    const allowed = canManageRole(actorRoles, targetRoles);
     if (!allowed) {
       return NextResponse.json(
         { error: "Vous n’avez pas les droits nécessaires sur cet établissement." },
@@ -88,13 +90,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Un administrateur qui supprimerait ou suspendrait son propre compte se
-    // fermerait la porte : le cas est refusé explicitement.
-    if (userId === actorId && action !== "update") {
+    if (userId === actorId) {
       return NextResponse.json(
-        { error: "Vous ne pouvez pas suspendre ni supprimer votre propre compte." },
+        { error: "Vous ne pouvez pas gérer votre propre compte depuis cette API." },
         { status: 400 },
       );
+    }
+
+    if (action === "role") {
+      const nextRole = clean(raw.role);
+      if (!canConvertTeachingRole(actorRoles, targetRoles, nextRole)) {
+        return NextResponse.json({ error: "Cette conversion de rôle n’est pas autorisée." }, { status: 403 });
+      }
+      const conversion = await sessionClient.rpc("convert_school_teaching_role", { p_school_id: schoolId, p_user_id: userId, p_new_role: nextRole });
+      if (conversion.error) throw conversion.error;
+      return NextResponse.json({ ok: true, role: nextRole, message: "Rôle enseignant converti." });
     }
 
     if (action === "status") {

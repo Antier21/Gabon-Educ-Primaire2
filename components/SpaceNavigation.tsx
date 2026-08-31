@@ -132,6 +132,21 @@ const adminGroups: AdminGroup[] = [
   },
 ];
 
+const pedagogyNavigationHrefs = new Set([
+  "/gabon-educ/pedagogie", "/gabon-educ/classes", "/gabon-educ/matieres",
+  "/gabon-educ/pedagogie/cahiers-de-textes",
+  "/gabon-educ/emplois-du-temps", "/gabon-educ/creer-enseignant",
+  "/gabon-educ/evaluations", "/gabon-educ/notes-bulletins",
+  "/gabon-educ/modele-bulletin", "/gabon-educ/bulletins-publication",
+  "/gabon-educ/cahier-de-textes", "/gabon-educ/cahier-de-textes/progression",
+  "/gabon-educ/mes-fiches", "/gabon-educ/communication",
+  "/gabon-educ/annonces", "/gabon-educ/assiduite",
+]);
+
+export function canShowAdminNavigationHref(role: SchoolRole | null, href: string) {
+  return role !== "academic_director" || pedagogyNavigationHrefs.has(href.split("?")[0]);
+}
+
 export function AdminMegaNav({ onLogout, role }: { onLogout: () => void; role?: SchoolRole }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -166,8 +181,9 @@ export function AdminMegaNav({ onLogout, role }: { onLogout: () => void; role?: 
     .filter((group) => !(resolvedRole && group.hiddenFor?.includes(resolvedRole)))
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => !(resolvedRole && item.hiddenFor?.includes(resolvedRole)),
+      items: group.items.filter((item) =>
+        !(resolvedRole && item.hiddenFor?.includes(resolvedRole)) &&
+        canShowAdminNavigationHref(resolvedRole, item.href),
       ),
     }))
     .filter((group) => group.items.length > 0);
