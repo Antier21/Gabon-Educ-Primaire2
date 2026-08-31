@@ -62,11 +62,11 @@ const communication = ["communication", "annonces", "notifications"] as const;
 const pedagogy = [
   "tableau-de-bord", "mes-classes", "mes-fiches", "cahier-de-textes",
   "cahier-de-textes/progression", "preparer-un-cours", "generateur-ia",
-  "programmes-apc", "evaluations", "notes", "bulletins", "saisie-bulletin",
+  "programmes-apc", "evaluations", "notes", "notes/parametres", "bulletins", "saisie-bulletin",
   "parametres", "modules/[slug]",
 ] as const;
 const publicRoutes = [
-  "", "connexion", "connexion-administration", "connexion-eleves", "connexion-parents",
+  "", "activation-etablissement", "connexion", "connexion-administration", "connexion-eleves", "connexion-parents",
   "connexion-vie-scolaire", "ouvrir-compte", "enregistrer-etablissement", "espaces",
   "mot-de-passe-oublie", "erreur",
 ] as const;
@@ -217,6 +217,8 @@ describe("routes publiques et noms voisins", () => {
       "espace-parent",
       "espace-eleve",
       "service-abonnements",
+      "centre-pilotage",
+      "super-admin",
     ].sort();
     expect(discoveredPages(app)).toEqual(classified);
   });
@@ -229,7 +231,8 @@ describe("service plateforme et doubles gardes", () => {
   it("conserve une unique garde superAdminOnly sur chaque page de service", () => {
     for (const file of [
       resolve(app, "service-abonnements/page.tsx"),
-      resolve(process.cwd(), "app/gabon-educ-service/page.tsx"),
+      resolve(app, "centre-pilotage/page.tsx"),
+      resolve(app, "super-admin/page.tsx"),
     ]) {
       const content = readFileSync(file, "utf8");
       expect(content).toContain("<RequireRole superAdminOnly");
