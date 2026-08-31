@@ -1,0 +1,259 @@
+.notes-register-print-action {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 70;
+}
+
+.notes-register-print-action button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #08734f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 10px 26px rgba(8, 75, 53, .24);
+  cursor: pointer;
+}
+
+.notes-register-print-action button:hover {
+  background: #056342;
+}
+
+.notes-register-print-action svg {
+  width: 17px;
+  height: 17px;
+}
+
+.notes-register-print-header {
+  display: none;
+}
+
+@page notes-register {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
+@media print {
+  body.printing-notes-register {
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  body.printing-notes-register .notes-register-route,
+  body.printing-notes-register .notes-register-route *,
+  body.printing-notes-register .notes-register-print-header,
+  body.printing-notes-register .notes-register-print-header *,
+  body.printing-notes-register .notes-print-target,
+  body.printing-notes-register .notes-print-target * {
+    visibility: visible !important;
+  }
+
+  body.printing-notes-register .notes-register-print-action {
+    display: none !important;
+  }
+
+  body.printing-notes-register .notes-register-print-header {
+    display: block !important;
+    margin: 0 0 5mm;
+    padding: 0 0 3mm;
+    border-bottom: .5mm solid #26352f;
+    color: #111;
+    page: notes-register;
+  }
+
+  body.printing-notes-register .notes-register-print-header > div:first-child {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10mm;
+    font-size: 8pt;
+  }
+
+  body.printing-notes-register .notes-register-print-header > div:first-child strong {
+    font-size: 10pt;
+  }
+
+  body.printing-notes-register .notes-register-print-header h1 {
+    margin: 2mm 0 3mm;
+    text-align: center;
+    font-size: 15pt;
+    letter-spacing: .04em;
+  }
+
+  body.printing-notes-register .notes-register-print-header dl {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2mm;
+    margin: 0;
+  }
+
+  body.printing-notes-register .notes-register-print-header dl > div {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2mm;
+    padding: 1.6mm 2mm;
+    border: .25mm solid #c2cbc6;
+    font-size: 7.5pt;
+  }
+
+  body.printing-notes-register .notes-register-print-header dt {
+    font-weight: 800;
+  }
+
+  body.printing-notes-register .notes-register-print-header dd {
+    margin: 0;
+  }
+
+  /* Le relevé est le seul bloc fonctionnel conservé dans la zone Notes. */
+  body.printing-notes-register .gradebook-print-page > fieldset > section > *:not(.notes-print-target) {
+    display: none !important;
+  }
+
+  body.printing-notes-register .gradebook-print-page,
+  body.printing-notes-register .gradebook-print-page > fieldset,
+  body.printing-notes-register .gradebook-print-page > fieldset > section {
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
+  }
+
+  body.printing-notes-register .notes-print-target {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    page: notes-register;
+  }
+
+  /* L'en-tête imprimable ci-dessus remplace le titre d'écran du bloc. */
+  body.printing-notes-register .notes-print-target > div:first-child {
+    display: none !important;
+  }
+
+  body.printing-notes-register .notes-print-target > div:has(> table:has(button[title^="Sélectionner cette évaluation"])) {
+    overflow: visible !important;
+    border: .25mm solid #6f7b75 !important;
+    border-radius: 0 !important;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    table-layout: fixed !important;
+    color: #111 !important;
+    font-size: 7pt !important;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) th,
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) td {
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 1.4mm 1mm !important;
+    border: .2mm solid #aeb7b2 !important;
+    background: #fff !important;
+    color: #111 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    white-space: normal !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead th {
+    background: #edf1ef !important;
+    font-weight: 800 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:first-child,
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:first-child,
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:first-child {
+    width: 44mm !important;
+    min-width: 44mm !important;
+    max-width: 44mm !important;
+    text-align: left !important;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(2),
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(2),
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(2) {
+    width: 18mm !important;
+    min-width: 18mm !important;
+    max-width: 18mm !important;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(n+3),
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(n+3),
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(n+3) {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead button {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #111 !important;
+    font-size: 7pt !important;
+    line-height: 1.15 !important;
+    white-space: normal !important;
+  }
+
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead button em,
+  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead small {
+    color: #404844 !important;
+    font-size: 6pt !important;
+  }
+
+  body.printing-notes-register .notes-print-target input[aria-label^="Note de"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #111 !important;
+    text-align: center !important;
+    font-size: 7pt !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+    appearance: textfield;
+  }
+
+  body.printing-notes-register .notes-print-target tfoot td {
+    background: #e5eae7 !important;
+    font-weight: 800 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@media (max-width: 640px) {
+  .notes-register-print-action {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .notes-register-print-action button {
+    min-height: 42px;
+    padding: 9px 13px;
+  }
+}
