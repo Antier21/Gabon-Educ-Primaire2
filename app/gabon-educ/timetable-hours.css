@@ -1,0 +1,12 @@
+/*
+ * Borne horaire commune des emplois du temps.
+ *
+ * Les anciens éditeurs peuvent encore contenir dans leur DOM les lignes
+ * historiques 14h25, 15h20, 16h10 et 16h55. La huitième ligne de cours et les
+ * suivantes sont volontairement retirées de toutes les grilles basées sur le
+ * composant platform-timetable-board. Les sept lignes conservées vont de
+ * 07h30 à 14h10 et respectent donc la borne métier de 14h30.
+ */
+.platform-timetable-board > .platform-timetable-row:nth-child(n + 9) {
+  display: none !important;
+}
