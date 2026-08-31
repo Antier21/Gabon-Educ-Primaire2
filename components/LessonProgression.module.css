@@ -118,6 +118,11 @@
  * qui reste ici vise des classes du composant, dont les noms sont réécrits à la
  * compilation, et ne pouvait donc PAS vivre là-bas. */
 @media print{
+  /* Une règle globale des bulletins masque `body *` pendant toute impression.
+     La progression possède son propre mode `printing-progression` : on rétablit
+     donc explicitement sa visibilité avant d'appliquer son isolation par
+     `display:none`, sans modifier le comportement d'impression des bulletins. */
+  :global(body.printing-progression) *{visibility:visible!important}
   :global(body.printing-progression) .sheetHead{margin-bottom:10px;padding-bottom:8px}
   :global(body.printing-progression) .logo{width:46px;height:46px}
   :global(body.printing-progression) .sheetTitles h1{font-size:14pt;margin:4px 0 2px}
