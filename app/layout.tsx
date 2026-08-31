@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./overflow-fix.css";
 import { PRODUCT } from "@/lib/product-edition";
 
 export const metadata: Metadata = {
