@@ -45,10 +45,14 @@
     background: #fff !important;
   }
 
-  body.printing-notes-register .notes-register-route,
-  body.printing-notes-register .notes-register-route *,
+  /* La règle globale des bulletins masque tout le body à l'impression.
+     On réaffiche ici uniquement l'en-tête du relevé et la chaîne d'ancêtres
+     nécessaire pour atteindre la matrice de notes. */
   body.printing-notes-register .notes-register-print-header,
   body.printing-notes-register .notes-register-print-header *,
+  body.printing-notes-register .gradebook-print-page:has(.notes-print-target),
+  body.printing-notes-register .gradebook-print-page:has(.notes-print-target) > fieldset,
+  body.printing-notes-register .gradebook-print-page :has(.notes-print-target),
   body.printing-notes-register .notes-print-target,
   body.printing-notes-register .notes-print-target * {
     visibility: visible !important;
@@ -110,14 +114,17 @@
     margin: 0;
   }
 
-  /* Le relevé est le seul bloc fonctionnel conservé dans la zone Notes. */
-  body.printing-notes-register .gradebook-print-page > fieldset > section > *:not(.notes-print-target) {
+  /* On ne masque plus un parent du relevé. On garde chaque ancêtre qui
+     contient .notes-print-target et on retire seulement ses frères. */
+  body.printing-notes-register .gradebook-print-page > *:not(:has(.notes-print-target)),
+  body.printing-notes-register .gradebook-print-page :has(.notes-print-target) > *:not(:has(.notes-print-target)):not(.notes-print-target) {
     display: none !important;
   }
 
   body.printing-notes-register .gradebook-print-page,
   body.printing-notes-register .gradebook-print-page > fieldset,
-  body.printing-notes-register .gradebook-print-page > fieldset > section {
+  body.printing-notes-register .gradebook-print-page > fieldset > section,
+  body.printing-notes-register .gradebook-print-page :has(> .notes-print-target) {
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -142,12 +149,14 @@
   }
 
   body.printing-notes-register .notes-print-target > div:has(> table:has(button[title^="Sélectionner cette évaluation"])) {
+    display: block !important;
     overflow: visible !important;
     border: .25mm solid #6f7b75 !important;
     border-radius: 0 !important;
   }
 
   body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) {
+    display: table !important;
     width: 100% !important;
     min-width: 0 !important;
     border-collapse: collapse !important;
@@ -157,8 +166,25 @@
     font-size: 7pt !important;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) th,
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) td {
+  body.printing-notes-register .notes-print-target thead {
+    display: table-header-group !important;
+  }
+
+  body.printing-notes-register .notes-print-target tbody {
+    display: table-row-group !important;
+  }
+
+  body.printing-notes-register .notes-print-target tfoot {
+    display: table-footer-group !important;
+  }
+
+  body.printing-notes-register .notes-print-target tr {
+    display: table-row !important;
+  }
+
+  body.printing-notes-register .notes-print-target th,
+  body.printing-notes-register .notes-print-target td {
+    display: table-cell !important;
     position: static !important;
     height: auto !important;
     min-height: 0 !important;
@@ -173,39 +199,39 @@
     break-inside: avoid;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead th {
+  body.printing-notes-register .notes-print-target thead th {
     background: #edf1ef !important;
     font-weight: 800 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:first-child,
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:first-child,
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:first-child {
+  body.printing-notes-register .notes-print-target thead tr:first-child > th:first-child,
+  body.printing-notes-register .notes-print-target tbody > tr > td:first-child,
+  body.printing-notes-register .notes-print-target tfoot > tr > td:first-child {
     width: 44mm !important;
     min-width: 44mm !important;
     max-width: 44mm !important;
     text-align: left !important;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(2),
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(2),
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(2) {
+  body.printing-notes-register .notes-print-target thead tr:first-child > th:nth-child(2),
+  body.printing-notes-register .notes-print-target tbody > tr > td:nth-child(2),
+  body.printing-notes-register .notes-print-target tfoot > tr > td:nth-child(2) {
     width: 18mm !important;
     min-width: 18mm !important;
     max-width: 18mm !important;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead tr:first-child > th:nth-child(n+3),
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tbody > tr > td:nth-child(n+3),
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) tfoot > tr > td:nth-child(n+3) {
+  body.printing-notes-register .notes-print-target thead tr:first-child > th:nth-child(n+3),
+  body.printing-notes-register .notes-print-target tbody > tr > td:nth-child(n+3),
+  body.printing-notes-register .notes-print-target tfoot > tr > td:nth-child(n+3) {
     width: auto !important;
     min-width: 0 !important;
     max-width: none !important;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead button {
+  body.printing-notes-register .notes-print-target thead button {
     width: 100% !important;
     max-width: none !important;
     padding: 0 !important;
@@ -217,8 +243,8 @@
     white-space: normal !important;
   }
 
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead button em,
-  body.printing-notes-register .notes-print-target table:has(button[title^="Sélectionner cette évaluation"]) thead small {
+  body.printing-notes-register .notes-print-target thead button em,
+  body.printing-notes-register .notes-print-target thead small {
     color: #404844 !important;
     font-size: 6pt !important;
   }
