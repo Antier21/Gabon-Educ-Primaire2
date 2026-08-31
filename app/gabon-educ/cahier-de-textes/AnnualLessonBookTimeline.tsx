@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { resolveActiveSchoolContext } from "@/lib/active-school";
 import { resolveActiveAcademicYear } from "@/lib/report-model/periods-store";
+import { createClient } from "@/lib/supabase/client";
 import {
   formatWeekRange,
   fromISODate,
@@ -85,7 +86,17 @@ export function AnnualLessonBookTimeline() {
         if (!context.school?.id || context.school.id === "local") return;
         const year = await resolveActiveAcademicYear(context.school.id);
         if (!year || cancelled) return;
-        setAcademicStart(atNoon(fromISODate(year.starts_on)));
+
+        const { data } = await createClient()
+          .from("academic_years")
+          .select("starts_on")
+          .eq("school_id", context.school.id)
+          .eq("id", year.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+        const startsOn = String(data?.starts_on || "");
+        if (startsOn) setAcademicStart(atNoon(fromISODate(startsOn)));
         setAcademicLabel(year.label || "");
       } catch {
         // La frise reste utilisable avec sa borne locale de secours.
