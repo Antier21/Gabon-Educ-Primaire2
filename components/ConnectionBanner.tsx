@@ -109,6 +109,7 @@ export function ConnectionBanner() {
   if (etat === "ok" || isPublicPath(pathname)) return null;
 
   if (etat === "session") {
+    const connexion = `${loginPathFor(pathname)}?retour=${encodeURIComponent(pathname)}`;
     return (
       <div className="connection-banner connection-banner-session" role="status" aria-live="polite">
         <KeyRound aria-hidden="true" />
@@ -116,7 +117,7 @@ export function ConnectionBanner() {
           <b>Votre session a expiré.</b> Ce que vous voyez vient de cet appareil : vos
           enregistrements ne partiront pas tant que vous ne serez pas reconnecté.
         </span>
-        <Link href={loginPathFor(pathname)}>Se reconnecter</Link>
+        <Link href={connexion}>Se reconnecter</Link>
       </div>
     );
   }
