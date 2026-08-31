@@ -9,6 +9,7 @@ type DayEntry = {
   iso: string;
   date: Date;
   week: number;
+  planningWeek: number;
   weekKey: string;
   weekday: string;
   dayNumber: number;
@@ -21,10 +22,12 @@ type DayEntry = {
 type WeekEntry = {
   key: string;
   week: number;
+  planningWeek: number;
   days: DayEntry[];
 };
 
 const YEAR_DAY_COUNT = 365;
+const DAY_MS = 86_400_000;
 
 function localISO(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -52,7 +55,25 @@ function isoWeekNumber(date: Date) {
   const day = target.getDay() || 7;
   target.setDate(target.getDate() + 4 - day);
   const yearStart = new Date(target.getFullYear(), 0, 1, 12, 0, 0, 0);
-  return Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return Math.ceil((((target.getTime() - yearStart.getTime()) / DAY_MS) + 1) / 7);
+}
+
+/*
+ * NotesRegisterManager conserve historiquement un entier « semaine » et le
+ * reconvertit en date depuis le premier lundi de l'année civile de départ.
+ * Cette valeur continue donc au-delà de 52 après janvier afin que janvier-juin
+ * pointe bien vers l'année civile suivante (54, 55, etc.) et non vers janvier
+ * de l'année précédente.
+ */
+function planningWeekNumber(date: Date) {
+  const now = new Date();
+  const schoolYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+  const januaryFirst = new Date(schoolYear, 0, 1, 12, 0, 0, 0);
+  const day = januaryFirst.getDay() || 7;
+  const firstMonday = new Date(januaryFirst);
+  firstMonday.setDate(januaryFirst.getDate() + (day <= 4 ? 1 - day : 8 - day));
+  const targetMonday = mondayOf(date);
+  return Math.round((targetMonday.getTime() - firstMonday.getTime()) / (DAY_MS * 7)) + 1;
 }
 
 function fallbackAcademicStart() {
@@ -121,6 +142,7 @@ export function AcademicWeekStrip({
         iso: localISO(date),
         date,
         week: isoWeekNumber(date),
+        planningWeek: planningWeekNumber(date),
         weekKey: localISO(mondayOf(date)),
         weekday: shortWeekday(date),
         dayNumber: date.getDate(),
@@ -141,14 +163,15 @@ export function AcademicWeekStrip({
     return Array.from(grouped.entries()).map(([key, values]) => ({
       key,
       week: values[0]?.week || 1,
+      planningWeek: values[0]?.planningWeek || 1,
       days: values,
     }));
   }, [days]);
 
-  const activeWeek = selectedWeek || isoWeekNumber(new Date());
+  const activeWeek = selectedWeek || planningWeekNumber(new Date());
 
   useEffect(() => {
-    const active = scrollRef.current?.querySelector<HTMLElement>(`[data-week="${activeWeek}"]`);
+    const active = scrollRef.current?.querySelector<HTMLElement>(`[data-planning-week="${activeWeek}"]`);
     active?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [activeWeek, weeks]);
 
@@ -176,8 +199,8 @@ export function AcademicWeekStrip({
           {weeks.map((week) => (
             <div
               key={week.key}
-              data-week={week.week}
-              className={`${styles.week} ${week.week === activeWeek ? styles.weekActive : ""}`}
+              data-planning-week={week.planningWeek}
+              className={`${styles.week} ${week.planningWeek === activeWeek ? styles.weekActive : ""}`}
             >
               <div className={styles.weekLabel}>S{week.week}</div>
               <div className={styles.days}>
@@ -186,7 +209,7 @@ export function AcademicWeekStrip({
                     key={day.iso}
                     type="button"
                     className={`${styles.day} ${day.endsWeek ? styles.weekEnd : ""} ${day.today ? styles.today : ""}`}
-                    onClick={() => onSelect?.(day.week)}
+                    onClick={() => onSelect?.(day.planningWeek)}
                     title={`${day.date.toLocaleDateString("fr-FR", {
                       weekday: "long",
                       day: "numeric",
