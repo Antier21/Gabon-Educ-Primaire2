@@ -30,6 +30,7 @@ const hours = [
   { label: "14h25", start: "14:25" },
   { label: "15h20", start: "15:20" },
   { label: "16h10", start: "16:10" },
+  { label: "16h55", start: "16:55" },
 ];
 const days = ["Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."];
 
