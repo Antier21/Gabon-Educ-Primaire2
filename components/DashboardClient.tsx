@@ -13,25 +13,13 @@ import { listClasses } from "@/lib/class-store";
 import { listEvaluations, type EvaluationRecord } from "@/lib/evaluation-store";
 import { storageModeLabel, type StorageMode } from "@/lib/storage-mode";
 import { loadPlatformWorkspace } from "@/lib/platform/store";
+import { TIMETABLE_PERIODS } from "@/lib/platform/timetable-hours";
 import {
   loadCurrentTeacherTimetable,
   type TeacherTimetableSlot,
 } from "@/lib/teacher-timetable";
 import { SimpleSpaceNav } from "@/components/SpaceNavigation";
 
-const hours = [
-  { label: "07h30", start: "07:30" },
-  { label: "08h25", start: "08:25" },
-  { label: "09h30", start: "09:30" },
-  { label: "10h25", start: "10:25" },
-  { label: "11h30", start: "11:30" },
-  { label: "12h25", start: "12:25" },
-  { label: "13h15", start: "13:15" },
-  { label: "14h25", start: "14:25" },
-  { label: "15h20", start: "15:20" },
-  { label: "16h10", start: "16:10" },
-  { label: "16h55", start: "16:55" },
-];
 const days = ["Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."];
 
 function fallbackCurrentAcademicWeek() {
@@ -192,14 +180,14 @@ export function DashboardClient() {
       <div className="teacher-dashboard-grid">
         <section className="teacher-panel teacher-schedule">
           <header>
-            <div><h2>Emploi du temps</h2><p>Semaine en cours · planning publié par l’établissement</p></div>
+            <div><h2>Emploi du temps</h2><p>Semaine en cours · planning publié · jusqu’à 14 h 30</p></div>
             <Link href="/gabon-educ/preparer-un-cours">Préparer un cours ↗</Link>
           </header>
           <div className="schedule-wrap">
             <div className="schedule-grid">
               <span className="schedule-corner" />
               {days.map((day) => <b key={day}>{day}</b>)}
-              {hours.map((hour) => (
+              {TIMETABLE_PERIODS.map((hour) => (
                 <div className="schedule-row" key={hour.start}>
                   <small>{hour.label}</small>
                   {days.map((day, col) => {
