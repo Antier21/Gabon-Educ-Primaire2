@@ -2,52 +2,36 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { readClasses, type ClassRecord } from "@/lib/class-store";
-import { readPlatformWorkspace } from "@/lib/platform/store";
-import type { PlatformWorkspace, TimetableSlot } from "@/lib/platform/types";
+import {
+  loadCurrentTeacherTimetable,
+  type TeacherTimetableSlot,
+} from "@/lib/teacher-timetable";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const TIME_ROWS = [
   { start: "07:30", end: "08:25", label: "07h30" },
-  { start: "08:25", end: "09:30", label: "08h25" },
+  { start: "08:25", end: "09:20", label: "08h25" },
   { start: "09:30", end: "10:25", label: "09h30" },
-  { start: "10:25", end: "11:30", label: "10h25" },
+  { start: "10:25", end: "11:20", label: "10h25" },
   { start: "11:30", end: "12:25", label: "11h30" },
   { start: "12:25", end: "13:15", label: "12h25" },
-  { start: "13:15", end: "14:25", label: "13h15" },
+  { start: "13:15", end: "14:10", label: "13h15" },
   { start: "14:25", end: "15:20", label: "14h25" },
   { start: "15:20", end: "16:10", label: "15h20" },
   { start: "16:10", end: "16:55", label: "16h10" },
   { start: "16:55", end: "17:40", label: "16h55" },
 ];
 
-function classLabel(classes: ClassRecord[], classId: string) {
-  const item = classes.find((classe) => classe.id === classId);
-  return item?.name || "Classe";
-}
-
-function subjectLabel(workspace: PlatformWorkspace, subjectId: string) {
-  return workspace.subjects.find((subject) => subject.id === subjectId)?.label || "Matière";
-}
-
-function teacherLabel(workspace: PlatformWorkspace, teacherId: string) {
-  const teacher = workspace.users.find((user) => user.id === teacherId);
-  return teacher ? `${teacher.firstName} ${teacher.lastName}`.trim() : "Enseignant";
-}
-
-function slotMatchesClass(slot: TimetableSlot, classes: ClassRecord[], classGroup?: string) {
+function slotMatchesClass(slot: TeacherTimetableSlot, classGroup?: string) {
   if (!classGroup?.trim()) return true;
   const normalized = classGroup.trim().toLocaleLowerCase("fr");
-  const classe = classes.find((item) => item.id === slot.classId);
-  if (!classe) return true;
-  return (
-    classe.name.toLocaleLowerCase("fr").includes(normalized) ||
-    classe.level.toLocaleLowerCase("fr").includes(normalized)
-  );
+  return slot.className.toLocaleLowerCase("fr").includes(normalized);
 }
 
-function slotForCell(slots: TimetableSlot[], weekday: number, startsAt: string) {
-  return slots.find((slot) => slot.weekday === weekday && slot.startsAt <= startsAt && slot.endsAt > startsAt);
+function slotForCell(slots: TeacherTimetableSlot[], weekday: number, startsAt: string) {
+  return slots.find(
+    (slot) => slot.weekday === weekday && slot.startsAt <= startsAt && slot.endsAt > startsAt,
+  );
 }
 
 export function TeacherWeeklyTimetable({
@@ -57,36 +41,70 @@ export function TeacherWeeklyTimetable({
   selectedWeek?: number;
   classGroup?: string;
 }) {
-  const [workspace, setWorkspace] = useState<PlatformWorkspace | null>(null);
-  const [classes, setClasses] = useState<ClassRecord[]>([]);
+  const [cloudSlots, setCloudSlots] = useState<TeacherTimetableSlot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [warning, setWarning] = useState("");
 
   useEffect(() => {
-    const refresh = () => {
-      setWorkspace(readPlatformWorkspace());
-      setClasses(readClasses());
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const slots = await loadCurrentTeacherTimetable();
+        if (cancelled) return;
+        setCloudSlots(slots);
+        setWarning("");
+      } catch (error) {
+        if (cancelled) return;
+        setWarning(
+          error instanceof Error
+            ? error.message
+            : "L’emploi du temps publié est momentanément indisponible.",
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    refresh();
-    window.addEventListener("gabon-educ:storage", refresh);
-    window.addEventListener("storage", refresh);
+
+    void refresh();
+    const onFocus = () => void refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("gabon-educ:storage", refresh);
-      window.removeEventListener("storage", refresh);
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
-  const slots = useMemo(() => {
-    if (!workspace) return [];
-    return workspace.timetable
-      .filter((slot) => slotMatchesClass(slot, classes, classGroup))
-      .sort((a, b) => `${a.weekday}${a.startsAt}`.localeCompare(`${b.weekday}${b.startsAt}`, "fr"));
-  }, [workspace, classes, classGroup]);
+  const classFilteredSlots = useMemo(
+    () => cloudSlots.filter((slot) => slotMatchesClass(slot, classGroup)),
+    [cloudSlots, classGroup],
+  );
+  const classFilterApplied = Boolean(classGroup?.trim() && classFilteredSlots.length);
+  const slots = useMemo(
+    () =>
+      (classFilterApplied ? classFilteredSlots : cloudSlots)
+        .slice()
+        .sort((a, b) => `${a.weekday}${a.startsAt}`.localeCompare(`${b.weekday}${b.startsAt}`, "fr")),
+    [classFilterApplied, classFilteredSlots, cloudSlots],
+  );
 
   return (
     <aside className="teacher-week-card teacher-week-card-board" aria-label="Emploi du temps enseignant">
       <header>
         <span>Semaine {selectedWeek || "—"}</span>
         <h2>Emploi du temps</h2>
-        <p>{classGroup?.trim() ? `Filtré sur ${classGroup}` : "Cliquez une case pour remplir le cahier de textes."}</p>
+        <p>
+          {loading
+            ? "Chargement du planning publié…"
+            : classFilterApplied
+              ? `Filtré sur ${classGroup}`
+              : "Planning publié par l’établissement"}
+        </p>
+        {warning ? <small role="alert">{warning}</small> : null}
       </header>
 
       <div className="teacher-week-board" role="table" aria-label="Tableau hebdomadaire de l’enseignant">
@@ -100,20 +118,30 @@ export function TeacherWeeklyTimetable({
           <div className="teacher-week-board-row" role="row" key={row.start}>
             <small>{row.label}</small>
             {DAYS.map((day, index) => {
-              const slot = workspace ? slotForCell(slots, index + 1, row.start) : null;
-              const href = `/gabon-educ/preparer-un-cours?week=${selectedWeek || ""}&day=${index + 1}&time=${row.start}`;
+              const slot = slotForCell(slots, index + 1, row.start);
+              const params = new URLSearchParams({
+                week: String(selectedWeek || ""),
+                day: String(index + 1),
+                time: row.start,
+              });
+              if (slot) {
+                params.set("classId", slot.classId);
+                params.set("className", slot.className);
+                params.set("subject", slot.subjectLabel);
+              }
+              const href = `/gabon-educ/preparer-un-cours?${params.toString()}`;
               return (
                 <Link
                   href={href}
                   className={slot ? "teacher-week-board-cell has-course" : "teacher-week-board-cell"}
                   key={`${day}-${row.start}`}
-                  title="Remplir le cahier de textes pour ce créneau"
+                  title={slot ? `${slot.subjectLabel} · ${slot.className}` : "Préparer un cours pour ce créneau"}
                 >
-                  {slot && workspace ? (
+                  {slot ? (
                     <>
-                      <strong>{subjectLabel(workspace, slot.subjectId)}</strong>
-                      <span>{classLabel(classes, slot.classId)}</span>
-                      <em>{teacherLabel(workspace, slot.teacherId)}</em>
+                      <strong>{slot.subjectLabel}</strong>
+                      <span>{slot.className}</span>
+                      {slot.room ? <em>{slot.room}</em> : null}
                     </>
                   ) : (
                     <span className="empty-cell-label">+</span>
