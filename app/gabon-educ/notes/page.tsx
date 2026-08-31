@@ -1,4 +1,5 @@
 import "./notes-register.css";
+import "./notes-print.css";
 import { GradebookManager } from "@/components/GradebookManager";
 import { RequireRole } from "@/components/RequireRole";
 import { PEDAGOGY_ROLES } from "@/lib/roles/page-policies";
