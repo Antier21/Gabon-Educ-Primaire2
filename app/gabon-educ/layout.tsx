@@ -1,3 +1,4 @@
+import "./timetable-hours.css";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 
 /**

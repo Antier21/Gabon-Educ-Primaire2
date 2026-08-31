@@ -1,19 +1,15 @@
 import type { ClassRecord } from "@/lib/class-store";
 import type { PlatformWorkspace, TimetableSlot } from "@/lib/platform/types";
+import {
+  clampTimetableDayEnd,
+  isTimetableSlotWithinDay,
+  TIMETABLE_DAY_END,
+  TIMETABLE_PERIODS,
+} from "@/lib/platform/timetable-hours";
 
-const PERIODS = [
-  ["07:30", "08:25"],
-  ["08:25", "09:20"],
-  ["09:30", "10:25"],
-  ["10:25", "11:20"],
-  ["11:30", "12:25"],
-  ["12:25", "13:15"],
-  ["13:15", "14:10"],
-  ["14:25", "15:20"],
-  ["15:20", "16:10"],
-  ["16:10", "16:55"],
-  ["16:55", "17:40"],
-] as const;
+const PERIODS = TIMETABLE_PERIODS.map(
+  ({ start, end }) => [start, end] as const,
+);
 
 const DEFAULT_WEEKDAYS = [1, 2, 3, 4, 5, 6] as const;
 
@@ -63,7 +59,9 @@ function generationAvailability(options: TimetableGenerationOptions = {}): Gener
     new Set(requestedWeekdays.filter((weekday) => Number.isInteger(weekday) && weekday >= 1 && weekday <= 6)),
   ).sort((a, b) => a - b);
   const startsAt = options.startsAt || PERIODS[0][0];
-  const endsAt = options.endsAt || PERIODS[PERIODS.length - 1][1];
+  // 14 h 30 est désormais une borne métier, pas une simple préférence UI.
+  // Même une ancienne préférence enregistrée à 17 h 40 est ramenée à 14 h 30.
+  const endsAt = clampTimetableDayEnd(options.endsAt || TIMETABLE_DAY_END);
   const periods = PERIODS.filter(
     ([start, end]) => start >= startsAt && end <= endsAt,
   );
@@ -92,8 +90,6 @@ function effectiveAssignments(
   }
   const selected: (typeof workspace.assignments)[number][] = [];
   for (const items of grouped.values()) {
-    // Au primaire, une exception spécialisée remplace le titulaire uniquement
-    // pour la matière concernée. L'année active a déjà été filtrée ci-dessus.
     selected.push(primary ? (items.find((item) => !item.headTeacher) || items[0]) : items[0]);
   }
   return selected;
@@ -115,7 +111,7 @@ export function inspectTimetableGeneration(
   if (!availability.weekdays.length) blockers.push("Sélectionnez au moins un jour d’enseignement.");
   if (availability.endsAt <= availability.startsAt) blockers.push("L’heure de fin de journée doit être postérieure à l’heure de début.");
   if (availability.endsAt > availability.startsAt && !availability.periods.length) {
-    blockers.push("La plage horaire choisie ne contient aucun créneau utilisable.");
+    blockers.push("La plage horaire choisie ne contient aucun créneau utilisable avant 14 h 30.");
   }
 
   const schoolClasses = classes.filter((item) => sameSchool(item.schoolId, schoolId));
@@ -178,7 +174,7 @@ export function inspectTimetableGeneration(
       const planned = plannedByClass.get(schoolClass.id) || 0;
       if (planned > weeklyCapacity) {
         blockers.push(
-          `${schoolClass.name} : ${planned} créneau(x) sont prévus mais la plage choisie n’en offre que ${weeklyCapacity}.`,
+          `${schoolClass.name} : ${planned} créneau(x) sont prévus mais la plage avant 14 h 30 n’en offre que ${weeklyCapacity}.`,
         );
       }
     }
@@ -211,7 +207,10 @@ export function generateMissingTimetable(
   const schoolClasses = classes.filter((item) => sameSchool(item.schoolId, schoolId));
   const classIds = new Set(schoolClasses.map((item) => item.id));
   const existing = workspace.timetable.filter(
-    (slot) => sameSchool(slot.schoolId, schoolId) && (!yearId || slot.academicYearId === yearId),
+    (slot) =>
+      sameSchool(slot.schoolId, schoolId) &&
+      (!yearId || slot.academicYearId === yearId) &&
+      isTimetableSlotWithinDay(slot.startsAt, slot.endsAt),
   );
   const all = () => [...existing, ...generated];
 
@@ -252,8 +251,6 @@ export function generateMissingTimetable(
           const sameSubjectDay = all().filter(
             (slot) => slot.classId === assignment.classId && slot.subjectId === assignment.subjectId && slot.weekday === weekday,
           ).length;
-          // Répartit une matière sur plusieurs jours avant d'en doubler une sur
-          // la même journée, puis équilibre la charge de la classe et du titulaire.
           const score = sameSubjectDay * 100 + classDayLoad * 10 + teacherDayLoad * 3 + periodIndex * 0.05;
           candidates.push({ weekday, startsAt, endsAt, score });
         }
