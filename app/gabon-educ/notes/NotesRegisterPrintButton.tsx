@@ -10,9 +10,12 @@ type PrintContext = {
   generatedAt: string;
 };
 
-function selectedLabel(prefix: string) {
+function selectedLabel(...prefixes: string[]) {
   const labels = Array.from(document.querySelectorAll<HTMLLabelElement>(".gradebook-print-page label"));
-  const label = labels.find((item) => item.textContent?.trim().startsWith(prefix));
+  const label = labels.find((item) => {
+    const text = item.textContent?.trim() || "";
+    return prefixes.some((prefix) => text.startsWith(prefix));
+  });
   const select = label?.querySelector<HTMLSelectElement>("select");
   return select?.selectedOptions[0]?.textContent?.trim() || "Non précisé";
 }
@@ -39,7 +42,7 @@ export function NotesRegisterPrintButton() {
     setContext({
       className: selectedLabel("Classe"),
       period: selectedLabel("Période"),
-      subject: selectedLabel("Matière"),
+      subject: selectedLabel("Matière", "Domaine"),
       generatedAt: new Intl.DateTimeFormat("fr-FR", {
         day: "2-digit",
         month: "2-digit",
@@ -79,7 +82,7 @@ export function NotesRegisterPrintButton() {
         <dl>
           <div><dt>Classe</dt><dd>{context.className}</dd></div>
           <div><dt>Période</dt><dd>{context.period}</dd></div>
-          <div><dt>Matière</dt><dd>{context.subject}</dd></div>
+          <div><dt>Matière / domaine</dt><dd>{context.subject}</dd></div>
           <div><dt>Édité le</dt><dd>{context.generatedAt}</dd></div>
         </dl>
       </header>
