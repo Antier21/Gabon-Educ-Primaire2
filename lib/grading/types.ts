@@ -4,7 +4,13 @@ export type GradingRole =
   | "school_admin"
   | "headmaster";
 export type PeriodKind = "trimester" | "semester";
-export type ScoreStatus = "graded" | "absent" | "exempt" | "not_graded";
+export type ScoreStatus =
+  | "graded"
+  | "absent"
+  | "zero_penalty"
+  | "not_ranked"
+  | "exempt"
+  | "not_graded";
 export type EvaluationMode = "numeric" | "mastery";
 export type MasteryLevel = "acquired" | "developing" | "not_acquired" | "not_evaluated";
 export const MASTERY_LEVEL_OPTIONS: Array<{ value: MasteryLevel; label: string; shortLabel: string }> = [

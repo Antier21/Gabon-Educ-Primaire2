@@ -63,7 +63,9 @@ function describe(error: unknown): string {
 
 const STATUS_LABELS: Record<string, string> = {
   graded: "Noté",
-  absent: "Absent",
+  absent: "Absence justifiée",
+  zero_penalty: "Absence non justifiée (0)",
+  not_ranked: "Non noté",
   exempt: "Dispensé",
   not_graded: "En attente",
 };

@@ -35,7 +35,7 @@ export function normalizedScore(
 }
 export function validScore(score: AssessmentScore) {
   return (
-    score.status === "graded" &&
+    (score.status === "graded" || score.status === "zero_penalty") &&
     score.value !== null &&
     Number.isFinite(score.value)
   );
@@ -99,6 +99,24 @@ export function studentSubjectAverage(
     average: totalWeight ? roundTo(weighted / totalWeight, decimals) : null,
     count,
   };
+}
+export function studentSubjectIsRanked(
+  studentId: string,
+  subject: string,
+  assessments: GradeAssessment[],
+  scores: AssessmentScore[],
+) {
+  const subjectAssessmentIds = new Set(
+    assessments
+      .filter((item) => item.subject === subject && item.active)
+      .map((item) => item.id),
+  );
+  return !scores.some(
+    (score) =>
+      score.studentId === studentId &&
+      score.status === "not_ranked" &&
+      subjectAssessmentIds.has(score.assessmentId),
+  );
 }
 export function weightedGeneralAverage(
   subjects: Array<{ average: number | null; coefficient: number }>,
@@ -257,13 +275,22 @@ export function buildReportCardSnapshot(args: {
         settings.maxScore,
         decimals,
       ),
+      ranked: studentSubjectIsRanked(
+        candidate.id,
+        subject.subject,
+        assessments,
+        workspace.scores,
+      ),
     }));
     const subjectStats = classStatistics(
       subjectValues.map((item) => item.average),
       decimals,
     );
     const ranks = rankValues(
-      subjectValues.map((item) => ({ id: item.id, average: item.average })),
+      subjectValues.map((item) => ({
+        id: item.id,
+        average: item.ranked ? item.average : null,
+      })),
       decimals,
     );
     const comment =
