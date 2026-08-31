@@ -1,5 +1,6 @@
 import "./notes-register.css";
 import "./notes-print.css";
+import "./notes-actions.css";
 import { RequireRole } from "@/components/RequireRole";
 import { PEDAGOGY_ROLES } from "@/lib/roles/page-policies";
 import { NotesRegisterPrintButton } from "./NotesRegisterPrintButton";
