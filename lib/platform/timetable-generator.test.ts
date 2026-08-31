@@ -124,8 +124,8 @@ describe("génération EDT par année scolaire", () => {
     expect(generated.slots).toHaveLength(1);
     expect(generated.slots[0].weekday).toBeGreaterThanOrEqual(1);
     expect(generated.slots[0].weekday).toBeLessThanOrEqual(5);
-    expect(generated.slots[0].startsAt).toBeGreaterThanOrEqual("07:30");
-    expect(generated.slots[0].endsAt).toBeLessThanOrEqual("12:25");
+    expect(generated.slots[0].startsAt.localeCompare("07:30")).toBeGreaterThanOrEqual(0);
+    expect(generated.slots[0].endsAt.localeCompare("12:25")).toBeLessThanOrEqual(0);
   });
 
   it("bloque une configuration dont la capacité hebdomadaire est insuffisante", () => {
