@@ -8,3 +8,6 @@ out
 
 # Local Netlify folder
 .netlify
+
+# Supabase local link/cache
+supabase/.temp/
