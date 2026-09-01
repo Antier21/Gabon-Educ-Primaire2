@@ -15,11 +15,35 @@ import { downloadCashSummaryPdf } from "./FinanceCashSummaryPdf";
 
 type Loaded = Awaited<ReturnType<typeof loadFinanceData>>;
 type Tab = "dashboard"|"fees"|"payment"|"students"|"families"|"cash"|"settings";
-const tabs: Array<{id:Tab;label:string;icon:typeof Banknote}> = [
-  {id:"dashboard",label:"Tableau de bord",icon:LayoutDashboard},{id:"fees",label:"Tarifs et échéanciers",icon:CalendarCheck},
-  {id:"payment",label:"Encaissement",icon:Banknote},{id:"students",label:"Élèves et impayés",icon:Users},
-  {id:"families",label:"Familles",icon:Users},{id:"cash",label:"Caisse",icon:Receipt},{id:"settings",label:"Paramètres",icon:Settings},
+type FinanceTile = { id:Tab; label:string; icon:typeof Banknote; tone:"violet"|"violetSoft"|"blue"|"blueSoft"|"orange"|"green"|"teal" };
+
+const financeGroups: Array<{title:string;items:FinanceTile[]}> = [
+  {title:"Saisies",items:[
+    {id:"payment",label:"Saisir un encaissement",icon:Banknote,tone:"violet"},
+    {id:"fees",label:"Tarifs et échéanciers",icon:CalendarCheck,tone:"violetSoft"},
+  ]},
+  {title:"Suivi & recouvrement",items:[
+    {id:"students",label:"Élèves et impayés",icon:Users,tone:"blue"},
+    {id:"families",label:"Situation des familles",icon:Users,tone:"blueSoft"},
+  ]},
+  {title:"Traitements",items:[
+    {id:"dashboard",label:"Tableau de bord",icon:LayoutDashboard,tone:"orange"},
+    {id:"cash",label:"Caisse et clôture",icon:Receipt,tone:"green"},
+  ]},
+  {title:"Contrôle & réglages",items:[
+    {id:"settings",label:"Paramètres financiers",icon:Settings,tone:"teal"},
+  ]},
 ];
+
+function tileToneClass(tone:FinanceTile["tone"]){
+  if(tone==="violet")return styles.tileViolet;
+  if(tone==="violetSoft")return styles.tileVioletSoft;
+  if(tone==="blue")return styles.tileBlue;
+  if(tone==="blueSoft")return styles.tileBlueSoft;
+  if(tone==="orange")return styles.tileOrange;
+  if(tone==="green")return styles.tileGreen;
+  return styles.tileTeal;
+}
 
 export function FinanceManager() {
   const [tab,setTab]=useState<Tab>("dashboard"); const [context,setContext]=useState<FinanceContext|null>(null);
@@ -44,8 +68,13 @@ export function FinanceManager() {
   const receiptData:FinanceReceiptData|null=useMemo(()=>{if(!receipt||!data||!context)return null;const payment=receipt.payment;const student=data.students.find(item=>item.id===payment.student_id);const installment=data.installments.find(item=>item.id===receipt.installmentId);const charge=data.charges.find(item=>item.id===installment?.charge_id);const classroom=data.classes.find(item=>item.id===student?.class_group_id);const balances=computeReceiptBalances(payment,data.charges.filter(item=>item.student_id===payment.student_id),data.installments,data.allocations,data.payments,receipt.installmentId);const cashier=[payment.cashier?.first_name,payment.cashier?.last_name].filter(Boolean).join(" ");return{payment,school:context.school,academicYearLabel:context.academicYearLabel,studentName:student?`${student.last_name} ${student.first_name}`:"Élève non renseigné",className:classroom?.name||"Classe non renseignée",feeLabel:charge?.finance_fee_types?.label||"Frais scolaire",installmentLabel:installment?.label||"Échéance",...balances,cashierName:cashier||"Caissier non renseigné",footer:data.settings?.receipt_footer||null,format:data.settings?.print_format||"a4"};},[receipt,data,context]);
 
   return <main className={styles.page}>
-    <header className={styles.brand}><Brand/><div><b>Comptabilité et frais de scolarité</b><span>Encaissements, reçus, impayés et caisse</span></div></header><AdminMegaNav onLogout={()=>{}}/>
-    <nav className={styles.tabs}>{tabs.map(item=><button key={item.id} className={tab===item.id?styles.active:""} onClick={()=>setTab(item.id)}><item.icon/>{item.label}</button>)}</nav>
+    <header className={styles.brand}><Brand/><div><b>Finance et comptabilité</b><span>Encaissements, frais de scolarité, recouvrement et caisse</span></div></header><AdminMegaNav onLogout={()=>{}}/>
+    <nav className={styles.tileBoard} aria-label="Fonctions financières">
+      {financeGroups.map(group=><section className={styles.tileGroup} key={group.title}>
+        <h2>{group.title}</h2>
+        <div className={styles.tileStack}>{group.items.map(item=><button key={item.id} type="button" aria-current={tab===item.id?"page":undefined} className={`${styles.financeTile} ${tileToneClass(item.tone)} ${tab===item.id?styles.activeTile:""}`} onClick={()=>setTab(item.id)}><item.icon/><span>{item.label}</span></button>)}</div>
+      </section>)}
+    </nav>
     {error&&<p className={styles.error} role="alert">{error}</p>}{notice&&<p className={styles.success}>{notice}</p>}
     {!data&&!error&&<p className={styles.loading}>Chargement des données financières…</p>}
     {data&&<section className={styles.content}>
